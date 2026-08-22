@@ -1,0 +1,32 @@
+{
+  "id": "/",
+  "name": "MITEX - Buy & Sell Premium Websites",
+  "short_name": "MITEX",
+  "description": "Buy and sell premium, ready-to-launch websites. Secure checkout, instant delivery and a full buyer dashboard.",
+  "start_url": "/index.html",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#070b14",
+  "theme_color": "#070b14",
+  "lang": "en",
+  "categories": ["business", "shopping"],
+  "icons": [
+    { "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/icons/icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "/icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" },
+    { "src": "/icons/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
+  ],
+  "shortcuts": [
+    {
+      "name": "Marketplace",
+      "url": "/marketplace.html",
+      "description": "Browse premium websites for sale"
+    },
+    {
+      "name": "My Account",
+      "url": "/account.html",
+      "description": "Your profile, orders and security"
+    }
+  ]
+}
