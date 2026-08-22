@@ -18,7 +18,7 @@ function setRefreshCookie(res, rawToken) {
     sameSite: "lax",
     secure: process.env.NODE_ENV === "production",
     maxAge: REFRESH_DAYS * 24 * 60 * 60 * 1000,
-    path: "/api/auth",
+    path: "/",
   });
 }
 
