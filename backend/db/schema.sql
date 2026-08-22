@@ -58,15 +58,16 @@ CREATE TABLE enquiries (
 );
 
 CREATE TABLE listings (
-  id          INT AUTO_INCREMENT PRIMARY KEY,
-  title       VARCHAR(150) NOT NULL,
-  description TEXT NOT NULL,
-  price       DECIMAL(12,2) NOT NULL,
-  level       TINYINT,
-  tech_stack  VARCHAR(300),
-  status      ENUM('available','sold') NOT NULL DEFAULT 'available',
-  thumbnail   VARCHAR(500),
-  created_at  VARCHAR(32) NOT NULL,
+  id           INT AUTO_INCREMENT PRIMARY KEY,
+  title        VARCHAR(150) NOT NULL,
+  description  TEXT NOT NULL,
+  price        DECIMAL(12,2) NOT NULL,
+  level        TINYINT,
+  tech_stack   VARCHAR(300),
+  status       ENUM('available','sold') NOT NULL DEFAULT 'available',
+  thumbnail    VARCHAR(500),
+  delivery_url VARCHAR(800),
+  created_at   VARCHAR(32) NOT NULL,
   INDEX idx_listings_status (status)
 );
 
@@ -155,15 +156,16 @@ CREATE TABLE webauthn_credentials (
 -- );
 --
 -- CREATE TABLE listings (
---   id          BIGSERIAL PRIMARY KEY,
---   title       TEXT NOT NULL,
---   description TEXT NOT NULL,
---   price       NUMERIC(12,2) NOT NULL CHECK (price >= 0),
---   level       SMALLINT CHECK (level BETWEEN 1 AND 7),
---   tech_stack  TEXT,
---   status      TEXT NOT NULL DEFAULT 'available' CHECK (status IN ('available','sold')),
---   thumbnail   TEXT,
---   created_at  TEXT NOT NULL
+--   id           BIGSERIAL PRIMARY KEY,
+--   title        TEXT NOT NULL,
+--   description  TEXT NOT NULL,
+--   price        NUMERIC(12,2) NOT NULL CHECK (price >= 0),
+--   level        SMALLINT CHECK (level BETWEEN 1 AND 7),
+--   tech_stack   TEXT,
+--   status       TEXT NOT NULL DEFAULT 'available' CHECK (status IN ('available','sold')),
+--   thumbnail    TEXT,
+--   delivery_url TEXT,
+--   created_at   TEXT NOT NULL
 -- );
 --
 -- CREATE TABLE subscribers (

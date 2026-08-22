@@ -1,7 +1,7 @@
 const express = require("express");
 const router = express.Router();
 
-const { requireAuth, requireRole } = require("../middleware/auth");
+const { requireAuth, requireRole, optionalAuth } = require("../middleware/auth");
 
 function validateListing(body, partial = false) {
   const errors = [];
@@ -37,19 +37,33 @@ function validateListing(body, partial = false) {
   if (body.thumbnail !== undefined) {
     out.thumbnail = String(body.thumbnail || "").trim().slice(0, 500) || null;
   }
+  if (body.deliveryUrl !== undefined) {
+    out.delivery_url = String(body.deliveryUrl || "").trim().slice(0, 800) || null;
+  }
 
   return { errors, values: out };
 }
 
+function isStaff(req) {
+  return Boolean(req.user && ["admin", "editor"].includes(req.user.role));
+}
+
+function stripDelivery(row, req) {
+  if (!row) return row;
+  if (isStaff(req)) return row;
+  const { delivery_url, ...rest } = row;
+  return rest;
+}
+
 // GET /api/listings - public: browse premium websites for sale
-router.get("/", async (req, res) => {
+router.get("/", optionalAuth, async (req, res) => {
   try {
     const { level, includeSold } = req.query;
     const rows = await req.store.listings.list({
       includeSold: includeSold === "true",
       level,
     });
-    res.json(rows);
+    res.json(rows.map((row) => stripDelivery(row, req)));
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "Internal server error" });
@@ -57,11 +71,11 @@ router.get("/", async (req, res) => {
 });
 
 // GET /api/listings/:id - public single listing
-router.get("/:id", async (req, res) => {
+router.get("/:id", optionalAuth, async (req, res) => {
   try {
     const row = await req.store.listings.get(req.params.id);
     if (!row) return res.status(404).json({ error: "Not found" });
-    res.json(row);
+    res.json(stripDelivery(row, req));
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "Internal server error" });

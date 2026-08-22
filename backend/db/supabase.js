@@ -205,6 +205,7 @@ const listings = {
         tech_stack: v.tech_stack ?? null,
         status: v.status ?? "available",
         thumbnail: v.thumbnail ?? null,
+        delivery_url: v.deliveryUrl ?? null,
         created_at: nowISO(),
       })
       .select()
@@ -213,7 +214,7 @@ const listings = {
     return data;
   },
   async update(id, patch) {
-    const allowed = ["title", "description", "price", "level", "tech_stack", "status", "thumbnail"];
+    const allowed = ["title", "description", "price", "level", "tech_stack", "status", "thumbnail", "delivery_url"];
     const set = {};
     for (const k of allowed) if (k in patch) set[k] = patch[k] === undefined ? null : patch[k];
     const { data, error } = await supabase.from("listings").update(set).eq("id", id).select().single();
@@ -297,6 +298,10 @@ const orders = {
   },
   async findByReference(reference) {
     const { data } = await supabase.from("orders").select("*").eq("reference", reference).maybeSingle();
+    return data || null;
+  },
+  async getById(id) {
+    const { data } = await supabase.from("orders").select("*").eq("id", id).maybeSingle();
     return data || null;
   },
   async markPaid(reference, paidAt) {

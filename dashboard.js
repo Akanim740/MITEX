@@ -292,6 +292,7 @@ listingForm.addEventListener("submit", async (e) => {
     level: $("#fLevel").value ? Number($("#fLevel").value) : null,
     tech_stack: $("#fTech").value.trim(),
     status: $("#fStatus").value,
+    deliveryUrl: $("#fDelivery") ? $("#fDelivery").value.trim() : "",
   };
   const id = $("#listingId").value;
   try {
@@ -355,6 +356,7 @@ async function loadListings() {
         $("#fLevel").value = row.level ?? "";
         $("#fTech").value = row.tech_stack || "";
         $("#fStatus").value = row.status;
+        $("#fDelivery").value = row.delivery_url || "";
         $("#listingSubmit").textContent = "Save Changes";
         $("#cancelEdit").classList.remove("hidden");
         window.scrollTo({ top: 0, behavior: "smooth" });

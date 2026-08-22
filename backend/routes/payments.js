@@ -143,6 +143,36 @@ router.post("/webhook", express.raw({ type: "*/*" }), async (req, res) => {
   }
 });
 
+// GET /api/payments/orders/:id/download - paid buyer downloads their website
+router.get("/orders/:id/download", requireAuth, async (req, res) => {
+  try {
+    const store = req.store;
+    const order = await store.orders.getById(req.params.id);
+    if (!order) return res.status(404).json({ error: "Order not found" });
+
+    const isOwner = String(order.user_id) === String(req.user.id);
+    const isStaff = ["admin", "editor"].includes(req.user.role);
+    if (!isOwner && !isStaff) {
+      return res.status(403).json({ error: "You do not have access to this order" });
+    }
+    if (order.status !== "paid") {
+      return res.status(402).json({ error: "This order has not been paid yet" });
+    }
+
+    let listing = null;
+    if (order.listing_id) listing = await store.listings.get(order.listing_id);
+    const url = listing && listing.delivery_url ? String(listing.delivery_url).trim() : "";
+
+    if (!url) {
+      return res.status(404).json({ error: "Delivery file not ready yet - the MITEX team will contact you shortly." });
+    }
+    res.redirect(302, url);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
 // GET /api/payments/orders/mine - current user's orders
 router.get("/orders/mine", requireAuth, async (req, res) => {
   try {

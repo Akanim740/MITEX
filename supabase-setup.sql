@@ -1,7 +1,11 @@
 -- ============================================================
 -- MITEX database schema - Supabase (PostgreSQL)
 -- Paste ALL of this into the Supabase SQL Editor and click RUN.
--- Safe to run more than once only if tables don't exist yet.
+-- ONLY for a brand-new/empty database!
+--
+-- If your tables already exist, do NOT run this file.
+-- Instead just run any missing upgrade lines, e.g.:
+--   ALTER TABLE listings ADD COLUMN IF NOT EXISTS delivery_url TEXT;
 -- ============================================================
 
 CREATE TABLE users (
@@ -58,6 +62,7 @@ CREATE TABLE listings (
   tech_stack  TEXT,
   status      TEXT NOT NULL DEFAULT 'available' CHECK (status IN ('available','sold')),
   thumbnail   TEXT,
+  delivery_url TEXT,
   created_at  TEXT NOT NULL
 );
 

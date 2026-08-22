@@ -19,6 +19,15 @@ async function init() {
     namedPlaceholders: false,
   });
 
+  try {
+    const [cols] = await pool.query(
+      "SELECT COUNT(*) AS n FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'listings' AND COLUMN_NAME = 'delivery_url'"
+    );
+    if (!cols[0].n) {
+      await pool.query("ALTER TABLE listings ADD COLUMN delivery_url VARCHAR(800)");
+    }
+  } catch {}
+
   await pool.query(`
     CREATE TABLE IF NOT EXISTS users (
       id             INT AUTO_INCREMENT PRIMARY KEY,
@@ -69,15 +78,16 @@ async function init() {
     );
 
     CREATE TABLE IF NOT EXISTS listings (
-      id          INT AUTO_INCREMENT PRIMARY KEY,
-      title       VARCHAR(150) NOT NULL,
-      description TEXT NOT NULL,
-      price       DECIMAL(12,2) NOT NULL,
-      level       TINYINT,
-      tech_stack  VARCHAR(300),
-      status      ENUM('available','sold') NOT NULL DEFAULT 'available',
-      thumbnail   VARCHAR(500),
-      created_at  VARCHAR(32) NOT NULL,
+      id           INT AUTO_INCREMENT PRIMARY KEY,
+      title        VARCHAR(150) NOT NULL,
+      description  TEXT NOT NULL,
+      price        DECIMAL(12,2) NOT NULL,
+      level        TINYINT,
+      tech_stack   VARCHAR(300),
+      status       ENUM('available','sold') NOT NULL DEFAULT 'available',
+      thumbnail    VARCHAR(500),
+      delivery_url VARCHAR(800),
+      created_at   VARCHAR(32) NOT NULL,
       INDEX idx_listings_status (status)
     );
 
@@ -278,13 +288,13 @@ const listings = {
   },
   async create(v) {
     const [res] = await pool.query(
-      "INSERT INTO listings (title, description, price, level, tech_stack, status, thumbnail, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-      [v.title, v.description, v.price, v.level ?? null, v.tech_stack ?? null, v.status ?? "available", v.thumbnail ?? null, nowISO()]
+      "INSERT INTO listings (title, description, price, level, tech_stack, status, thumbnail, delivery_url, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+      [v.title, v.description, v.price, v.level ?? null, v.tech_stack ?? null, v.status ?? "available", v.thumbnail ?? null, v.deliveryUrl ?? null, nowISO()]
     );
     return this.get(res.insertId);
   },
   async update(id, patch) {
-    const allowed = ["title", "description", "price", "level", "tech_stack", "status", "thumbnail"];
+    const allowed = ["title", "description", "price", "level", "tech_stack", "status", "thumbnail", "delivery_url"];
     const keys = Object.keys(patch).filter((k) => allowed.includes(k));
     if (!keys.length) return this.get(id);
     const vals = keys.map((k) => (patch[k] === undefined ? null : patch[k]));
@@ -345,6 +355,10 @@ const orders = {
   },
   async findByReference(reference) {
     const [rows] = await pool.query("SELECT * FROM orders WHERE reference = ?", [reference]);
+    return rows[0] || null;
+  },
+  async getById(id) {
+    const [rows] = await pool.query("SELECT * FROM orders WHERE id = ?", [id]);
     return rows[0] || null;
   },
   async markPaid(reference, paidAt) {

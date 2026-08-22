@@ -177,12 +177,13 @@ const listings = {
       tech_stack: v.tech_stack ?? null,
       status: v.status ?? "available",
       thumbnail: v.thumbnail ?? null,
+      delivery_url: v.deliveryUrl ?? null,
       created_at: nowISO(),
     });
     return { ...row, id: String(row._id) };
   },
   async update(id, patch) {
-    const allowed = ["title", "description", "price", "level", "tech_stack", "status", "thumbnail"];
+    const allowed = ["title", "description", "price", "level", "tech_stack", "status", "thumbnail", "delivery_url"];
     const set = {};
     for (const k of allowed) if (k in patch) set[k] = patch[k] === undefined ? null : patch[k];
     if (!Object.keys(set).length) return this.get(id);
@@ -245,6 +246,13 @@ const orders = {
   },
   async findByReference(reference) {
     return db.collection("orders").findOne({ reference }) || null;
+  },
+  async getById(id) {
+    try {
+      return await db.collection("orders").findOne({ _id: oid(id) });
+    } catch {
+      return null;
+    }
   },
   async markPaid(reference, paidAt) {
     return (await db.collection("orders").updateOne({ reference }, { $set: { status: "paid", paid_at: paidAt } })).modifiedCount > 0;

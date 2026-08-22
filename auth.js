@@ -491,7 +491,11 @@ async function loadMyOrders() {
         <tr>
           <td><strong>${esc(o.title)}</strong><br /><span class="muted">${esc(o.reference)}</span></td>
           <td>${naira(o.amount)}</td>
-          <td>${statusChip(o.status)}</td>
+          <td>${statusChip(o.status)}${
+            o.status === "paid"
+              ? ` <a class="btn btn-sm btn-primary" href="/api/payments/orders/${encodeURIComponent(o.id)}/download" target="_blank" rel="noopener" style="margin-left:8px">Download</a>`
+              : ""
+          }</td>
           <td class="muted">${new Date(o.created_at).toLocaleDateString("en-NG")}</td>
         </tr>`
       )

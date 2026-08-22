@@ -60,15 +60,16 @@ db.exec(`
   );
 
   CREATE TABLE IF NOT EXISTS listings (
-    id          INTEGER PRIMARY KEY AUTOINCREMENT,
-    title       TEXT NOT NULL,
-    description TEXT NOT NULL,
-    price       REAL NOT NULL CHECK (price >= 0),
-    level       INTEGER CHECK (level BETWEEN 1 AND 7),
-    tech_stack  TEXT,
-    status      TEXT NOT NULL DEFAULT 'available' CHECK (status IN ('available','sold')),
-    thumbnail   TEXT,
-    created_at  TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+    id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    title        TEXT NOT NULL,
+    description  TEXT NOT NULL,
+    price        REAL NOT NULL CHECK (price >= 0),
+    level        INTEGER CHECK (level BETWEEN 1 AND 7),
+    tech_stack   TEXT,
+    status       TEXT NOT NULL DEFAULT 'available' CHECK (status IN ('available','sold')),
+    thumbnail    TEXT,
+    delivery_url TEXT,
+    created_at   TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
   );
 
   CREATE TABLE IF NOT EXISTS subscribers (
@@ -104,6 +105,11 @@ db.exec(`
     created_at    TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
   );
 `);
+
+for (const col of ["delivery_url"]) {
+  const cols = db.prepare("PRAGMA table_info(listings)").all().map((c) => c.name);
+  if (!cols.includes(col)) db.exec(`ALTER TABLE listings ADD COLUMN ${col} TEXT`);
+}
 
 const nowISO = () => new Date().toISOString();
 
@@ -246,13 +252,13 @@ const listings = {
   async create(v) {
     const res = db
       .prepare(
-        "INSERT INTO listings (title, description, price, level, tech_stack, status, thumbnail) VALUES (?, ?, ?, ?, ?, ?, ?)"
+        "INSERT INTO listings (title, description, price, level, tech_stack, status, thumbnail, delivery_url) VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
       )
-      .run(v.title, v.description, v.price, v.level ?? null, v.tech_stack ?? null, v.status ?? "available", v.thumbnail ?? null);
+      .run(v.title, v.description, v.price, v.level ?? null, v.tech_stack ?? null, v.status ?? "available", v.thumbnail ?? null, v.deliveryUrl ?? null);
     return this.get(res.lastInsertRowid);
   },
   async update(id, patch) {
-    const allowed = ["title", "description", "price", "level", "tech_stack", "status", "thumbnail"];
+    const allowed = ["title", "description", "price", "level", "tech_stack", "status", "thumbnail", "delivery_url"];
     const keys = Object.keys(patch).filter((k) => allowed.includes(k));
     if (!keys.length) return this.get(id);
     const sets = keys.map((k) => `${k} = ?`).join(", ");
@@ -306,6 +312,9 @@ const orders = {
   },
   async findByReference(reference) {
     return db.prepare("SELECT * FROM orders WHERE reference = ?").get(reference) || null;
+  },
+  async getById(id) {
+    return db.prepare("SELECT * FROM orders WHERE id = ?").get(id) || null;
   },
   async markPaid(reference, paidAt) {
     return db.prepare("UPDATE orders SET status = 'paid', paid_at = ? WHERE reference = ?").run(paidAt, reference).changes > 0;

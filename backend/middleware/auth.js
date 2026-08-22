@@ -38,6 +38,24 @@ async function requireAuth(req, res, next) {
   next();
 }
 
+async function optionalAuth(req, _res, next) {
+  const header = req.headers.authorization || "";
+  const token = header.startsWith("Bearer ") ? header.slice(7) : null;
+  if (!token) return next();
+  try {
+    const payload = jwt.verify(token, JWT_ACCESS_SECRET);
+    const store = req.store;
+    if (store) {
+      const user = await store.users.findById(payload.sub);
+      if (user) {
+        const { password_hash, ...safeUser } = user;
+        req.user = safeUser;
+      }
+    }
+  } catch {}
+  next();
+}
+
 function requireRole(...roles) {
   return (req, res, next) => {
     if (!req.user) {
@@ -61,4 +79,4 @@ async function resolveRefreshSession(req) {
   return { session, user };
 }
 
-module.exports = { signAccessToken, requireAuth, requireRole, resolveRefreshSession, JWT_ACCESS_SECRET, ACCESS_TTL };
+module.exports = { signAccessToken, requireAuth, optionalAuth, requireRole, resolveRefreshSession, JWT_ACCESS_SECRET, ACCESS_TTL };

@@ -184,11 +184,12 @@ const listings = {
       tech_stack: v.tech_stack ?? null,
       status: v.status ?? "available",
       thumbnail: v.thumbnail ?? null,
+      delivery_url: v.deliveryUrl ?? null,
       created_at: nowISO(),
     });
   },
   async update(id, patch) {
-    const allowed = ["title", "description", "price", "level", "tech_stack", "status", "thumbnail"];
+    const allowed = ["title", "description", "price", "level", "tech_stack", "status", "thumbnail", "delivery_url"];
     const set = {};
     for (const k of allowed) if (k in patch) set[k] = patch[k] === undefined ? null : patch[k];
     await col("listings").doc(String(id)).update(set);
@@ -261,6 +262,10 @@ const orders = {
   async findByReference(reference) {
     const snap = await col("orders").where("reference", "==", reference).limit(1).get();
     return snap.empty ? null : { ...snap.docs[0].data(), id: snap.docs[0].id };
+  },
+  async getById(id) {
+    const d = await col("orders").doc(String(id)).get();
+    return d.exists ? { ...d.data(), id: d.id } : null;
   },
   async markPaid(reference, paidAt) {
     const row = await this.findByReference(reference);
