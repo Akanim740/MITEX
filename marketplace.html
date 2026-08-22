@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Premium Website Marketplace | MITEX</title>
+  <meta name="description" content="Browse and buy premium, ready-to-launch websites from MITEX. Secure checkout with Paystack." />
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23070b14'/%3E%3Ctext x='32' y='44' font-family='Arial' font-size='34' font-weight='bold' fill='%23fbbf24' text-anchor='middle'%3EM%3C/text%3E%3C/svg%3E" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;600;700;800&family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="auth.css" />
+  <style>
+    .market-main { width: min(1100px, 94%); margin-inline: auto; padding: 46px 0 90px; }
+    .market-head { margin-bottom: 34px; }
+    .market-head h1 { font-family: "Sora", sans-serif; font-size: clamp(1.7rem, 4vw, 2.4rem); }
+    .market-head p { color: var(--muted); max-width: 560px; }
+    .search-wrap { position: relative; margin-top: 24px; max-width: 540px; }
+    .search-wrap svg { position: absolute; left: 16px; top: 50%; transform: translateY(-50%); width: 18px; height: 18px; color: var(--muted); pointer-events: none; }
+    .search-wrap input { width: 100%; padding: 14px 18px 14px 44px; border-radius: 999px; border: 1px solid var(--card-border); background: var(--card); color: var(--text); font-size: 0.95rem; font-family: inherit; outline: none; transition: border-color .25s ease, box-shadow .25s ease; }
+    .search-wrap input:focus { border-color: rgba(251,191,36,.6); box-shadow: 0 0 0 4px rgba(251,191,36,.12); }
+    .result-count { margin-top: 10px; font-size: .85rem; }
+    .listing-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 22px; }
+    .listing-card { background: var(--card); border: 1px solid var(--card-border); border-radius: 18px; padding: 26px; display: flex; flex-direction: column; gap: 12px; transition: transform .25s ease, border-color .25s ease; }
+    .listing-card:hover { transform: translateY(-5px); border-color: rgba(251,191,36,.45); }
+    .listing-card h3 { font-family: "Sora", sans-serif; font-size: 1.12rem; }
+    .listing-card p { color: var(--muted); font-size: .92rem; flex-grow: 1; }
+    .price { font-family: "Sora", sans-serif; font-size: 1.45rem; font-weight: 800; color: var(--gold); }
+    .tech-row { display: flex; flex-wrap: wrap; gap: 7px; }
+    .sold-overlay { position: relative; opacity: .55; pointer-events: none; }
+    .sold-tag { position: absolute; top: 16px; right: 16px; }
+    .empty-market { padding: 60px 20px; text-align: center; color: var(--muted); grid-column: 1 / -1; border: 1px dashed var(--card-border); border-radius: 18px; }
+  </style>
+</head>
+<body data-page="marketplace">
+  <header class="topbar">
+    <div class="topbar-inner">
+      <a class="logo" href="/index.html">MIT<span>EX</span></a>
+      <div id="navAuthArea"></div>
+    </div>
+  </header>
+
+  <main class="market-main">
+    <div class="market-head">
+      <h1>Premium Website <span style="color:#fbbf24;">Marketplace</span></h1>
+      <p>Ready-to-launch websites, hand-built by MITEX. Pay securely with Paystack and take ownership fast.</p>
+      <div class="search-wrap">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.5" y2="16.5"/></svg>
+        <input type="search" id="marketSearch" placeholder="Search websites - e.g. e-commerce, portfolio, school, blog..." autocomplete="off" />
+      </div>
+      <p class="result-count muted" id="resultCount"></p>
+    </div>
+
+    <div class="listing-grid" id="listingsGrid">
+      <p class="empty-market">Loading listings...</p>
+    </div>
+  </main>
+
+  <script src="auth.js"></script>
+</body>
+</html>

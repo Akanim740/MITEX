@@ -1,0 +1,47 @@
+services:
+  - type: web
+    name: mitex
+    runtime: node
+    plan: free
+    rootDir: backend
+    buildCommand: npm install --omit=dev
+    startCommand: npm start
+    healthCheckPath: /api/health
+    autoDeploy: true
+    envVars:
+      - key: NODE_ENV
+        value: production
+      # Public URL of the deployed site (Render fills this in automatically)
+      - key: APP_URL
+        value: https://mitex.onrender.com
+      - key: CORS_ORIGIN
+        value: https://mitex.onrender.com
+      # ===== Database (Supabase Postgres) =====
+      - key: DB_CLIENT
+        sync: false
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_KEY
+        sync: false
+      # Seed admin + 23 listings on first boot (safe to leave on - idempotent)
+      - key: SEED_ON_BOOT
+        value: "true"
+      # ===== Auth secrets =====
+      - key: JWT_ACCESS_SECRET
+        generateValue: true
+      - key: ACCESS_TTL
+        value: 15m
+      - key: REFRESH_TTL_DAYS
+        value: "7"
+      # ===== Biometric login =====
+      # Must match your site's exact domain. Change to your custom domain
+      # after connecting it, e.g. mitex.store
+      - key: WEBAUTHN_RP_ID
+        value: mitex.onrender.com
+      # ===== Paystack =====
+      - key: PAYSTACK_SECRET_KEY
+        sync: false
+      - key: PAYSTACK_BASE_URL
+        value: https://api.paystack.co
+      - key: PAYSTACK_DEMO
+        value: "false"

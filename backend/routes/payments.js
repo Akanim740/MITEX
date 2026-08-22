@@ -1,0 +1,166 @@
+const express = require("express");
+const router = express.Router();
+
+const { requireAuth, requireRole } = require("../middleware/auth");
+const { randomToken } = require("../utils/tokens");
+const paystack = require("../utils/paystack");
+
+function newReference() {
+  return `MITEX-${Date.now()}-${randomToken(4).toUpperCase()}`;
+}
+
+async function settleOrder(store, order) {
+  if (order.status === "paid") return;
+  await store.orders.markPaid(order.reference, new Date().toISOString());
+  if (order.listing_id) {
+    const listing = await store.listings.get(order.listing_id);
+    if (listing && listing.status === "available") {
+      await store.listings.update(order.listing_id, { status: "sold" });
+    }
+  }
+}
+
+// POST /api/payments/initialize - start checkout for a listing
+router.post("/initialize", requireAuth, async (req, res) => {
+  try {
+    const store = req.store;
+    const { listingId } = req.body;
+    if (!listingId) return res.status(400).json({ error: "listingId is required" });
+
+    const listing = await store.listings.get(listingId);
+    if (!listing) return res.status(404).json({ error: "Listing not found" });
+    if (listing.status !== "available") return res.status(409).json({ error: "This listing has already been sold" });
+
+    const reference = newReference();
+    const order = await store.orders.create({
+      userId: req.user.id,
+      listingId: listing.id,
+      reference,
+      title: listing.title,
+      amount: listing.price,
+      currency: "NGN",
+      email: req.user.email,
+      name: req.user.name,
+    });
+
+    const init = await paystack.initializeTransaction({
+      email: req.user.email,
+      amountNaira: listing.price,
+      reference,
+      metadata: { orderId: order.id, listingId: String(listing.id), buyer: req.user.email },
+    });
+
+    res.status(201).json({
+      message: "Checkout initialized",
+      reference,
+      authorization_url: init.authorization_url,
+      demo: Boolean(init.demo),
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: err.message || "Internal server error" });
+  }
+});
+
+// GET /api/payments/verify/:reference - check and settle an order
+router.get("/verify/:reference", requireAuth, async (req, res) => {
+  try {
+    const store = req.store;
+    const order = await store.orders.findByReference(req.params.reference);
+    if (!order) return res.status(404).json({ error: "Order not found" });
+
+    const isOwner = String(order.user_id) === String(req.user.id);
+    const isStaff = ["admin", "editor"].includes(req.user.role);
+    if (!isOwner && !isStaff) {
+      return res.status(403).json({ error: "You do not have access to this order" });
+    }
+
+    if (order.status !== "paid" && paystack.isConfigured()) {
+      const tx = await paystack.verifyTransaction(order.reference);
+      if (tx.status === "success" && tx.amount >= Math.round(order.amount * 100)) {
+        await settleOrder(store, order);
+      } else if (tx.status === "failed") {
+        await store.orders.markFailed(order.reference);
+      }
+    }
+
+    const fresh = await store.orders.findByReference(order.reference);
+    res.json({ status: fresh.status, order: fresh });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: err.message || "Internal server error" });
+  }
+});
+
+// POST /api/payments/demo-pay/:reference - simulated payment (demo mode only)
+router.post("/demo-pay/:reference", requireAuth, async (req, res) => {
+  try {
+    if (paystack.isConfigured()) {
+      return res.status(403).json({ error: "Demo payments are disabled when Paystack is configured" });
+    }
+    const store = req.store;
+    const order = await store.orders.findByReference(req.params.reference);
+    if (!order) return res.status(404).json({ error: "Order not found" });
+    if (String(order.user_id) !== String(req.user.id)) {
+      return res.status(403).json({ error: "You do not have access to this order" });
+    }
+    if (order.status === "paid") return res.json({ message: "Order already paid", status: "paid" });
+
+    await settleOrder(store, order);
+    res.json({ message: "Payment successful (simulated)", status: "paid" });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// POST /api/payments/webhook - Paystack server-to-server events
+router.post("/webhook", express.raw({ type: "*/*" }), async (req, res) => {
+  try {
+    if (!paystack.isConfigured()) {
+      return res.status(503).json({ error: "Webhooks unavailable in demo mode" });
+    }
+
+    const signature = req.headers["x-paystack-signature"];
+    if (!paystack.verifyWebhookSignature(req.rawBody, signature)) {
+      return res.status(401).json({ error: "Invalid signature" });
+    }
+
+    const event = JSON.parse(req.rawBody.toString("utf8"));
+    const store = req.store;
+
+    if (event.event === "charge.success" && event.data && event.data.reference) {
+      const order = await store.orders.findByReference(event.data.reference);
+      if (order && order.status !== "paid") {
+        await settleOrder(store, order);
+      }
+    }
+
+    res.sendStatus(200);
+  } catch (err) {
+    console.error(err);
+    res.sendStatus(200);
+  }
+});
+
+// GET /api/payments/orders/mine - current user's orders
+router.get("/orders/mine", requireAuth, async (req, res) => {
+  try {
+    res.json(await req.store.orders.listForUser(req.user.id));
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// GET /api/payments/orders - staff list all orders
+router.get("/orders", requireAuth, requireRole("admin", "editor"), async (req, res) => {
+  try {
+    res.json(await req.store.orders.listAll(req.query.status));
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+module.exports = router;

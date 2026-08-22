@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>My Account | MITEX</title>
+  <meta name="robots" content="noindex, nofollow" />
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23070b14'/%3E%3Ctext x='32' y='44' font-family='Arial' font-size='34' font-weight='bold' fill='%23fbbf24' text-anchor='middle'%3EM%3C/text%3E%3C/svg%3E" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;600;700;800&family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="auth.css" />
+</head>
+<body data-page="account">
+  <header class="topbar">
+    <div class="topbar-inner">
+      <a class="logo" href="/index.html">MIT<span>EX</span></a>
+      <div class="dropdown" data-dropdown>
+        <button class="drop-btn" type="button" aria-expanded="false">
+          <span class="avatar" id="topAvatar">?</span>
+          <span id="topName">Account</span>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+        </button>
+        <div class="drop-menu">
+          <a href="/index.html">View website</a>
+          <a href="/marketplace.html">Marketplace</a>
+          <a href="#profile-panel" id="menuProfile">Profile</a>
+          <a href="#security-panel" id="menuSecurity">Security</a>
+          <a href="/dashboard.html" id="menuDashboard" class="hidden">Admin dashboard</a>
+          <button type="button" class="danger" id="logoutBtn">Log out</button>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <main class="account-main">
+    <h1>My Account</h1>
+
+    <div id="verifyBanner" class="banner hidden">
+      <span>Please verify your email address to secure your account.</span>
+      <button type="button" id="resendBtn" class="btn btn-primary btn-sm">Resend verification email</button>
+    </div>
+    <div id="devVerifyBox" class="dev-box hidden" style="margin-bottom:26px;">
+      <strong>Developer mode:</strong> email sending is not configured yet.
+      <button type="button" id="devVerifyBtn" class="btn btn-ghost btn-sm" style="margin-top:10px;">Verify my email now</button>
+    </div>
+
+    <div class="account-grid">
+      <aside class="panel profile-head" id="profilePanel">
+        <div class="big-avatar" id="bigAvatar">?</div>
+        <h3 id="pName">Loading...</h3>
+        <p class="muted" id="pEmail"></p>
+        <div class="chips">
+          <span class="chip gold" id="pRole">customer</span>
+          <span class="chip" id="pVerified">unverified</span>
+        </div>
+        <div class="meta-list">
+          <div><span>Phone</span><b id="pPhone">-</b></div>
+          <div><span>Bio</span><b id="pBio">-</b></div>
+          <div><span>Member since</span><b id="pJoined">-</b></div>
+        </div>
+      </aside>
+
+      <div>
+        <section class="panel" id="profile-panel">
+          <h2>Edit Profile</h2>
+          <form id="profileForm">
+            <div class="form-grid">
+              <label>Full name
+                <input type="text" id="eName" minlength="2" maxlength="80" required />
+              </label>
+              <label>Phone
+                <input type="tel" id="ePhone" placeholder="+234 800 000 0000" />
+              </label>
+              <label class="span-2">Avatar URL
+                <input type="url" id="eAvatar" placeholder="https://example.com/photo.jpg" />
+              </label>
+              <label class="span-2">Bio
+                <textarea id="eBio" rows="3" maxlength="1000" placeholder="Tell us about you or your business..."></textarea>
+              </label>
+            </div>
+            <div class="form-actions">
+              <button type="submit" class="btn btn-primary btn-sm" id="profileSaveBtn">Save Changes</button>
+              <span id="profileMsg" class="success-text hidden">Saved.</span>
+            </div>
+          </form>
+        </section>
+
+        <section class="panel" id="orders-panel">
+          <h2>My Orders</h2>
+          <div class="table-wrap" style="overflow-x:auto;">
+            <table style="min-width:520px;">
+              <thead>
+                <tr><th>Item</th><th>Amount</th><th>Status</th><th>Date</th></tr>
+              </thead>
+              <tbody id="ordersBody">
+                <tr><td colspan="4" class="muted">Loading...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <section class="panel" id="security-panel">
+          <h2>Change Password</h2>
+          <form id="passwordForm">
+            <div class="form-grid">
+              <label>Current password
+                <input type="password" id="curPass" required autocomplete="current-password" />
+              </label>
+              <label>New password
+                <input type="password" id="newPass" required autocomplete="new-password" placeholder="At least 8 characters" />
+              </label>
+            </div>
+            <p class="hint">Changing your password logs out your other sessions.</p>
+            <p id="passError" class="error hidden"></p>
+            <div class="form-actions">
+              <button type="submit" class="btn btn-primary btn-sm" id="passSaveBtn">Update Password</button>
+            </div>
+          </form>
+        </section>
+
+        <section class="panel" id="biometric-panel">
+          <h2>Biometric Sign-In</h2>
+          <p class="muted">Use your fingerprint or face to sign in on this device - no password needed.</p>
+          <div class="form-actions">
+            <button type="button" class="btn btn-primary btn-sm" id="addPasskeyBtn">Enable fingerprint / face ID</button>
+          </div>
+          <p id="biometricMsg" class="muted hint hidden"></p>
+          <ul id="passkeyList" class="subs-list"></ul>
+        </section>
+      </div>
+    </div>
+  </main>
+  <script src="auth.js"></script>
+</body>
+</html>

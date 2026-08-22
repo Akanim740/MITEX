@@ -1,0 +1,386 @@
+let supabase;
+
+function toPublic(row) {
+  if (!row) return null;
+  const { password_hash, ...rest } = row;
+  return rest;
+}
+
+async function init() {
+  let createClient;
+  try {
+    ({ createClient } = require("@supabase/supabase-js"));
+  } catch {
+    throw new Error("Supabase client not installed. Run: npm install @supabase/supabase-js");
+  }
+
+  const url = process.env.SUPABASE_URL;
+  const key = process.env.SUPABASE_SERVICE_KEY;
+  if (!url || !key) {
+    throw new Error("SUPABASE_URL and SUPABASE_SERVICE_KEY must be set in .env when DB_CLIENT=supabase");
+  }
+
+  supabase = createClient(url, key, { auth: { persistSession: false } });
+
+  const { error } = await supabase.from("users").select("id").limit(1);
+  if (error && error.code === "42P01") {
+    throw new Error(
+      "Supabase tables not found. Run the SQL in backend/db/schema.sql (Postgres section) in your Supabase SQL editor."
+    );
+  }
+
+  return api;
+}
+
+const nowISO = () => new Date().toISOString();
+
+const users = {
+  async count() {
+    const { count } = await supabase.from("users").select("id", { count: "exact", head: true });
+    return count || 0;
+  },
+  async findByEmail(email) {
+    const { data } = await supabase.from("users").select("*").eq("email", String(email).toLowerCase()).maybeSingle();
+    return data || null;
+  },
+  async findById(id) {
+    const { data } = await supabase.from("users").select("*").eq("id", id).maybeSingle();
+    return data || null;
+  },
+  async create({ name, email, passwordHash, role = "customer", emailVerified = 0 }) {
+    const { data, error } = await supabase
+      .from("users")
+      .insert({
+        name,
+        email: String(email).toLowerCase(),
+        password_hash: passwordHash,
+        role,
+        email_verified: !!emailVerified,
+        created_at: nowISO(),
+      })
+      .select()
+      .single();
+    if (error) throw error;
+    return data;
+  },
+  async update(id, patch) {
+    const allowed = ["name", "phone", "bio", "avatar_url", "role", "email_verified"];
+    const set = {};
+    for (const k of allowed) if (k in patch) set[k] = patch[k];
+    set.updated_at = nowISO();
+    const { data, error } = await supabase.from("users").update(set).eq("id", id).select().single();
+    if (error) throw error;
+    return data;
+  },
+  async updatePassword(id, passwordHash) {
+    const { error } = await supabase
+      .from("users")
+      .update({ password_hash: passwordHash, updated_at: nowISO() })
+      .eq("id", id);
+    if (error) throw error;
+  },
+  async list() {
+    const { data } = await supabase.from("users").select("*").order("created_at", { ascending: false });
+    return data || [];
+  },
+  async remove(id) {
+    const { error } = await supabase.from("users").delete().eq("id", id);
+    return !error;
+  },
+};
+
+const tokens = {
+  async create({ userId, tokenHash, type, expiresAt }) {
+    const { error } = await supabase
+      .from("tokens")
+      .insert({ user_id: userId, token_hash: tokenHash, type, expires_at: expiresAt, used: false, created_at: nowISO() });
+    if (error) throw error;
+  },
+  async findValid(tokenHash, type) {
+    const { data } = await supabase
+      .from("tokens")
+      .select("*")
+      .eq("token_hash", tokenHash)
+      .eq("type", type)
+      .eq("used", false)
+      .gt("expires_at", nowISO())
+      .maybeSingle();
+    return data || null;
+  },
+  async markUsed(id) {
+    await supabase.from("tokens").update({ used: true }).eq("id", id);
+  },
+  async deleteByUser(userId, type) {
+    await supabase.from("tokens").delete().eq("user_id", userId).eq("type", type);
+  },
+};
+
+const sessions = {
+  async create({ userId, tokenHash, expiresAt }) {
+    const { error } = await supabase
+      .from("sessions")
+      .insert({ user_id: userId, token_hash: tokenHash, expires_at: expiresAt, revoked: false, created_at: nowISO() });
+    if (error) throw error;
+  },
+  async findValid(tokenHash) {
+    const { data } = await supabase
+      .from("sessions")
+      .select("*")
+      .eq("token_hash", tokenHash)
+      .eq("revoked", false)
+      .gt("expires_at", nowISO())
+      .maybeSingle();
+    return data || null;
+  },
+  async revoke(id) {
+    await supabase.from("sessions").update({ revoked: true }).eq("id", id);
+  },
+  async revokeAllForUser(userId) {
+    await supabase.from("sessions").update({ revoked: true }).eq("user_id", userId);
+  },
+};
+
+const enquiries = {
+  async create(v) {
+    const { data, error } = await supabase
+      .from("enquiries")
+      .insert({ ...v, status: "new", created_at: nowISO() })
+      .select()
+      .single();
+    if (error) throw error;
+    return data;
+  },
+  async list(status) {
+    let query = supabase.from("enquiries").select("*").order("created_at", { ascending: false });
+    if (status) query = query.eq("status", status);
+    const { data } = await query;
+    return data || [];
+  },
+  async get(id) {
+    const { data } = await supabase.from("enquiries").select("*").eq("id", id).maybeSingle();
+    return data || null;
+  },
+  async setStatus(id, status) {
+    const { error } = await supabase.from("enquiries").update({ status }).eq("id", id);
+    return !error;
+  },
+  async remove(id) {
+    const { error } = await supabase.from("enquiries").delete().eq("id", id);
+    return !error;
+  },
+  async stats() {
+    const total = await this._count();
+    const by = async (s) => {
+      const { count } = await supabase.from("enquiries").select("id", { count: "exact", head: true }).eq("status", s);
+      return count || 0;
+    };
+    return { total, new: await by("new"), contacted: await by("contacted"), closed: await by("closed") };
+  },
+  async _count() {
+    const { count } = await supabase.from("enquiries").select("id", { count: "exact", head: true });
+    return count || 0;
+  },
+};
+
+const listings = {
+  async list({ includeSold = false, level } = {}) {
+    let query = supabase.from("listings").select("*").order("created_at", { ascending: false });
+    if (!includeSold) query = query.eq("status", "available");
+    if (level !== undefined && level !== null && level !== "") query = query.eq("level", Number(level));
+    const { data } = await query;
+    return data || [];
+  },
+  async get(id) {
+    const { data } = await supabase.from("listings").select("*").eq("id", id).maybeSingle();
+    return data || null;
+  },
+  async create(v) {
+    const { data, error } = await supabase
+      .from("listings")
+      .insert({
+        title: v.title,
+        description: v.description,
+        price: v.price,
+        level: v.level ?? null,
+        tech_stack: v.tech_stack ?? null,
+        status: v.status ?? "available",
+        thumbnail: v.thumbnail ?? null,
+        created_at: nowISO(),
+      })
+      .select()
+      .single();
+    if (error) throw error;
+    return data;
+  },
+  async update(id, patch) {
+    const allowed = ["title", "description", "price", "level", "tech_stack", "status", "thumbnail"];
+    const set = {};
+    for (const k of allowed) if (k in patch) set[k] = patch[k] === undefined ? null : patch[k];
+    const { data, error } = await supabase.from("listings").update(set).eq("id", id).select().single();
+    if (error) throw error;
+    return data;
+  },
+  async remove(id) {
+    const { error } = await supabase.from("listings").delete().eq("id", id);
+    return !error;
+  },
+  async stats() {
+    const available = await this.list({ includeSold: true }).then((rows) => rows.filter((r) => r.status === "available"));
+    const total = await supabase.from("listings").select("id", { count: "exact", head: true }).then(({ count }) => count || 0);
+    const sold = await supabase
+      .from("listings")
+      .select("id", { count: "exact", head: true })
+      .eq("status", "sold")
+      .then(({ count }) => count || 0);
+    return {
+      total,
+      available: available.length,
+      sold,
+      inventoryValue: available.reduce((sum, l) => sum + (Number(l.price) || 0), 0),
+    };
+  },
+};
+
+const subscribers = {
+  async findByEmail(email) {
+    const { data } = await supabase.from("subscribers").select("*").eq("email", String(email).toLowerCase()).maybeSingle();
+    return data || null;
+  },
+  async activate(email) {
+    const { error } = await supabase.from("subscribers").update({ active: true }).eq("email", String(email).toLowerCase());
+    return !error;
+  },
+  async create(email) {
+    const { error } = await supabase
+      .from("subscribers")
+      .insert({ email: String(email).toLowerCase(), active: true, created_at: nowISO() });
+    if (error) throw error;
+  },
+  async deactivate(email) {
+    const { error } = await supabase.from("subscribers").update({ active: false }).eq("email", String(email).toLowerCase());
+    return !error;
+  },
+  async listActive() {
+    const { data } = await supabase
+      .from("subscribers")
+      .select("id, email, created_at")
+      .eq("active", true)
+      .order("created_at", { ascending: false });
+    return data || [];
+  },
+  async countActive() {
+    const { count } = await supabase.from("subscribers").select("id", { count: "exact", head: true }).eq("active", true);
+    return count || 0;
+  },
+};
+
+const orders = {
+  async create(v) {
+    const { data, error } = await supabase
+      .from("orders")
+      .insert({
+        user_id: v.userId ?? null,
+        listing_id: v.listingId ?? null,
+        reference: v.reference,
+        title: v.title,
+        amount: v.amount,
+        currency: v.currency || "NGN",
+        email: v.email,
+        name: v.name ?? null,
+        status: "pending",
+        created_at: nowISO(),
+      })
+      .select()
+      .single();
+    if (error) throw error;
+    return data;
+  },
+  async findByReference(reference) {
+    const { data } = await supabase.from("orders").select("*").eq("reference", reference).maybeSingle();
+    return data || null;
+  },
+  async markPaid(reference, paidAt) {
+    const { error } = await supabase.from("orders").update({ status: "paid", paid_at: paidAt }).eq("reference", reference);
+    return !error;
+  },
+  async markFailed(reference) {
+    const { error } = await supabase.from("orders").update({ status: "failed" }).eq("reference", reference).eq("status", "pending");
+    return !error;
+  },
+  async listForUser(userId) {
+    const { data } = await supabase.from("orders").select("*").eq("user_id", userId).order("created_at", { ascending: false });
+    return data || [];
+  },
+  async listAll(status) {
+    let query = supabase.from("orders").select("*").order("created_at", { ascending: false });
+    if (status) query = query.eq("status", status);
+    const { data } = await query;
+    return data || [];
+  },
+  async stats() {
+    const all = (await supabase.from("orders").select("amount, status")).data || [];
+    const by = (s) => all.filter((o) => o.status === s).length;
+    return {
+      total: all.length,
+      paid: by("paid"),
+      pending: by("pending"),
+      failed: by("failed"),
+      revenue: all.filter((o) => o.status === "paid").reduce((sum, o) => sum + (Number(o.amount) || 0), 0),
+    };
+  },
+};
+
+const credentials = {
+  async create(v) {
+    const { data, error } = await supabase
+      .from("webauthn_credentials")
+      .insert({
+        user_id: v.userId,
+        credential_id: v.credentialId,
+        public_key: v.publicKey,
+        counter: v.counter || 0,
+        device_type: v.deviceType ?? null,
+        backed_up: v.backedUp ? 1 : 0,
+        created_at: nowISO(),
+      })
+      .select()
+      .single();
+    if (error) throw error;
+    return data;
+  },
+  async findByCredentialId(credentialId) {
+    const { data } = await supabase.from("webauthn_credentials").select("*").eq("credential_id", credentialId).maybeSingle();
+    return data || null;
+  },
+  async listForUser(userId) {
+    const { data } = await supabase
+      .from("webauthn_credentials")
+      .select("*")
+      .eq("user_id", userId)
+      .order("created_at", { ascending: false });
+    return data || [];
+  },
+  async updateCounter(id, counter) {
+    const { error } = await supabase.from("webauthn_credentials").update({ counter }).eq("id", id);
+    return !error;
+  },
+  async remove(id) {
+    const { error } = await supabase.from("webauthn_credentials").delete().eq("id", id);
+    return !error;
+  },
+};
+
+const api = {
+  name: "supabase",
+  users,
+  tokens,
+  sessions,
+  enquiries,
+  listings,
+  subscribers,
+  orders,
+  credentials,
+  _publicUser: toPublic,
+};
+
+module.exports = { init };
