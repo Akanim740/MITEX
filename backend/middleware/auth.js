@@ -68,6 +68,22 @@ function requireRole(...roles) {
   };
 }
 
+// Accepts either an Authorization header OR the refresh-session cookie,
+// so plain browser navigation (e.g. clicking a download link) works.
+async function requireAuthFlexible(req, res, next) {
+  if (!req.user && !(req.headers.authorization || "").startsWith("Bearer ")) {
+    try {
+      const resolved = await resolveRefreshSession(req);
+      if (resolved) {
+        const { password_hash, ...safeUser } = resolved.user;
+        req.user = safeUser;
+        return next();
+      }
+    } catch {}
+  }
+  return requireAuth(req, res, next);
+}
+
 async function resolveRefreshSession(req) {
   const raw = req.cookies ? req.cookies.mitex_refresh : null;
   if (!raw) return null;
@@ -79,4 +95,4 @@ async function resolveRefreshSession(req) {
   return { session, user };
 }
 
-module.exports = { signAccessToken, requireAuth, optionalAuth, requireRole, resolveRefreshSession, JWT_ACCESS_SECRET, ACCESS_TTL };
+module.exports = { signAccessToken, requireAuth, optionalAuth, requireAuthFlexible, requireRole, resolveRefreshSession, JWT_ACCESS_SECRET, ACCESS_TTL };

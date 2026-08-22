@@ -1,7 +1,7 @@
 const express = require("express");
 const router = express.Router();
 
-const { requireAuth, requireRole } = require("../middleware/auth");
+const { requireAuth, requireRole, requireAuthFlexible } = require("../middleware/auth");
 const { randomToken } = require("../utils/tokens");
 const paystack = require("../utils/paystack");
 
@@ -144,7 +144,7 @@ router.post("/webhook", express.raw({ type: "*/*" }), async (req, res) => {
 });
 
 // GET /api/payments/orders/:id/download - paid buyer downloads their website
-router.get("/orders/:id/download", requireAuth, async (req, res) => {
+router.get("/orders/:id/download", requireAuthFlexible, async (req, res) => {
   try {
     const store = req.store;
     const order = await store.orders.getById(req.params.id);
