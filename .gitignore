@@ -21,3 +21,6 @@ Thumbs.db
 
 # Test artifacts
 backend/test-results/
+
+# Delivery packages (built locally, uploaded to Drive)
+deliveries/
