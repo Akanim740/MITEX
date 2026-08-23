@@ -19,7 +19,7 @@ db.exec(`
     name           TEXT NOT NULL,
     email          TEXT NOT NULL UNIQUE,
     password_hash  TEXT NOT NULL,
-    role           TEXT NOT NULL DEFAULT 'customer' CHECK (role IN ('admin','editor','customer')),
+    role           TEXT NOT NULL DEFAULT 'customer' CHECK (role IN ('admin','editor','staff','customer')),
     email_verified INTEGER NOT NULL DEFAULT 0,
     phone          TEXT,
     bio            TEXT,
@@ -106,9 +106,44 @@ db.exec(`
   );
 `);
 
-for (const col of ["delivery_url"]) {
+for (const col of ["delivery_url", "employee_id"]) {
   const cols = db.prepare("PRAGMA table_info(listings)").all().map((c) => c.name);
-  if (!cols.includes(col)) db.exec(`ALTER TABLE listings ADD COLUMN ${col} TEXT`);
+  if (!cols.includes(col)) db.exec(`ALTER TABLE listings ADD COLUMN ${col} ${col === "employee_id" ? "INTEGER" : "TEXT"}`);
+}
+
+// Older databases were created with a role CHECK that lacks 'staff'.
+// SQLite cannot alter a CHECK constraint, so rebuild the users table once.
+const usersTableSql = db.prepare("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'users'").get();
+if (usersTableSql && !String(usersTableSql.sql).includes("'staff'")) {
+  db.exec("PRAGMA foreign_keys = OFF");
+  db.exec("BEGIN");
+  db.exec(`
+    CREATE TABLE users_new (
+      id             INTEGER PRIMARY KEY AUTOINCREMENT,
+      name           TEXT NOT NULL,
+      email          TEXT NOT NULL UNIQUE,
+      password_hash  TEXT NOT NULL,
+      role           TEXT NOT NULL DEFAULT 'customer' CHECK (role IN ('admin','editor','staff','customer')),
+      email_verified INTEGER NOT NULL DEFAULT 0,
+      phone          TEXT,
+      bio            TEXT,
+      avatar_url     TEXT,
+      active         INTEGER NOT NULL DEFAULT 1,
+      created_at     TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+      updated_at     TEXT
+    );
+    INSERT INTO users_new (id, name, email, password_hash, role, email_verified, phone, bio, avatar_url, created_at, updated_at)
+      SELECT id, name, email, password_hash, role, email_verified, phone, bio, avatar_url, created_at, updated_at FROM users;
+    DROP TABLE users;
+    ALTER TABLE users_new RENAME TO users;
+  `);
+  db.exec("COMMIT");
+  db.exec("PRAGMA foreign_keys = ON");
+}
+
+{
+  const userCols = db.prepare("PRAGMA table_info(users)").all().map((c) => c.name);
+  if (!userCols.includes("active")) db.exec("ALTER TABLE users ADD COLUMN active INTEGER NOT NULL DEFAULT 1");
 }
 
 const nowISO = () => new Date().toISOString();
@@ -129,20 +164,26 @@ const users = {
   async findById(id) {
     return db.prepare("SELECT * FROM users WHERE id = ?").get(id) || null;
   },
-  async create({ name, email, passwordHash, role = "customer", emailVerified = 0 }) {
+  async create({ name, email, passwordHash, role = "customer", emailVerified = 0, phone = null, bio = null, avatar_url = null, active }) {
     const res = db
-      .prepare("INSERT INTO users (name, email, password_hash, role, email_verified) VALUES (?, ?, ?, ?, ?)")
-      .run(name, String(email).toLowerCase(), passwordHash, role, emailVerified ? 1 : 0);
+      .prepare("INSERT INTO users (name, email, password_hash, role, email_verified, phone, bio, avatar_url, active) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)")
+      .run(name, String(email).toLowerCase(), passwordHash, role, emailVerified ? 1 : 0, phone, bio, avatar_url, active === undefined ? 1 : active ? 1 : 0);
     return this.findById(res.lastInsertRowid);
   },
   async update(id, patch) {
-    const allowed = ["name", "phone", "bio", "avatar_url", "role", "email_verified"];
+    const allowed = ["name", "phone", "bio", "avatar_url", "role", "email_verified", "active"];
     const keys = Object.keys(patch).filter((k) => allowed.includes(k));
     if (!keys.length) return this.findById(id);
     const sets = keys.map((k) => `${k} = ?`).join(", ");
     const vals = keys.map((k) => (typeof patch[k] === "boolean" ? (patch[k] ? 1 : 0) : patch[k]));
     db.prepare(`UPDATE users SET ${sets}, updated_at = ? WHERE id = ?`).run(...vals, nowISO(), id);
     return this.findById(id);
+  },
+  async countByRole(role) {
+    return db.prepare("SELECT COUNT(*) AS n FROM users WHERE role = ?").get(role).n;
+  },
+  async listByRole(role) {
+    return db.prepare("SELECT * FROM users WHERE role = ? ORDER BY created_at ASC").all(role);
   },
   async updatePassword(id, passwordHash) {
     db.prepare("UPDATE users SET password_hash = ?, updated_at = ? WHERE id = ?").run(passwordHash, nowISO(), id);
@@ -252,13 +293,13 @@ const listings = {
   async create(v) {
     const res = db
       .prepare(
-        "INSERT INTO listings (title, description, price, level, tech_stack, status, thumbnail, delivery_url) VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
+        "INSERT INTO listings (title, description, price, level, tech_stack, status, thumbnail, delivery_url, employee_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
       )
-      .run(v.title, v.description, v.price, v.level ?? null, v.tech_stack ?? null, v.status ?? "available", v.thumbnail ?? null, v.deliveryUrl ?? null);
+      .run(v.title, v.description, v.price, v.level ?? null, v.tech_stack ?? null, v.status ?? "available", v.thumbnail ?? null, v.delivery_url ?? v.deliveryUrl ?? null, v.employee_id ?? null);
     return this.get(res.lastInsertRowid);
   },
   async update(id, patch) {
-    const allowed = ["title", "description", "price", "level", "tech_stack", "status", "thumbnail", "delivery_url"];
+    const allowed = ["title", "description", "price", "level", "tech_stack", "status", "thumbnail", "delivery_url", "employee_id"];
     const keys = Object.keys(patch).filter((k) => allowed.includes(k));
     if (!keys.length) return this.get(id);
     const sets = keys.map((k) => `${k} = ?`).join(", ");
@@ -268,6 +309,12 @@ const listings = {
   },
   async remove(id) {
     return db.prepare("DELETE FROM listings WHERE id = ?").run(id).changes > 0;
+  },
+  async listForEmployee(employeeId) {
+    return db.prepare("SELECT * FROM listings WHERE employee_id = ? ORDER BY created_at DESC").all(employeeId);
+  },
+  async unassignEmployee(employeeId) {
+    return db.prepare("UPDATE listings SET employee_id = NULL WHERE employee_id = ?").run(employeeId).changes;
   },
   async stats() {
     const total = db.prepare("SELECT COUNT(*) AS n FROM listings").get().n;

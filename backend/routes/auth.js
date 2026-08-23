@@ -94,6 +94,9 @@ router.post("/login", async (req, res) => {
     if (!user || !(await bcrypt.compare(password, user.password_hash))) {
       return res.status(401).json({ error: "Invalid credentials" });
     }
+    if (user.role === "staff" && !Number(user.active)) {
+      return res.status(403).json({ error: "This employee account has been deactivated. Contact the admin." });
+    }
 
     const { accessToken } = await issueSession(store, res, user);
     res.json({
@@ -287,6 +290,149 @@ router.get("/dashboard", requireAuth, requireRole("admin", "editor"), async (req
       store.orders.stats(),
     ]);
     res.json({ enquiries, listings, subscribers, orders });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Employees (staff) - managed by admin, max 21 people
+// ---------------------------------------------------------------------------
+const MAX_STAFF = Number(process.env.MAX_STAFF || 21);
+
+function staffPublic(u) {
+  return {
+    id: u.id,
+    name: u.name,
+    email: u.email,
+    phone: u.phone || null,
+    title: u.bio || null,
+    active: u.active === undefined ? 1 : Number(u.active) ? 1 : 0,
+    created_at: u.created_at,
+  };
+}
+
+async function staffWithLoad(store, rows) {
+  return Promise.all(
+    rows.map(async (u) => {
+      const listings = await store.listings.listForEmployee(String(u.id));
+      return { ...staffPublic(u), listingCount: listings.length };
+    })
+  );
+}
+
+// GET /api/auth/staff - admin: list employees
+router.get("/staff", requireAuth, requireRole("admin"), async (req, res) => {
+  try {
+    const rows = await req.store.users.listByRole("staff");
+    res.json(await staffWithLoad(req.store, rows));
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// POST /api/auth/staff - admin: add an employee
+router.post("/staff", requireAuth, requireRole("admin"), async (req, res) => {
+  try {
+    const store = req.store;
+    const count = await store.users.countByRole("staff");
+    if (count >= MAX_STAFF) {
+      return res.status(403).json({ error: `Staff limit reached (${MAX_STAFF} employees max)` });
+    }
+
+    const name = String(req.body.name || "").trim();
+    const email = String(req.body.email || "").trim().toLowerCase();
+    const password = String(req.body.password || "");
+    const phone = String(req.body.phone || "").trim() || null;
+    const title = String(req.body.title || "").trim().slice(0, 120) || null;
+
+    if (name.length < 2 || name.length > 80) {
+      return res.status(400).json({ error: "Name must be 2-80 characters" });
+    }
+    if (!EMAIL_RE.test(email)) {
+      return res.status(400).json({ error: "Invalid email address" });
+    }
+    if (password.length < 8 || !/[A-Za-z]/.test(password) || !/[0-9]/.test(password)) {
+      return res.status(400).json({ error: "Password must be at least 8 characters and include letters and numbers" });
+    }
+
+    const existing = await store.users.findByEmail(email);
+    if (existing) {
+      return res.status(409).json({ error: "An account with this email already exists" });
+    }
+
+    const passwordHash = await bcrypt.hash(password, 12);
+    await store.users.create({
+      name,
+      email,
+      passwordHash,
+      role: "staff",
+      emailVerified: 1,
+      phone,
+      bio: title,
+      active: 1,
+    });
+
+    res.status(201).json({ message: `${name} added to the team`, employee: staffPublic(await store.users.findByEmail(email)) });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// PATCH /api/auth/staff/:id - admin: update an employee
+router.patch("/staff/:id", requireAuth, requireRole("admin"), async (req, res) => {
+  try {
+    const store = req.store;
+    const user = await store.users.findById(req.params.id);
+    if (!user || user.role !== "staff") {
+      return res.status(404).json({ error: "Employee not found" });
+    }
+
+    const patch = {};
+    if (req.body.name !== undefined) {
+      const name = String(req.body.name || "").trim();
+      if (name.length < 2 || name.length > 80) return res.status(400).json({ error: "Name must be 2-80 characters" });
+      patch.name = name;
+    }
+    if (req.body.phone !== undefined) patch.phone = String(req.body.phone || "").trim() || null;
+    if (req.body.title !== undefined) patch.bio = String(req.body.title || "").trim().slice(0, 120) || null;
+    if (req.body.active !== undefined) patch.active = req.body.active ? 1 : 0;
+    if (req.body.newPassword !== undefined && String(req.body.newPassword)) {
+      const pw = String(req.body.newPassword);
+      if (pw.length < 8 || !/[A-Za-z]/.test(pw) || !/[0-9]/.test(pw)) {
+        return res.status(400).json({ error: "New password must be at least 8 characters and include letters and numbers" });
+      }
+      await store.users.updatePassword(user.id, await bcrypt.hash(pw, 12));
+    }
+
+    const patchKeys = Object.keys(patch).filter((k) => k !== "password_hash_placeholder");
+    if (patchKeys.length) await store.users.update(user.id, patch);
+
+    const updated = await store.users.findById(user.id);
+    res.json({ message: "Employee updated", employee: staffPublic(updated) });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// DELETE /api/auth/staff/:id - admin: remove an employee (their listings become unassigned)
+router.delete("/staff/:id", requireAuth, requireRole("admin"), async (req, res) => {
+  try {
+    const store = req.store;
+    const user = await store.users.findById(req.params.id);
+    if (!user || user.role !== "staff") {
+      return res.status(404).json({ error: "Employee not found" });
+    }
+
+    const unassigned = await store.listings.unassignEmployee(String(user.id));
+    await store.sessions.revokeAllForUser(user.id);
+    await store.users.remove(user.id);
+
+    res.json({ message: `${user.name} removed. ${unassigned} listing(s) unassigned.` });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "Internal server error" });

@@ -83,11 +83,14 @@ function showDenied() {
   $("#deniedView").classList.remove("hidden");
 }
 
+let currentUser = null;
+
 function showApp(user) {
-  if (user.role !== "admin" && user.role !== "editor") {
+  if (!["admin", "editor", "staff"].includes(user.role)) {
     logout(true);
     return showDenied();
   }
+  currentUser = user;
   $("#loginView").classList.add("hidden");
   $("#deniedView").classList.add("hidden");
   $("#appView").classList.remove("hidden");
@@ -95,6 +98,9 @@ function showApp(user) {
   $("#userAvatar").textContent = (user.name || "A").charAt(0).toUpperCase();
   $("#userEmailLabel").textContent = user.email;
   $("#userRoleLabel").textContent = user.role;
+
+  const staffUser = user.role === "staff";
+  document.querySelectorAll("[data-admin-only]").forEach((el) => el.classList.toggle("hidden", staffUser));
 }
 
 async function initAuth() {
@@ -104,7 +110,7 @@ async function initAuth() {
     const user = await API.get("/api/auth/me");
     localStorage.setItem("mitex_user", JSON.stringify(user));
     showApp(user);
-    setView("overview");
+    setView(user.role === "staff" ? "listings" : "overview");
   } catch {
     showLogin();
   }
@@ -125,7 +131,7 @@ $("#loginForm").addEventListener("submit", async (e) => {
     localStorage.setItem("mitex_token", data.accessToken);
     localStorage.setItem("mitex_user", JSON.stringify(data.user));
     showApp(data.user);
-    setView("overview");
+    setView(data.user.role === "staff" ? "listings" : "overview");
   } catch (err) {
     errEl.textContent = err.message;
     errEl.classList.remove("hidden");
@@ -174,6 +180,7 @@ const loaders = {
   listings: loadListings,
   orders: loadOrders,
   subscribers: loadSubscribers,
+  employees: loadEmployees,
 };
 
 let currentView = null;
@@ -201,6 +208,7 @@ $("#refreshEnquiries").addEventListener("click", loadEnquiries);
 $("#refreshListings").addEventListener("click", loadListings);
 $("#refreshOrders").addEventListener("click", loadOrders);
 $("#refreshSubs").addEventListener("click", loadSubscribers);
+$("#refreshEmployees").addEventListener("click", loadEmployees);
 
 async function loadOverview() {
   const grid = $("#statsGrid");
@@ -282,6 +290,22 @@ async function loadEnquiries() {
 }
 
 const listingForm = $("#listingForm");
+let staffCache = [];
+
+async function refreshEmployeeSelect(selectedId) {
+  const sel = $("#fEmployee");
+  if (!sel || !currentUser || currentUser.role === "staff") return;
+  try {
+    staffCache = await API.get("/api/auth/staff");
+    sel.innerHTML =
+      '<option value="">Unassigned (admin handles)</option>' +
+      staffCache
+        .filter((s) => Number(s.active))
+        .map((s) => `<option value="${esc(s.id)}">${esc(s.name)}${s.listingCount ? ` (${s.listingCount})` : ""}</option>`)
+        .join("");
+    if (selectedId !== undefined) sel.value = selectedId ?? "";
+  } catch {}
+}
 
 listingForm.addEventListener("submit", async (e) => {
   e.preventDefault();
@@ -294,7 +318,14 @@ listingForm.addEventListener("submit", async (e) => {
     status: $("#fStatus").value,
     deliveryUrl: $("#fDelivery") ? $("#fDelivery").value.trim() : "",
   };
+  if (currentUser && currentUser.role !== "staff") {
+    payload.employeeId = $("#fEmployee") && $("#fEmployee").value ? $("#fEmployee").value : null;
+  }
   const id = $("#listingId").value;
+  if (!id && currentUser && currentUser.role === "staff") {
+    alert("Employees edit existing listings. Ask an admin to assign one to you.");
+    return;
+  }
   try {
     if (id) {
       await API.put(`/api/listings/${id}`, payload);
@@ -315,17 +346,35 @@ function resetListingForm() {
   $("#listingId").value = "";
   $("#listingSubmit").textContent = "Add Listing";
   $("#cancelEdit").classList.add("hidden");
+  if (currentUser && currentUser.role === "staff") {
+    $("#listingSubmit").classList.add("hidden");
+  } else if ($("#fEmployee")) {
+    $("#fEmployee").value = "";
+    $("#listingSubmit").classList.remove("hidden");
+  }
 }
 
 async function loadListings() {
   const body = $("#listingsBody");
-  body.innerHTML = '<tr><td colspan="6" class="empty-state">Loading...</td></tr>';
+  const staffUser = currentUser && currentUser.role === "staff";
+  body.innerHTML = '<tr><td colspan="7" class="empty-state">Loading...</td></tr>';
   try {
-    const rows = await API.get("/api/listings?includeSold=true");
+    if (!staffUser) refreshEmployeeSelect();
+    else {
+      $("#listingSubmit").textContent = "Save Changes";
+      $("#listingSubmit").classList.add("hidden");
+    }
+    const rows = await API.get(staffUser ? "/api/listings/mine" : "/api/listings?includeSold=true");
     if (!rows.length) {
-      body.innerHTML = '<tr><td colspan="6" class="empty-state">No listings yet. Add your first premium website above.</td></tr>';
+      body.innerHTML = staffUser
+        ? '<tr><td colspan="7" class="empty-state">No listings assigned to you yet. An admin will assign them.</td></tr>'
+        : '<tr><td colspan="7" class="empty-state">No listings yet. Add your first premium website above.</td></tr>';
       return;
     }
+    const empName = (id) => {
+      const s = staffCache.find((x) => String(x.id) === String(id));
+      return s ? s.name : null;
+    };
     body.innerHTML = rows
       .map(
         (r) => `
@@ -333,12 +382,13 @@ async function loadListings() {
           <td><strong>${esc(r.title)}</strong><br /><span class="muted">${esc(r.tech_stack || "")}</span></td>
           <td>${naira(r.price)}</td>
           <td>${r.level ?? "-"}</td>
+          <td>${!staffUser && r.employee_id ? esc(empName(r.employee_id)) || "?" : '<span class="muted">-</span>'}</td>
           <td><span class="badge ${esc(r.status)}">${esc(r.status)}</span></td>
           <td class="muted">${fmtDate(r.created_at)}</td>
           <td>
             <div class="row-actions">
               <button class="icon-btn" data-edit="${r.id}">Edit</button>
-              <button class="icon-btn delete" data-del="${r.id}">Delete</button>
+              ${staffUser ? "" : `<button class="icon-btn delete" data-del="${r.id}">Delete</button>`}
             </div>
           </td>
         </tr>`
@@ -357,6 +407,8 @@ async function loadListings() {
         $("#fTech").value = row.tech_stack || "";
         $("#fStatus").value = row.status;
         $("#fDelivery").value = row.delivery_url || "";
+        if ($("#fEmployee")) refreshEmployeeSelect(row.employee_id);
+        $("#listingSubmit").classList.remove("hidden");
         $("#listingSubmit").textContent = "Save Changes";
         $("#cancelEdit").classList.remove("hidden");
         window.scrollTo({ top: 0, behavior: "smooth" });
@@ -375,7 +427,123 @@ async function loadListings() {
       });
     });
   } catch (err) {
-    body.innerHTML = `<tr><td colspan="6" class="empty-state">${esc(err.message)}</td></tr>`;
+    body.innerHTML = `<tr><td colspan="7" class="empty-state">${esc(err.message)}</td></tr>`;
+  }
+}
+
+// ---- Employees ----
+const employeeForm = $("#employeeForm");
+
+employeeForm.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const id = $("#employeeId").value;
+  try {
+    if (id) {
+      const patch = {
+        name: $("#eName").value.trim(),
+        phone: $("#ePhone").value.trim(),
+        title: $("#eTitle").value.trim(),
+      };
+      if ($("#ePassword").value) patch.newPassword = $("#ePassword").value;
+      await API.patch(`/api/auth/staff/${id}`, patch);
+    } else {
+      await API.post("/api/auth/staff", {
+        name: $("#eName").value.trim(),
+        email: $("#eEmail").value.trim(),
+        password: $("#ePassword").value,
+        phone: $("#ePhone").value.trim(),
+        title: $("#eTitle").value.trim(),
+      });
+    }
+    resetEmployeeForm();
+    loadEmployees();
+    refreshEmployeeSelect();
+  } catch (err) {
+    alert(err.message);
+  }
+});
+
+$("#cancelEmployeeEdit").addEventListener("click", resetEmployeeForm);
+
+function resetEmployeeForm() {
+  employeeForm.reset();
+  $("#employeeId").value = "";
+  $("#employeeSubmit").textContent = "Add Employee";
+  $("#cancelEmployeeEdit").classList.add("hidden");
+}
+
+async function loadEmployees() {
+  const body = $("#employeesBody");
+  body.innerHTML = '<tr><td colspan="5" class="empty-state">Loading...</td></tr>';
+  try {
+    const rows = await API.get("/api/auth/staff");
+    $("#employeeCount").textContent = `${rows.length} / 21 employees`;
+    if (!rows.length) {
+      body.innerHTML = '<tr><td colspan="5" class="empty-state">No employees yet. Add your first team member above.</td></tr>';
+      return;
+    }
+    body.innerHTML = rows
+      .map(
+        (r) => `
+        <tr>
+          <td><strong>${esc(r.name)}</strong>${r.title ? `<br /><span class="muted">${esc(r.title)}</span>` : ""}</td>
+          <td>${esc(r.email)}${r.phone ? `<br /><span class="muted">${esc(r.phone)}</span>` : ""}</td>
+          <td>${r.listingCount}</td>
+          <td><span class="badge ${Number(r.active) ? "available" : "sold"}">${Number(r.active) ? "active" : "inactive"}</span></td>
+          <td>
+            <div class="row-actions">
+              <button class="icon-btn" data-eedit="${r.id}">Edit</button>
+              <button class="icon-btn" data-etoggle="${r.id}" data-active="${Number(r.active)}">${Number(r.active) ? "Deactivate" : "Activate"}</button>
+              <button class="icon-btn delete" data-edel="${r.id}">Remove</button>
+            </div>
+          </td>
+        </tr>`
+      )
+      .join("");
+
+    body.querySelectorAll("[data-eedit]").forEach((btn) =>
+      btn.addEventListener("click", () => {
+        const row = rows.find((r) => String(r.id) === btn.dataset.eedit);
+        if (!row) return;
+        $("#employeeId").value = row.id;
+        $("#eName").value = row.name;
+        $("#eEmail").value = row.email;
+        $("#eEmail").disabled = true;
+        $("#ePassword").value = "";
+        $("#ePhone").value = row.phone || "";
+        $("#eTitle").value = row.title || "";
+        $("#employeeSubmit").textContent = "Save Changes";
+        $("#cancelEmployeeEdit").classList.remove("hidden");
+        window.scrollTo({ top: 0, behavior: "smooth" });
+      })
+    );
+
+    body.querySelectorAll("[data-etoggle]").forEach((btn) =>
+      btn.addEventListener("click", async () => {
+        const active = btn.dataset.active === "1";
+        try {
+          await API.patch(`/api/auth/staff/${btn.dataset.etoggle}`, { active: !active });
+          loadEmployees();
+        } catch (err) {
+          alert(err.message);
+        }
+      })
+    );
+
+    body.querySelectorAll("[data-edel]").forEach((btn) =>
+      btn.addEventListener("click", async () => {
+        if (!confirm("Remove this employee? Their listings become unassigned.")) return;
+        try {
+          await API.del(`/api/auth/staff/${btn.dataset.edel}`);
+          loadEmployees();
+          refreshEmployeeSelect();
+        } catch (err) {
+          alert(err.message);
+        }
+      })
+    );
+  } catch (err) {
+    body.innerHTML = `<tr><td colspan="5" class="empty-state">${esc(err.message)}</td></tr>`;
   }
 }
 

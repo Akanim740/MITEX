@@ -61,6 +61,9 @@ function requireRole(...roles) {
     if (!req.user) {
       return res.status(401).json({ error: "Authentication required" });
     }
+    if (req.user.role === "staff" && !Number(req.user.active)) {
+      return res.status(403).json({ error: "This employee account has been deactivated. Contact the admin." });
+    }
     if (!roles.includes(req.user.role)) {
       return res.status(403).json({ error: `Requires role: ${roles.join(" or ")}` });
     }

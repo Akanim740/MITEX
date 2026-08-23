@@ -26,6 +26,26 @@ async function init() {
     if (!cols[0].n) {
       await pool.query("ALTER TABLE listings ADD COLUMN delivery_url VARCHAR(800)");
     }
+
+    // Staff system migrations (safe to run repeatedly)
+    const [roleCol] = await pool.query(
+      "SELECT COLUMN_TYPE AS t FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'users' AND COLUMN_NAME = 'role'"
+    );
+    if (roleCol[0] && !String(roleCol[0].t).includes("'staff'")) {
+      await pool.query("ALTER TABLE users MODIFY COLUMN role ENUM('admin','editor','staff','customer') NOT NULL DEFAULT 'customer'");
+    }
+    const [activeCol] = await pool.query(
+      "SELECT COUNT(*) AS n FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'users' AND COLUMN_NAME = 'active'"
+    );
+    if (!activeCol[0].n) {
+      await pool.query("ALTER TABLE users ADD COLUMN active TINYINT(1) NOT NULL DEFAULT 1");
+    }
+    const [empCol] = await pool.query(
+      "SELECT COUNT(*) AS n FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'listings' AND COLUMN_NAME = 'employee_id'"
+    );
+    if (!empCol[0].n) {
+      await pool.query("ALTER TABLE listings ADD COLUMN employee_id INT NULL, ADD INDEX idx_listings_employee (employee_id)");
+    }
   } catch {}
 
   await pool.query(`
@@ -34,11 +54,12 @@ async function init() {
       name           VARCHAR(120) NOT NULL,
       email          VARCHAR(190) NOT NULL UNIQUE,
       password_hash  VARCHAR(255) NOT NULL,
-      role           ENUM('admin','editor','customer') NOT NULL DEFAULT 'customer',
+      role           ENUM('admin','editor','staff','customer') NOT NULL DEFAULT 'customer',
       email_verified TINYINT(1) NOT NULL DEFAULT 0,
       phone          VARCHAR(40),
       bio            TEXT,
       avatar_url     VARCHAR(500),
+      active         TINYINT(1) NOT NULL DEFAULT 1,
       created_at     VARCHAR(32) NOT NULL,
       updated_at     VARCHAR(32)
     );
@@ -87,8 +108,10 @@ async function init() {
       status       ENUM('available','sold') NOT NULL DEFAULT 'available',
       thumbnail    VARCHAR(500),
       delivery_url VARCHAR(800),
+      employee_id  INT NULL,
       created_at   VARCHAR(32) NOT NULL,
-      INDEX idx_listings_status (status)
+      INDEX idx_listings_status (status),
+      INDEX idx_listings_employee (employee_id)
     );
 
     CREATE TABLE IF NOT EXISTS subscribers (
@@ -152,15 +175,15 @@ const users = {
     const [rows] = await pool.query("SELECT * FROM users WHERE id = ?", [id]);
     return rows[0] || null;
   },
-  async create({ name, email, passwordHash, role = "customer", emailVerified = 0 }) {
+  async create({ name, email, passwordHash, role = "customer", emailVerified = 0, phone = null, bio = null, avatar_url = null, active }) {
     const [res] = await pool.query(
-      "INSERT INTO users (name, email, password_hash, role, email_verified, created_at) VALUES (?, ?, ?, ?, ?, ?)",
-      [name, String(email).toLowerCase(), passwordHash, role, emailVerified ? 1 : 0, nowISO()]
+      "INSERT INTO users (name, email, password_hash, role, email_verified, phone, bio, avatar_url, active, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+      [name, String(email).toLowerCase(), passwordHash, role, emailVerified ? 1 : 0, phone, bio, avatar_url, active === undefined ? 1 : active ? 1 : 0, nowISO()]
     );
     return this.findById(res.insertId);
   },
   async update(id, patch) {
-    const allowed = ["name", "phone", "bio", "avatar_url", "role", "email_verified"];
+    const allowed = ["name", "phone", "bio", "avatar_url", "role", "email_verified", "active"];
     const keys = Object.keys(patch).filter((k) => allowed.includes(k));
     if (!keys.length) return this.findById(id);
     const vals = keys.map((k) => (typeof patch[k] === "boolean" ? (patch[k] ? 1 : 0) : patch[k]));
@@ -170,6 +193,14 @@ const users = {
       id,
     ]);
     return this.findById(id);
+  },
+  async countByRole(role) {
+    const [rows] = await pool.query("SELECT COUNT(*) AS n FROM users WHERE role = ?", [role]);
+    return rows[0].n;
+  },
+  async listByRole(role) {
+    const [rows] = await pool.query("SELECT * FROM users WHERE role = ? ORDER BY created_at ASC", [role]);
+    return rows;
   },
   async updatePassword(id, passwordHash) {
     await pool.query("UPDATE users SET password_hash = ?, updated_at = ? WHERE id = ?", [passwordHash, nowISO(), id]);
@@ -288,18 +319,26 @@ const listings = {
   },
   async create(v) {
     const [res] = await pool.query(
-      "INSERT INTO listings (title, description, price, level, tech_stack, status, thumbnail, delivery_url, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-      [v.title, v.description, v.price, v.level ?? null, v.tech_stack ?? null, v.status ?? "available", v.thumbnail ?? null, v.deliveryUrl ?? null, nowISO()]
+      "INSERT INTO listings (title, description, price, level, tech_stack, status, thumbnail, delivery_url, employee_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+      [v.title, v.description, v.price, v.level ?? null, v.tech_stack ?? null, v.status ?? "available", v.thumbnail ?? null, v.delivery_url ?? v.deliveryUrl ?? null, v.employee_id ?? null, nowISO()]
     );
     return this.get(res.insertId);
   },
   async update(id, patch) {
-    const allowed = ["title", "description", "price", "level", "tech_stack", "status", "thumbnail", "delivery_url"];
+    const allowed = ["title", "description", "price", "level", "tech_stack", "status", "thumbnail", "delivery_url", "employee_id"];
     const keys = Object.keys(patch).filter((k) => allowed.includes(k));
     if (!keys.length) return this.get(id);
     const vals = keys.map((k) => (patch[k] === undefined ? null : patch[k]));
     await pool.query(`UPDATE listings SET ${keys.map((k) => `${k} = ?`).join(", ")} WHERE id = ?`, [...vals, id]);
     return this.get(id);
+  },
+  async listForEmployee(employeeId) {
+    const [rows] = await pool.query("SELECT * FROM listings WHERE employee_id = ? ORDER BY created_at DESC", [employeeId]);
+    return rows;
+  },
+  async unassignEmployee(employeeId) {
+    const [res] = await pool.query("UPDATE listings SET employee_id = NULL WHERE employee_id = ?", [employeeId]);
+    return res.affectedRows;
   },
   async remove(id) {
     const [res] = await pool.query("DELETE FROM listings WHERE id = ?", [id]);

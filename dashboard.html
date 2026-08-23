@@ -64,10 +64,11 @@
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
             </button>
             <div class="drop-menu">
-              <button type="button" data-view="enquiries">Enquiries</button>
+              <button type="button" data-view="enquiries" data-admin-only>Enquiries</button>
               <button type="button" data-view="listings">Listings</button>
-              <button type="button" data-view="orders">Orders</button>
-              <button type="button" data-view="subscribers">Subscribers</button>
+              <button type="button" data-view="orders" data-admin-only>Orders</button>
+              <button type="button" data-view="subscribers" data-admin-only>Subscribers</button>
+              <button type="button" data-view="employees" data-admin-only>Employees</button>
             </div>
           </div>
 
@@ -133,6 +134,11 @@
             <select id="fStatus"><option value="available">Available</option><option value="sold">Sold</option></select>
           </label>
           <label class="span-2">Tech stack<input type="text" id="fTech" placeholder="e.g. Node.js, SQLite, Payments" /></label>
+          <label class="span-2" data-admin-only>Assigned employee
+            <select id="fEmployee">
+              <option value="">Unassigned (admin handles)</option>
+            </select>
+          </label>
           <label class="span-2">Delivery link (private - buyers get this after paying)<input type="url" id="fDelivery" placeholder="https://drive.google.com/... or any download URL" /></label>
           <label class="span-2">Description<textarea id="fDesc" rows="3" required></textarea></label>
           <div class="form-actions span-2">
@@ -144,9 +150,40 @@
         <div class="table-wrap">
           <table>
             <thead>
-              <tr><th>Title</th><th>Price</th><th>Level</th><th>Status</th><th>Created</th><th></th></tr>
+              <tr><th>Title</th><th>Price</th><th>Level</th><th>Employee</th><th>Status</th><th>Created</th><th></th></tr>
             </thead>
             <tbody id="listingsBody"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section id="view-employees" class="view hidden">
+        <div class="view-head">
+          <h2>Employees</h2>
+          <button class="btn btn-ghost btn-sm" id="refreshEmployees" type="button">Refresh</button>
+        </div>
+        <p class="muted" style="margin-bottom:14px;">Your team, up to 21 people. Each employee gets a login and handles the listings you assign to them.</p>
+
+        <form id="employeeForm" class="listing-form">
+          <input type="hidden" id="employeeId" />
+          <label>Full name<input type="text" id="eName" required maxlength="80" placeholder="e.g. Adebayo Johnson" /></label>
+          <label>Email (their login)<input type="email" id="eEmail" required placeholder="adebayo@mitex.store" /></label>
+          <label>Password<input type="text" id="ePassword" required minlength="8" placeholder="Min 8 chars, letters + numbers" /></label>
+          <label>WhatsApp number<input type="tel" id="ePhone" placeholder="+234 801 234 5678" /></label>
+          <label class="span-2">Job title<input type="text" id="eTitle" maxlength="120" placeholder="e.g. Sales Executive - shown to buyers" /></label>
+          <div class="form-actions span-2">
+            <button type="submit" class="btn btn-primary btn-sm" id="employeeSubmit">Add Employee</button>
+            <button type="button" class="btn btn-ghost btn-sm hidden" id="cancelEmployeeEdit">Cancel Edit</button>
+            <span id="employeeCount" class="muted"></span>
+          </div>
+        </form>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>Name</th><th>Contact</th><th>Listings</th><th>Status</th><th></th></tr>
+            </thead>
+            <tbody id="employeesBody"></tbody>
           </table>
         </div>
       </section>

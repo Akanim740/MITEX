@@ -55,16 +55,17 @@ const users = {
       return null;
     }
   },
-  async create({ name, email, passwordHash, role = "customer", emailVerified = 0 }) {
+  async create({ name, email, passwordHash, role = "customer", emailVerified = 0, phone = null, bio = null, avatar_url = null, active }) {
     const doc = {
       name,
       email: String(email).toLowerCase(),
       password_hash: passwordHash,
       role,
       email_verified: emailVerified ? 1 : 0,
-      phone: null,
-      bio: null,
-      avatar_url: null,
+      phone,
+      bio,
+      avatar_url,
+      active: active === undefined ? 1 : active ? 1 : 0,
       created_at: nowISO(),
       updated_at: null,
     };
@@ -72,13 +73,19 @@ const users = {
     return { ...row, id: String(row._id) };
   },
   async update(id, patch) {
-    const allowed = ["name", "phone", "bio", "avatar_url", "role", "email_verified"];
+    const allowed = ["name", "phone", "bio", "avatar_url", "role", "email_verified", "active"];
     const set = {};
     for (const k of allowed) if (k in patch) set[k] = typeof patch[k] === "boolean" ? (patch[k] ? 1 : 0) : patch[k];
     if (!Object.keys(set).length) return this.findById(id);
     set.updated_at = nowISO();
     await db.collection("users").updateOne({ _id: oid(id) }, { $set: set });
     return this.findById(id);
+  },
+  async countByRole(role) {
+    return db.collection("users").countDocuments({ role });
+  },
+  async listByRole(role) {
+    return db.collection("users").find({ role }).sort({ created_at: 1 }).toArray();
   },
   async updatePassword(id, passwordHash) {
     await db.collection("users").updateOne({ _id: oid(id) }, { $set: { password_hash: passwordHash, updated_at: nowISO() } });
@@ -177,18 +184,25 @@ const listings = {
       tech_stack: v.tech_stack ?? null,
       status: v.status ?? "available",
       thumbnail: v.thumbnail ?? null,
-      delivery_url: v.deliveryUrl ?? null,
+      delivery_url: v.delivery_url ?? v.deliveryUrl ?? null,
+      employee_id: v.employee_id ?? null,
       created_at: nowISO(),
     });
     return { ...row, id: String(row._id) };
   },
   async update(id, patch) {
-    const allowed = ["title", "description", "price", "level", "tech_stack", "status", "thumbnail", "delivery_url"];
+    const allowed = ["title", "description", "price", "level", "tech_stack", "status", "thumbnail", "delivery_url", "employee_id"];
     const set = {};
     for (const k of allowed) if (k in patch) set[k] = patch[k] === undefined ? null : patch[k];
     if (!Object.keys(set).length) return this.get(id);
     await db.collection("listings").updateOne({ _id: oid(id) }, { $set: set });
     return this.get(id);
+  },
+  async listForEmployee(employeeId) {
+    return db.collection("listings").find({ employee_id: employeeId }).sort({ created_at: -1 }).toArray();
+  },
+  async unassignEmployee(employeeId) {
+    return (await db.collection("listings").updateMany({ employee_id: employeeId }, { $set: { employee_id: null } })).modifiedCount;
   },
   async remove(id) {
     return (await db.collection("listings").deleteOne({ _id: oid(id) })).deletedCount > 0;

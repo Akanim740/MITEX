@@ -51,26 +51,35 @@ const users = {
     const d = await col("users").doc(String(id)).get();
     return d.exists ? { ...d.data(), id: d.id } : null;
   },
-  async create({ name, email, passwordHash, role = "customer", emailVerified = 0 }) {
+  async create({ name, email, passwordHash, role = "customer", emailVerified = 0, phone = null, bio = null, avatar_url = null, active }) {
     return addDoc("users", {
       name,
       email: String(email).toLowerCase(),
       password_hash: passwordHash,
       role,
       email_verified: emailVerified ? 1 : 0,
-      phone: null,
-      bio: null,
-      avatar_url: null,
+      phone,
+      bio,
+      avatar_url,
+      active: active === undefined ? 1 : active ? 1 : 0,
       created_at: nowISO(),
       updated_at: null,
     });
   },
   async update(id, patch) {
-    const allowed = ["name", "phone", "bio", "avatar_url", "role", "email_verified"];
+    const allowed = ["name", "phone", "bio", "avatar_url", "role", "email_verified", "active"];
     const set = { updated_at: nowISO() };
     for (const k of allowed) if (k in patch) set[k] = typeof patch[k] === "boolean" ? (patch[k] ? 1 : 0) : patch[k];
     await col("users").doc(String(id)).update(set);
     return this.findById(id);
+  },
+  async countByRole(role) {
+    const snap = await col("users").where("role", "==", role).count().get();
+    return snap.data().count || 0;
+  },
+  async listByRole(role) {
+    const snap = await col("users").where("role", "==", role).get();
+    return snap.docs.map((d) => ({ ...d.data(), id: d.id })).sort((a, b) => String(a.created_at).localeCompare(String(b.created_at)));
   },
   async updatePassword(id, passwordHash) {
     await col("users").doc(String(id)).update({ password_hash: passwordHash, updated_at: nowISO() });
@@ -184,16 +193,28 @@ const listings = {
       tech_stack: v.tech_stack ?? null,
       status: v.status ?? "available",
       thumbnail: v.thumbnail ?? null,
-      delivery_url: v.deliveryUrl ?? null,
+      delivery_url: v.delivery_url ?? v.deliveryUrl ?? null,
+      employee_id: v.employee_id ?? null,
       created_at: nowISO(),
     });
   },
   async update(id, patch) {
-    const allowed = ["title", "description", "price", "level", "tech_stack", "status", "thumbnail", "delivery_url"];
+    const allowed = ["title", "description", "price", "level", "tech_stack", "status", "thumbnail", "delivery_url", "employee_id"];
     const set = {};
     for (const k of allowed) if (k in patch) set[k] = patch[k] === undefined ? null : patch[k];
     await col("listings").doc(String(id)).update(set);
     return this.get(id);
+  },
+  async listForEmployee(employeeId) {
+    const snap = await col("listings").where("employee_id", "==", employeeId).get();
+    return snap.docs.map((d) => ({ ...d.data(), id: d.id })).sort((a, b) => String(b.created_at).localeCompare(String(a.created_at)));
+  },
+  async unassignEmployee(employeeId) {
+    const snap = await col("listings").where("employee_id", "==", employeeId).get();
+    const batch = firestore.batch();
+    snap.docs.forEach((d) => batch.update(d.ref, { employee_id: null }));
+    await batch.commit();
+    return snap.size;
   },
   async remove(id) {
     await col("listings").doc(String(id)).delete();

@@ -602,6 +602,15 @@ function renderListings(query) {
         <p>${esc(l.description)}</p>
         ${l.tech_stack ? `<div class="tech-row">${l.tech_stack.split(",").map((t) => `<span class="chip">${esc(t.trim())}</span>`).join("")}</div>` : ""}
         <div class="price">${naira(l.price)}</div>
+        ${
+          l.employee
+            ? `<div class="handled-by">Handled by <strong>${esc(l.employee.name)}</strong>${
+                l.employee.phone
+                  ? ` &middot; <a href="https://wa.me/${esc(String(l.employee.phone).replace(/[^0-9]/g, ""))}" target="_blank" rel="noopener">WhatsApp</a>`
+                  : ""
+              }</div>`
+            : ""
+        }
         <button class="btn btn-primary btn-full" data-buy="${l.id}">Buy Now</button>
       </article>`
     )

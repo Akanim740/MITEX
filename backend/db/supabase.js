@@ -47,7 +47,7 @@ const users = {
     const { data } = await supabase.from("users").select("*").eq("id", id).maybeSingle();
     return data || null;
   },
-  async create({ name, email, passwordHash, role = "customer", emailVerified = 0 }) {
+  async create({ name, email, passwordHash, role = "customer", emailVerified = 0, phone = null, bio = null, avatar_url = null, active }) {
     const { data, error } = await supabase
       .from("users")
       .insert({
@@ -56,6 +56,10 @@ const users = {
         password_hash: passwordHash,
         role,
         email_verified: !!emailVerified,
+        phone,
+        bio,
+        avatar_url,
+        active: active === undefined ? true : !!active,
         created_at: nowISO(),
       })
       .select()
@@ -64,13 +68,21 @@ const users = {
     return data;
   },
   async update(id, patch) {
-    const allowed = ["name", "phone", "bio", "avatar_url", "role", "email_verified"];
+    const allowed = ["name", "phone", "bio", "avatar_url", "role", "email_verified", "active"];
     const set = {};
     for (const k of allowed) if (k in patch) set[k] = patch[k];
     set.updated_at = nowISO();
     const { data, error } = await supabase.from("users").update(set).eq("id", id).select().single();
     if (error) throw error;
     return data;
+  },
+  async countByRole(role) {
+    const { count } = await supabase.from("users").select("id", { count: "exact", head: true }).eq("role", role);
+    return count || 0;
+  },
+  async listByRole(role) {
+    const { data } = await supabase.from("users").select("*").eq("role", role).order("created_at", { ascending: true });
+    return data || [];
   },
   async updatePassword(id, passwordHash) {
     const { error } = await supabase
@@ -205,7 +217,8 @@ const listings = {
         tech_stack: v.tech_stack ?? null,
         status: v.status ?? "available",
         thumbnail: v.thumbnail ?? null,
-        delivery_url: v.deliveryUrl ?? null,
+        delivery_url: v.delivery_url ?? v.deliveryUrl ?? null,
+        employee_id: v.employee_id ?? null,
         created_at: nowISO(),
       })
       .select()
@@ -214,12 +227,29 @@ const listings = {
     return data;
   },
   async update(id, patch) {
-    const allowed = ["title", "description", "price", "level", "tech_stack", "status", "thumbnail", "delivery_url"];
+    const allowed = ["title", "description", "price", "level", "tech_stack", "status", "thumbnail", "delivery_url", "employee_id"];
     const set = {};
     for (const k of allowed) if (k in patch) set[k] = patch[k] === undefined ? null : patch[k];
     const { data, error } = await supabase.from("listings").update(set).eq("id", id).select().single();
     if (error) throw error;
     return data;
+  },
+  async listForEmployee(employeeId) {
+    const { data } = await supabase
+      .from("listings")
+      .select("*")
+      .eq("employee_id", employeeId)
+      .order("created_at", { ascending: false });
+    return data || [];
+  },
+  async unassignEmployee(employeeId) {
+    const { data, error } = await supabase
+      .from("listings")
+      .update({ employee_id: null })
+      .eq("employee_id", employeeId)
+      .select("id");
+    if (error) throw error;
+    return (data || []).length;
   },
   async remove(id) {
     const { error } = await supabase.from("listings").delete().eq("id", id);

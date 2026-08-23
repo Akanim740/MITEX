@@ -4,8 +4,8 @@
 -- ONLY for a brand-new/empty database!
 --
 -- If your tables already exist, do NOT run this file.
--- Instead just run any missing upgrade lines, e.g.:
---   ALTER TABLE listings ADD COLUMN IF NOT EXISTS delivery_url TEXT;
+-- Instead scroll to the UPGRADES section at the bottom and run
+-- only the lines you are missing.
 -- ============================================================
 
 CREATE TABLE users (
@@ -13,11 +13,12 @@ CREATE TABLE users (
   name           TEXT NOT NULL,
   email          TEXT NOT NULL UNIQUE,
   password_hash  TEXT NOT NULL,
-  role           TEXT NOT NULL DEFAULT 'customer' CHECK (role IN ('admin','editor','customer')),
+  role           TEXT NOT NULL DEFAULT 'customer' CHECK (role IN ('admin','editor','staff','customer')),
   email_verified BOOLEAN NOT NULL DEFAULT FALSE,
   phone          TEXT,
   bio            TEXT,
   avatar_url     TEXT,
+  active         BOOLEAN NOT NULL DEFAULT TRUE,
   created_at     TEXT NOT NULL,
   updated_at     TEXT
 );
@@ -63,6 +64,7 @@ CREATE TABLE listings (
   status      TEXT NOT NULL DEFAULT 'available' CHECK (status IN ('available','sold')),
   thumbnail   TEXT,
   delivery_url TEXT,
+  employee_id BIGINT REFERENCES users(id) ON DELETE SET NULL,
   created_at  TEXT NOT NULL
 );
 
@@ -98,3 +100,19 @@ CREATE TABLE webauthn_credentials (
   backed_up     BOOLEAN NOT NULL DEFAULT FALSE,
   created_at    TEXT NOT NULL
 );
+
+-- ============================================================
+-- UPGRADES (run only the lines you are missing, one at a time)
+-- ============================================================
+-- ALTER TABLE listings ADD COLUMN IF NOT EXISTS delivery_url TEXT;
+-- ALTER TABLE listings ADD COLUMN IF NOT EXISTS employee_id BIGINT REFERENCES users(id) ON DELETE SET NULL;
+-- ALTER TABLE users ADD COLUMN IF NOT EXISTS active BOOLEAN NOT NULL DEFAULT TRUE;
+--
+-- Employees feature: allow role 'staff' on existing databases.
+-- The CHECK constraint on users.role must be replaced:
+--   ALTER TABLE users DROP CONSTRAINT users_role_check;
+--   ALTER TABLE users ADD CONSTRAINT users_role_check
+--     CHECK (role IN ('admin','editor','staff','customer'));
+-- (If that DROP errors, find the exact name first:
+--   SELECT conname FROM pg_constraint WHERE conrelid = 'users'::regclass AND contype = 'c';
+--  then drop/add using that name.)
