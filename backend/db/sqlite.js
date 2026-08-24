@@ -124,6 +124,17 @@ db.exec(`
     hire_completed    INTEGER NOT NULL DEFAULT 0,
     created_at        TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
   );
+
+  CREATE TABLE IF NOT EXISTS salaries (
+    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    staff_user_id INTEGER NOT NULL,
+    amount        INTEGER NOT NULL,
+    bonus         INTEGER NOT NULL DEFAULT 0,
+    period        TEXT NOT NULL,
+    note          TEXT,
+    paid_at       TEXT NOT NULL,
+    created_at    TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+  );
 `);
 
 for (const col of ["delivery_url", "employee_id"]) {
@@ -498,6 +509,33 @@ const applications = {
   },
 };
 
+const salaries = {
+  async create(v) {
+    const res = db
+      .prepare("INSERT INTO salaries (staff_user_id, amount, bonus, period, note, paid_at) VALUES (?, ?, ?, ?, ?, ?)")
+      .run(String(v.staffUserId), Math.round(v.amount), Math.round(v.bonus || 0), v.period, v.note ?? null, nowISO());
+    return this.getById(res.lastInsertRowid);
+  },
+  async getById(id) {
+    return db.prepare("SELECT * FROM salaries WHERE id = ?").get(id) || null;
+  },
+  async listForStaff(staffUserId) {
+    return db.prepare("SELECT * FROM salaries WHERE staff_user_id = ? ORDER BY created_at DESC").all(String(staffUserId));
+  },
+  async listAll(period) {
+    return period
+      ? db.prepare("SELECT * FROM salaries WHERE period = ? ORDER BY created_at DESC").all(period)
+      : db.prepare("SELECT * FROM salaries ORDER BY created_at DESC").all();
+  },
+  async totalForPeriod(period) {
+    const row = db.prepare("SELECT COALESCE(SUM(amount + bonus),0) AS n FROM salaries WHERE period = ?").get(period);
+    return row.n;
+  },
+  async remove(id) {
+    return db.prepare("DELETE FROM salaries WHERE id = ?").run(id).changes > 0;
+  },
+};
+
 module.exports = {
   name: "sqlite",
   file: DB_FILE,
@@ -510,5 +548,6 @@ module.exports = {
   orders,
   credentials,
   applications,
+  salaries,
   _publicUser: stripSecret,
 };

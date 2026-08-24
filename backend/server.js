@@ -12,6 +12,12 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 app.set("trust proxy", 1);
+app.disable("x-powered-by");
+
+// Boot guard: refuse insecure defaults in production
+if (process.env.NODE_ENV === "production" && (!process.env.JWT_ACCESS_SECRET || process.env.JWT_ACCESS_SECRET.length < 32)) {
+  console.error("FATAL: set a strong JWT_ACCESS_SECRET (32+ random chars) in production");
+}
 
 let store;
 app.use((req, res, next) => {
@@ -19,16 +25,30 @@ app.use((req, res, next) => {
   next();
 });
 
+// Block public access to source code and internal files
+const BLOCKED_PATH = /^\/(\.git|\.env|backend|node_modules|scripts)(\/|$)|\.(sql|db|md|log|ps1|lock)$|^\/package(-lock)?\.json$/i;
+app.use((req, res, next) => {
+  if (BLOCKED_PATH.test(req.path)) return res.status(404).json({ error: "Not found" });
+  next();
+});
+
 app.use(
   helmet({
     contentSecurityPolicy: false,
     crossOriginEmbedderPolicy: false,
+    hsts: { maxAge: 15552000, includeSubDomains: true },
+    referrerPolicy: { policy: "strict-origin-when-cross-origin" },
   })
 );
 
+// Same-origin site needs no cross-origin API access; lock CORS unless explicitly opened
+const corsOrigins = String(process.env.CORS_ORIGIN || "")
+  .split(",")
+  .map((s) => s.trim())
+  .filter(Boolean);
 app.use(
   cors({
-    origin: process.env.CORS_ORIGIN || "*",
+    origin: corsOrigins.length ? corsOrigins : false,
     credentials: true,
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE"],
     allowedHeaders: ["Content-Type", "Authorization"],
@@ -74,6 +94,7 @@ app.use("/api/listings", require("./routes/listings"));
 app.use("/api/newsletter", require("./routes/newsletter"));
 app.use("/api/payments", require("./routes/payments"));
 app.use("/api/applications", require("./routes/applications"));
+app.use("/api/salaries", require("./routes/salaries"));
 
 app.get("/api/health", async (req, res) => {
   try {

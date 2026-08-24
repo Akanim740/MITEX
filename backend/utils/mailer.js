@@ -73,4 +73,22 @@ function hireEmail(app, rawToken) {
   };
 }
 
-module.exports = { sendMail, verificationEmail, resetEmail, testEmail, hireEmail, smtpConfigured, APP_URL };
+function naira(amount) {
+  return "\u20A6" + Number(amount || 0).toLocaleString("en-NG");
+}
+
+function receiptEmail(order) {
+  return {
+    subject: `MITEX receipt - ${order.title} (${order.reference})`,
+    text: `Thank you for your purchase!\n\nOrder:   ${order.title}\nAmount:  ${naira(order.amount)}\nRef:     ${order.reference}\nDate:    ${order.paid_at || new Date().toISOString()}\n\nYour website download is available in My Account on MITEX.\nQuestions? WhatsApp +234 701 163 3770.\n\n- MITEX team`,
+  };
+}
+
+function salaryEmail(staff, payment) {
+  return {
+    subject: `MITEX salary paid - ${payment.period}`,
+    text: `Hi ${staff.name},\n\nYour salary has been recorded as paid:\n\nPeriod: ${payment.period}\nAmount: ${naira(payment.amount)}${payment.bonus ? `\nBonus:  ${naira(payment.bonus)}` : ""}${payment.note ? `\nNote:   ${payment.note}` : ""}\n\nKeep this email as your record. Questions? Talk to admin.\n\n- MITEX team`,
+  };
+}
+
+module.exports = { sendMail, verificationEmail, resetEmail, testEmail, hireEmail, receiptEmail, salaryEmail, smtpConfigured, APP_URL };

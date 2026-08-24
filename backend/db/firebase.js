@@ -442,6 +442,49 @@ const applications = {
   },
 };
 
+const salaries = {
+  async create(v) {
+    return addDoc("salaries", {
+      staff_user_id: String(v.staffUserId),
+      amount: Math.round(v.amount),
+      bonus: Math.round(v.bonus || 0),
+      period: v.period,
+      note: v.note ?? null,
+      paid_at: nowISO(),
+      created_at: nowISO(),
+    });
+  },
+  async getById(id) {
+    const d = await col("salaries").doc(String(id)).get();
+    return d.exists ? { ...d.data(), id: d.id } : null;
+  },
+  async listForStaff(staffUserId) {
+    const snap = await col("salaries").where("staff_user_id", "==", String(staffUserId)).get();
+    return snap.docs
+      .map((d) => ({ ...d.data(), id: d.id }))
+      .sort((a, b) => String(b.created_at).localeCompare(String(a.created_at)));
+  },
+  async listAll(period) {
+    let query = col("salaries");
+    if (period) query = query.where("period", "==", period);
+    const snap = await query.get();
+    return snap.docs
+      .map((d) => ({ ...d.data(), id: d.id }))
+      .sort((a, b) => String(b.created_at).localeCompare(String(a.created_at)));
+  },
+  async totalForPeriod(period) {
+    const snap = await col("salaries").where("period", "==", period).get();
+    return snap.docs.reduce((sum, d) => {
+      const r = d.data();
+      return sum + Number(r.amount || 0) + Number(r.bonus || 0);
+    }, 0);
+  },
+  async remove(id) {
+    await col("salaries").doc(String(id)).delete();
+    return true;
+  },
+};
+
 const api = {
   name: "firebase",
   users,
@@ -453,6 +496,7 @@ const api = {
   orders,
   credentials,
   applications,
+  salaries,
   _publicUser: toPublic,
 };
 

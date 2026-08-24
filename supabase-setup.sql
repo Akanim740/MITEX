@@ -121,6 +121,17 @@ CREATE TABLE applications (
   created_at        TEXT NOT NULL
 );
 
+CREATE TABLE salaries (
+  id            BIGSERIAL PRIMARY KEY,
+  staff_user_id BIGINT REFERENCES users(id) ON DELETE CASCADE,
+  amount        BIGINT NOT NULL CHECK (amount > 0),
+  bonus         BIGINT NOT NULL DEFAULT 0 CHECK (bonus >= 0),
+  period        TEXT NOT NULL,
+  note          TEXT,
+  paid_at       TEXT NOT NULL,
+  created_at    TEXT NOT NULL
+);
+
 -- ============================================================
 -- UPGRADES (run only the lines you are missing, one at a time)
 -- ============================================================
@@ -147,6 +158,18 @@ CREATE TABLE applications (
 --   hire_token        TEXT UNIQUE,
 --   hire_completed    BOOLEAN NOT NULL DEFAULT FALSE,
 --   created_at        TEXT NOT NULL
+-- );
+--
+-- Salary ledger for employee payments.
+-- CREATE TABLE salaries (
+--   id            BIGSERIAL PRIMARY KEY,
+--   staff_user_id BIGINT REFERENCES users(id) ON DELETE CASCADE,
+--   amount        BIGINT NOT NULL CHECK (amount > 0),
+--   bonus         BIGINT NOT NULL DEFAULT 0 CHECK (bonus >= 0),
+--   period        TEXT NOT NULL,
+--   note          TEXT,
+--   paid_at       TEXT NOT NULL,
+--   created_at    TEXT NOT NULL
 -- );
 --
 -- Employees feature: allow role 'staff' on existing databases.

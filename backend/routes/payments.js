@@ -3,6 +3,7 @@ const router = express.Router();
 
 const { requireAuth, requireRole, requireAuthFlexible } = require("../middleware/auth");
 const { randomToken } = require("../utils/tokens");
+const { sendMail, receiptEmail } = require("../utils/mailer");
 const paystack = require("../utils/paystack");
 
 function newReference() {
@@ -18,6 +19,14 @@ async function settleOrder(store, order) {
       await store.listings.update(order.listing_id, { status: "sold" });
     }
   }
+  // Buyer receipt - a failed email must never fail the payment
+  setImmediate(() => {
+    sendMail({
+      to: order.email,
+      subject: `MITEX receipt - ${order.title} (${order.reference})`,
+      text: receiptEmail(order).text,
+    }).catch((e) => console.error("receipt email failed:", e.message));
+  });
 }
 
 // POST /api/payments/initialize - start checkout for a listing

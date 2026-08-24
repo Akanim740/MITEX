@@ -182,6 +182,7 @@ const loaders = {
   subscribers: loadSubscribers,
   employees: loadEmployees,
   applications: loadApplications,
+  salaries: loadSalaries,
 };
 
 let currentView = null;
@@ -211,6 +212,7 @@ $("#refreshOrders").addEventListener("click", loadOrders);
 $("#refreshSubs").addEventListener("click", loadSubscribers);
 $("#refreshEmployees").addEventListener("click", loadEmployees);
 $("#refreshApplications").addEventListener("click", loadApplications);
+$("#refreshSalaries").addEventListener("click", loadSalaries);
 
 document.querySelectorAll("[data-app-filter]").forEach((chip) =>
   chip.addEventListener("click", () => {
@@ -503,6 +505,7 @@ async function loadEmployees() {
           <td>
             <div class="row-actions">
               <button class="icon-btn" data-eedit="${r.id}">Edit</button>
+              <button class="icon-btn" data-epay="${r.id}">Pay Salary</button>
               <button class="icon-btn" data-etoggle="${r.id}" data-active="${Number(r.active)}">${Number(r.active) ? "Deactivate" : "Activate"}</button>
               <button class="icon-btn delete" data-edel="${r.id}">Remove</button>
             </div>
@@ -525,6 +528,25 @@ async function loadEmployees() {
         $("#employeeSubmit").textContent = "Save Changes";
         $("#cancelEmployeeEdit").classList.remove("hidden");
         window.scrollTo({ top: 0, behavior: "smooth" });
+      })
+    );
+
+    body.querySelectorAll("[data-epay]").forEach((btn) =>
+      btn.addEventListener("click", async () => {
+        const row = rows.find((r) => String(r.id) === btn.dataset.epay);
+        if (!row) return;
+        const amountStr = prompt(`Salary amount for ${row.name} (₦):`, "150000");
+        if (amountStr === null) return;
+        const amount = Number(amountStr);
+        const period = prompt("Which month? Format YYYY-MM (e.g. 2026-08):", new Date().toISOString().slice(0, 7));
+        if (period === null) return;
+        try {
+          await API.post("/api/salaries", { staffId: row.id, amount, bonus: 0, period, note: null });
+          alert(`Salary recorded for ${row.name}. They will be notified by email.`);
+          setView("salaries");
+        } catch (err) {
+          alert(err.message);
+        }
       })
     );
 
@@ -677,6 +699,113 @@ function currentFilter() {
   const activeChip = document.querySelector("[data-app-filter].active");
   return activeChip ? activeChip.dataset.appFilter : "";
 }
+
+function currentFilter() {
+  const activeChip = document.querySelector("[data-app-filter].active");
+  return activeChip ? activeChip.dataset.appFilter : "";
+}
+
+let salaryStaffCache = [];
+
+async function loadSalaries() {
+  const isAdmin = currentUser && currentUser.role !== "staff";
+  $("#salariesTitle").textContent = isAdmin ? "Salary Payments" : "My Salary History";
+  const body = $("#salariesBody");
+  body.innerHTML = '<tr><td colspan="7" class="empty-state">Loading...</td></tr>';
+
+  if (isAdmin) {
+    try {
+      salaryStaffCache = await API.get("/api/auth/staff");
+      const sel = $("#sEmployee");
+      sel.innerHTML =
+        '<option value="">Choose employee...</option>' +
+        salaryStaffCache.map((s) => `<option value="${esc(s.id)}">${esc(s.name)}</option>`).join("");
+    } catch {
+      sel.innerHTML = '<option value="">No employees yet</option>';
+    }
+    $("#salaryForm").classList.remove("hidden");
+  } else {
+    $("#salaryForm").classList.add("hidden");
+  }
+
+  try {
+    let payments, total = null;
+    if (isAdmin) {
+      const period = $("#sPeriod").value;
+      const res = await API.get(`/api/salaries${period ? `?period=${encodeURIComponent(period)}` : ""}`);
+      payments = res.payments;
+      total = res.totalForPeriod;
+    } else {
+      payments = await API.get("/api/salaries/mine");
+    }
+
+    if (!payments.length) {
+      body.innerHTML = '<tr><td colspan="7" class="empty-state">No salary records yet.</td></tr>';
+    } else {
+      const nameOf = (id) => {
+        const s = salaryStaffCache.find((x) => String(x.id) === String(id));
+        return s ? s.name : `#${id}`;
+      };
+      body.innerHTML = payments
+        .map(
+          (r) => `
+        <tr>
+          <td><strong>${esc(r.period)}</strong></td>
+          <td>${isAdmin ? esc(nameOf(r.staff_user_id)) : "You"}</td>
+          <td>${naira(r.amount)}</td>
+          <td>${r.bonus ? naira(r.bonus) : "-"}</td>
+          <td class="msg-cell" title="${esc(r.note || "")}">${r.note ? esc(r.note) : "-"}</td>
+          <td class="muted">${fmtDate(r.paid_at)}</td>
+          <td>${isAdmin ? `<div class="row-actions"><button class="icon-btn delete" data-sdel="${r.id}">Remove</button></div>` : ""}</td>
+        </tr>`
+        )
+        .join("");
+
+      body.querySelectorAll("[data-sdel]").forEach((btn) =>
+        btn.addEventListener("click", async () => {
+          if (!confirm("Remove this salary record?")) return;
+          try {
+            await API.del(`/api/salaries/${btn.dataset.sdel}`);
+            loadSalaries();
+          } catch (err) {
+            alert(err.message);
+          }
+        })
+      );
+    }
+
+    const totalEl = $("#salariesTotal");
+    if (totalEl) {
+      const month = $("#sPeriod").value;
+      totalEl.textContent = total !== null && month ? `Total paid in ${month}: ${naira(total)}` : "";
+    }
+  } catch (err) {
+    body.innerHTML = `<tr><td colspan="7" class="empty-state">${esc(err.message)}</td></tr>`;
+  }
+}
+
+$("#salaryForm").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const staffId = $("#sEmployee").value;
+  const amount = Number($("#sAmount").value);
+  const bonus = Number($("#sBonus").value || 0);
+  const period = $("#sPeriod").value;
+  const note = $("#sNote").value;
+
+  if (!staffId) return alert("Choose an employee first");
+  const staff = salaryStaffCache.find((s) => String(s.id) === String(staffId));
+
+  if (!confirm(`Record ${naira(amount + bonus)} salary for ${staff ? staff.name : "this employee"} for ${period}?`)) return;
+  try {
+    await API.post("/api/salaries", { staffId, amount, bonus, period, note });
+    $("#sAmount").value = "";
+    $("#sBonus").value = "";
+    $("#sNote").value = "";
+    loadSalaries();
+  } catch (err) {
+    alert(err.message);
+  }
+});
 
 async function loadOrders() {
   const body = $("#ordersBody");

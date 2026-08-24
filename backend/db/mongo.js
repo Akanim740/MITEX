@@ -410,6 +410,43 @@ const applications = {
   },
 };
 
+const salaries = {
+  async create(v) {
+    const row = await insertOne("salaries", {
+      staff_user_id: String(v.staffUserId),
+      amount: Math.round(v.amount),
+      bonus: Math.round(v.bonus || 0),
+      period: v.period,
+      note: v.note ?? null,
+      paid_at: nowISO(),
+      created_at: nowISO(),
+    });
+    return { ...row, id: String(row._id) };
+  },
+  async getById(id) {
+    try {
+      const row = await db.collection("salaries").findOne({ _id: oid(id) });
+      return row ? { ...row, id: String(row._id) } : null;
+    } catch {
+      return null;
+    }
+  },
+  async listForStaff(staffUserId) {
+    return db.collection("salaries").find({ staff_user_id: String(staffUserId) }).sort({ created_at: -1 }).toArray();
+  },
+  async listAll(period) {
+    const filter = period ? { period } : {};
+    return db.collection("salaries").find(filter).sort({ created_at: -1 }).toArray();
+  },
+  async totalForPeriod(period) {
+    const rows = await db.collection("salaries").find({ period }).toArray();
+    return rows.reduce((sum, r) => sum + Number(r.amount || 0) + Number(r.bonus || 0), 0);
+  },
+  async remove(id) {
+    return (await db.collection("salaries").deleteOne({ _id: oid(id) })).deletedCount > 0;
+  },
+};
+
 const api = {
   name: "mongo",
   users,
@@ -421,6 +458,7 @@ const api = {
   orders,
   credentials,
   applications,
+  salaries,
   _publicUser: toPublic,
   _close: () => client && client.close(),
 };

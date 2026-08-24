@@ -70,6 +70,7 @@
               <button type="button" data-view="subscribers" data-admin-only>Subscribers</button>
               <button type="button" data-view="employees" data-admin-only>Employees</button>
               <button type="button" data-view="applications" data-admin-only>Applications</button>
+              <button type="button" data-view="salaries">Salaries</button>
             </div>
           </div>
 
@@ -210,6 +211,45 @@
               <tr><th>Name</th><th>Contact</th><th>Status</th><th>Applied</th><th></th></tr>
             </thead>
             <tbody id="applicationsBody"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section id="view-salaries" class="view hidden">
+        <div class="view-head">
+          <h2 id="salariesTitle">Salary Payments</h2>
+          <button class="btn btn-ghost btn-sm" id="refreshSalaries" type="button">Refresh</button>
+        </div>
+        <p class="muted" style="margin-bottom:14px;">Record every salary you pay your team. Employees are notified by email and can see their history here.</p>
+
+        <form id="salaryForm" class="listing-form" data-admin-only>
+          <label>Employee
+            <select id="sEmployee" required></select>
+          </label>
+          <label>Month (period)
+            <input type="month" id="sPeriod" required />
+          </label>
+          <label>Amount (₦)
+            <input type="number" id="sAmount" required min="1000" step="500" placeholder="e.g. 150000" />
+          </label>
+          <label>Bonus (₦)
+            <input type="number" id="sBonus" min="0" step="500" placeholder="0" />
+          </label>
+          <label class="span-2">Note
+            <input type="text" id="sNote" maxlength="200" placeholder="e.g. August salary + performance bonus" />
+          </label>
+          <div class="form-actions span-2">
+            <button type="submit" class="btn btn-primary btn-sm">Record Payment</button>
+            <span id="salariesTotal" class="muted"></span>
+          </div>
+        </form>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>Period</th><th>Employee</th><th>Amount</th><th>Bonus</th><th>Note</th><th>Paid on</th><th></th></tr>
+            </thead>
+            <tbody id="salariesBody"></tbody>
           </table>
         </div>
       </section>

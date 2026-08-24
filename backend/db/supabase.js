@@ -501,6 +501,52 @@ const applications = {
   },
 };
 
+const salaries = {
+  async create(v) {
+    const { data, error } = await supabase
+      .from("salaries")
+      .insert({
+        staff_user_id: String(v.staffUserId),
+        amount: Math.round(v.amount),
+        bonus: Math.round(v.bonus || 0),
+        period: v.period,
+        note: v.note ?? null,
+        paid_at: nowISO(),
+        created_at: nowISO(),
+      })
+      .select()
+      .single();
+    if (error) throw error;
+    return data;
+  },
+  async getById(id) {
+    const { data } = await supabase.from("salaries").select("*").eq("id", id).maybeSingle();
+    return data || null;
+  },
+  async listForStaff(staffUserId) {
+    const { data } = await supabase
+      .from("salaries")
+      .select("*")
+      .eq("staff_user_id", String(staffUserId))
+      .order("created_at", { ascending: false });
+    return data || [];
+  },
+  async listAll(period) {
+    let query = supabase.from("salaries").select("*").order("created_at", { ascending: false });
+    if (period) query = query.eq("period", period);
+    const { data } = await query;
+    return data || [];
+  },
+  async totalForPeriod(period) {
+    const { data } = await supabase.from("salaries").select("amount, bonus").eq("period", period);
+    return (data || []).reduce((sum, r) => sum + Number(r.amount || 0) + Number(r.bonus || 0), 0);
+  },
+  async remove(id) {
+    const { error } = await supabase.from("salaries").delete().eq("id", id);
+    return !error;
+  },
+};
+
 const api = {
   name: "supabase",
   users,
@@ -512,6 +558,7 @@ const api = {
   orders,
   credentials,
   applications,
+  salaries,
   _publicUser: toPublic,
 };
 

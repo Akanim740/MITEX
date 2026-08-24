@@ -170,6 +170,19 @@ async function init() {
       created_at        VARCHAR(32) NOT NULL,
       INDEX idx_applications_status (status)
     );
+
+    CREATE TABLE IF NOT EXISTS salaries (
+      id            INT AUTO_INCREMENT PRIMARY KEY,
+      staff_user_id VARCHAR(40) NOT NULL,
+      amount        INT NOT NULL,
+      bonus         INT NOT NULL DEFAULT 0,
+      period        VARCHAR(16) NOT NULL,
+      note          TEXT,
+      paid_at       VARCHAR(32) NOT NULL,
+      created_at    VARCHAR(32) NOT NULL,
+      INDEX idx_salaries_staff (staff_user_id),
+      INDEX idx_salaries_period (period)
+    );
   `);
 
   return api;
@@ -541,6 +554,42 @@ const applications = {
   },
 };
 
+const salaries = {
+  async create(v) {
+    const [res] = await pool.query(
+      "INSERT INTO salaries (staff_user_id, amount, bonus, period, note, paid_at) VALUES (?, ?, ?, ?, ?, ?)",
+      [String(v.staffUserId), Math.round(v.amount), Math.round(v.bonus || 0), v.period, v.note ?? null, nowISO()]
+    );
+    return this.getById(res.insertId);
+  },
+  async getById(id) {
+    const [rows] = await pool.query("SELECT * FROM salaries WHERE id = ?", [id]);
+    return rows[0] || null;
+  },
+  async listForStaff(staffUserId) {
+    const [rows] = await pool.query("SELECT * FROM salaries WHERE staff_user_id = ? ORDER BY created_at DESC", [
+      String(staffUserId),
+    ]);
+    return rows;
+  },
+  async listAll(period) {
+    const [rows] = period
+      ? await pool.query("SELECT * FROM salaries WHERE period = ? ORDER BY created_at DESC", [period])
+      : await pool.query("SELECT * FROM salaries ORDER BY created_at DESC");
+    return rows;
+  },
+  async totalForPeriod(period) {
+    const [rows] = await pool.query("SELECT COALESCE(SUM(amount + bonus),0) AS n FROM salaries WHERE period = ?", [
+      period,
+    ]);
+    return Number(rows[0].n) || 0;
+  },
+  async remove(id) {
+    const [res] = await pool.query("DELETE FROM salaries WHERE id = ?", [id]);
+    return res.affectedRows > 0;
+  },
+};
+
 const api = {
   name: "mysql",
   users,
@@ -552,6 +601,7 @@ const api = {
   orders,
   credentials,
   applications,
+  salaries,
   _publicUser: stripSecret,
 };
 
