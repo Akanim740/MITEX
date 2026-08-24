@@ -477,6 +477,11 @@ const applications = {
     if (error) throw error;
     return data;
   },
+  async setPayDetails(id, enc) {
+    const { data, error } = await supabase.from("applications").update({ payment_enc: enc }).eq("id", id).select().single();
+    if (error) throw error;
+    return data;
+  },
   async markHired(id, { staffUserId, hireToken }) {
     const { data, error } = await supabase
       .from("applications")

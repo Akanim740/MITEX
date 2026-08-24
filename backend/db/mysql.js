@@ -167,6 +167,7 @@ async function init() {
       staff_user_id     VARCHAR(40),
       hire_token        VARCHAR(64) UNIQUE,
       hire_completed    TINYINT(1) NOT NULL DEFAULT 0,
+      payment_enc       TEXT,
       created_at        VARCHAR(32) NOT NULL,
       INDEX idx_applications_status (status)
     );
@@ -184,6 +185,14 @@ async function init() {
       INDEX idx_salaries_period (period)
     );
   `);
+
+  // Older databases: add columns that arrived after first launch
+  const [appCols] = await pool.query(
+    "SELECT COUNT(*) AS n FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'applications' AND COLUMN_NAME = 'payment_enc'"
+  );
+  if (!appCols[0].n) {
+    await pool.query("ALTER TABLE applications ADD COLUMN payment_enc TEXT");
+  }
 
   return api;
 }
@@ -532,6 +541,10 @@ const applications = {
       "UPDATE applications SET status = 'submitted', submit_url = ?, submit_notes = ?, submitted_at = ? WHERE id = ?",
       [url, notes ?? null, nowISO(), id]
     );
+    return this.get(id);
+  },
+  async setPayDetails(id, enc) {
+    await pool.query("UPDATE applications SET payment_enc = ? WHERE id = ?", [enc, id]);
     return this.get(id);
   },
   async markHired(id, { staffUserId, hireToken }) {

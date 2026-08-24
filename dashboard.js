@@ -621,7 +621,9 @@ async function loadApplications(status) {
             <div class="row-actions">
               <button class="icon-btn" data-aview="${r.id}">Details</button>
               ${["new", "test_sent", "submitted"].includes(r.status) ? `<button class="icon-btn" data-asend="${r.id}">${r.status === "test_sent" ? "Resend Test" : "Send Test"}</button>` : ""}
-              ${r.status === "submitted" ? `<button class="icon-btn pass" data-apass="${r.id}">Pass</button>` : ""}
+              ${r.wa_link ? `<a class="icon-btn" href="${esc(r.wa_link)}" target="_blank" rel="noopener" title="Send the test link by WhatsApp">WhatsApp</a>` : ""}
+              ${r.status === "submitted" ? `<button class="icon-btn" data-abank="${r.id}">Bank</button>` : ""}
+              ${r.status === "submitted" ? `<button class="icon-btn pass" data-apass="${r.id}">Approve</button>` : ""}
               ${!["rejected", "passed"].includes(r.status) ? `<button class="icon-btn delete" data-areject="${r.id}">Reject</button>` : ""}
             </div>
           </td>
@@ -670,11 +672,29 @@ async function loadApplications(status) {
 
     body.querySelectorAll("[data-apass]").forEach((btn) =>
       btn.addEventListener("click", async () => {
-        if (!confirm("Mark this applicant as PASSED and hire them? A staff account will be created and they get an email link to set their password.")) return;
+        if (!confirm("Approve this applicant and hire them? A staff account will be created, the first available listing is assigned to them, and they get an email link to set their password.")) return;
         try {
           const res = await API.post(`/api/applications/${btn.dataset.apass}/pass`, {});
-          alert(res.devLink ? `${res.message}\n\nSMTP not configured - share this link manually:\n${res.devLink}` : res.message);
+          alert(res.devLink ? `${res.message}\n\nShare this link manually:\n${res.devLink}` : res.message);
           loadApplications(currentFilter());
+        } catch (err) {
+          alert(err.message);
+        }
+      })
+    );
+
+    body.querySelectorAll("[data-abank]").forEach((btn) =>
+      btn.addEventListener("click", async () => {
+        try {
+          const d = await API.get(`/api/applications/${btn.dataset.abank}/payment-details`);
+          if (!d.hasDetails) {
+            alert("This applicant has not saved payment details yet. The form appears on their application page after they submit their test.");
+            return;
+          }
+          alert(
+            `Payment details for ${cache.find((x) => String(x.id) === btn.dataset.abank)?.name || "applicant"}:\n\n` +
+              `Account name: ${d.accountName}\nBank: ${d.bankName}\nAccount number: ${d.accountNumber}`
+          );
         } catch (err) {
           alert(err.message);
         }

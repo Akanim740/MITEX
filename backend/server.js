@@ -131,6 +131,7 @@ getStore()
         console.error(`  Seed on boot failed: ${err.message}`);
       }
     }
+    require("./routes/applications").startAutomation(store);
     app.listen(PORT, () => {
       console.log(`\n  MITEX server running at http://localhost:${PORT}`);
       console.log(`  Database driver: ${store.name}`);

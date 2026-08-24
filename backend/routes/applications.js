@@ -4,10 +4,14 @@ const router = express.Router();
 
 const { requireAuth, requireRole } = require("../middleware/auth");
 const { randomToken } = require("../utils/tokens");
-const { sendMail, testEmail, hireEmail } = require("../utils/mailer");
+const { sendMail, testEmail, hireEmail, APP_URL } = require("../utils/mailer");
+const cryptoBox = require("../utils/crypto-box");
 
 // Staff accounts are capped at 21 - shared rule with routes/auth.js
 const MAX_STAFF = Number(process.env.MAX_STAFF || 21);
+
+// Applications untouched for this long get their test dispatched automatically
+const AUTO_DISPATCH_HOURS = Number(process.env.AUTO_DISPATCH_HOURS || 24);
 
 // Public form endpoints get their own gentle limit
 const publicLimiter = rateLimit({
@@ -18,8 +22,26 @@ const publicLimiter = rateLimit({
 
 function safeApp(app) {
   if (!app) return app;
-  const { test_token, hire_token, ...rest } = app;
+  const { test_token, hire_token, payment_enc, ...rest } = app;
   return rest;
+}
+
+// WhatsApp needs international format without '+': 08012345678 -> 2348012345678
+function waPhone(phone) {
+  let digits = String(phone || "").replace(/\D/g, "");
+  if (!digits) return null;
+  if (digits.startsWith("00")) digits = digits.slice(2);
+  if (digits.length === 11 && digits.startsWith("0")) digits = `234${digits.slice(1)}`;
+  if (digits.length === 10) digits = `234${digits}`;
+  return digits.length >= 10 && digits.length <= 15 ? digits : null;
+}
+
+function waLink(app, token) {
+  const num = waPhone(app.phone);
+  if (!num || !token) return null;
+  const url = `${APP_URL}/careers.html?token=${token}`;
+  const text = `Hi ${app.name}! This is MITEX.\n\nYour application test is ready. Open this private link to read the brief and submit your work:\n${url}\n\nGood luck!`;
+  return `https://wa.me/${num}?text=${encodeURIComponent(text)}`;
 }
 
 function publicView(app) {
@@ -101,7 +123,72 @@ router.post("/submit-test", publicLimiter, async (req, res) => {
     }
 
     await store.applications.setSubmission(app.id, { url, notes });
-    res.json({ message: "Test submitted! Our team will review it and email you the result." });
+
+    // Optional payment details can ride along with the submission
+    let bankSaved = false;
+    if (req.body.accountName || req.body.bankName || req.body.accountNumber) {
+      bankSaved = await saveBankDetails(store, app.id, {
+        accountName: String(req.body.accountName || "").trim(),
+        bankName: String(req.body.bankName || "").trim(),
+        accountNumber: String(req.body.accountNumber || "").trim(),
+      });
+      if (!bankSaved) {
+        return res.json({ message: "Test submitted! But your payment details were incomplete - submit them below so we can pay you when hired.", paymentDetailsOk: false });
+      }
+    }
+
+    res.json({ message: "Test submitted! Our team will review it and email you the result.", paymentDetailsOk: true });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// Shared validation + encrypted storage for applicant payment details
+async function saveBankDetails(store, appId, { accountName, bankName, accountNumber }) {
+  if (accountName.length < 2 || accountName.length > 100) return false;
+  if (bankName.length < 2 || bankName.length > 60) return false;
+  if (!/^\d{6,17}$/.test(accountNumber)) return false;
+  const cipher = cryptoBox.encrypt(JSON.stringify({ accountName, bankName, accountNumber }));
+  await store.applications.setPayDetails(appId, cipher);
+  return true;
+}
+
+// POST /api/applications/bank-details - applicant saves/updates payment details via their private token
+router.post("/bank-details", publicLimiter, async (req, res) => {
+  try {
+    const store = req.store;
+    const token = String(req.body.token || "");
+    const app = await store.applications.getByTestToken(token);
+    if (!app) return res.status(404).json({ error: "Application not found. Check your link." });
+    if (!["test_sent", "submitted"].includes(app.status)) {
+      return res.status(400).json({ error: "Payment details are only collected from active applicants." });
+    }
+
+    const ok = await saveBankDetails(store, app.id, {
+      accountName: String(req.body.accountName || "").trim(),
+      bankName: String(req.body.bankName || "").trim(),
+      accountNumber: String(req.body.accountNumber || "").trim(),
+    });
+    if (!ok) {
+      return res.status(400).json({ error: "Enter a valid account name, bank name and account number (digits only)." });
+    }
+    res.json({ message: "Payment details saved. They are encrypted and only the MITEX admin can see them." });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// GET /api/applications/:id/payment-details - admin only: decrypt an applicant's payment details
+router.get("/:id/payment-details", requireAuth, requireRole("admin"), async (req, res) => {
+  try {
+    const app = await req.store.applications.get(req.params.id);
+    if (!app) return res.status(404).json({ error: "Application not found" });
+    if (!app.payment_enc) return res.json({ hasDetails: false });
+    const parsed = JSON.parse(cryptoBox.decrypt(app.payment_enc) || "null");
+    if (!parsed) return res.json({ hasDetails: false });
+    res.json({ hasDetails: true, ...parsed });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "Internal server error" });
@@ -112,7 +199,13 @@ router.post("/submit-test", publicLimiter, async (req, res) => {
 router.get("/", requireAuth, requireRole("admin"), async (req, res) => {
   try {
     const rows = await req.store.applications.list(req.query.status);
-    res.json((rows || []).map(safeApp));
+    // Admin-only extras: WhatsApp share link (uses the private token, never stored client-side)
+    const enriched = (rows || []).map((r) => ({
+      ...safeApp(r),
+      has_payment_details: Boolean(r.payment_enc),
+      wa_link: waLink(r, r.test_token),
+    }));
+    res.json(enriched);
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "Internal server error" });
@@ -207,6 +300,19 @@ router.post("/:id/pass", requireAuth, requireRole("admin"), async (req, res) => 
     const hireToken = randomToken(32);
     await store.applications.markHired(app.id, { staffUserId: user.id, hireToken });
 
+    // Auto-assign the first available website listing to the new worker
+    let assignedListing = null;
+    try {
+      const available = await store.listings.list({ includeSold: false });
+      const free = (available || []).find((l) => l.employee_id === null || l.employee_id === undefined);
+      if (free) {
+        await store.listings.update(free.id, { employee_id: String(user.id) });
+        assignedListing = free.title;
+      }
+    } catch (assignErr) {
+      console.error("auto-assign listing failed:", assignErr.message);
+    }
+
     const mail = hireEmail(app, hireToken);
     let result;
     try {
@@ -214,14 +320,14 @@ router.post("/:id/pass", requireAuth, requireRole("admin"), async (req, res) => 
     } catch (mailErr) {
       console.error("pass mail failed:", mailErr.message);
       return res.json({
-        message: `${app.name} passed and their staff account is ready. Email failed to send (${mailErr.message}) - share this link manually.`,
+        message: `${app.name} passed and their staff account is ready.${assignedListing ? ` Assigned work: ${assignedListing}.` : ""} Email failed to send (${mailErr.message}) - share this link manually.`,
         devLink: mail.url,
         devNote: "Email delivery problem - check your SMTP settings in Render",
       });
     }
 
     res.json({
-      message: `${app.name} passed. Onboarding link emailed.`,
+      message: `${app.name} passed. Onboarding link emailed.${assignedListing ? ` They were automatically assigned: ${assignedListing}.` : " No free listings to assign right now."}`,
       ...(result.dev ? { devLink: mail.url, devNote: "SMTP not configured - share this link manually" } : {}),
     });
   } catch (err) {
@@ -230,4 +336,45 @@ router.post("/:id/pass", requireAuth, requireRole("admin"), async (req, res) => 
   }
 });
 
+// ---------------------------------------------------------------------------
+// 24-hour auto-dispatch: applications still unreviewed after AUTO_DISPATCH_HOURS
+// get their test generated + emailed automatically. WhatsApp link stays ready
+// in the admin dashboard either way.
+// ---------------------------------------------------------------------------
+async function autoDispatchSweep(store) {
+  try {
+    const pending = await store.applications.list("new");
+    const cutoff = Date.now() - AUTO_DISPATCH_HOURS * 60 * 60 * 1000;
+    let dispatched = 0;
+    for (const app of pending || []) {
+      if (new Date(app.created_at).getTime() > cutoff) continue;
+
+      const instructions =
+        "Build a one-page website for an imaginary business of your choice. It must look professional on phones and laptops, load fast, and include a contact section. Host it anywhere free (Netlify, Vercel, GitHub Pages) and send us the live link.";
+      const token = randomToken(24);
+      await store.applications.setTest(app.id, { testToken: token, instructions });
+
+      const mail = testEmail({ ...app }, token, instructions);
+      sendMail({ to: app.email, subject: mail.subject, text: mail.text }).catch((mailErr) =>
+        console.error(`auto-dispatch mail failed for ${app.email}: ${mailErr.message}`)
+      );
+      dispatched += 1;
+    }
+    if (dispatched) console.log(`[automation] auto-dispatched ${dispatched} test(s) after ${AUTO_DISPATCH_HOURS}h`);
+  } catch (err) {
+    console.error("[automation] sweep failed:", err.message);
+  }
+}
+
+function startAutomation(storePromiseOrStore) {
+  Promise.resolve(storePromiseOrStore)
+    .then((store) => {
+      setTimeout(() => autoDispatchSweep(store), 30 * 1000);
+      setInterval(() => autoDispatchSweep(store), 15 * 60 * 1000);
+      console.log(`[automation] 24h auto-review active (checks every 15 min, dispatch after ${AUTO_DISPATCH_HOURS}h)`);
+    })
+    .catch((err) => console.error("[automation] could not start:", err.message));
+}
+
 module.exports = router;
+module.exports.startAutomation = startAutomation;

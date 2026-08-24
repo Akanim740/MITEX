@@ -122,6 +122,7 @@ db.exec(`
     staff_user_id     INTEGER,
     hire_token        TEXT UNIQUE,
     hire_completed    INTEGER NOT NULL DEFAULT 0,
+    payment_enc       TEXT,
     created_at        TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
   );
 
@@ -175,6 +176,11 @@ if (usersTableSql && !String(usersTableSql.sql).includes("'staff'")) {
 {
   const userCols = db.prepare("PRAGMA table_info(users)").all().map((c) => c.name);
   if (!userCols.includes("active")) db.exec("ALTER TABLE users ADD COLUMN active INTEGER NOT NULL DEFAULT 1");
+}
+
+{
+  const appCols = db.prepare("PRAGMA table_info(applications)").all().map((c) => c.name);
+  if (!appCols.includes("payment_enc")) db.exec("ALTER TABLE applications ADD COLUMN payment_enc TEXT");
 }
 
 const nowISO = () => new Date().toISOString();
@@ -488,6 +494,10 @@ const applications = {
       nowISO(),
       id
     );
+    return this.get(id);
+  },
+  async setPayDetails(id, enc) {
+    db.prepare("UPDATE applications SET payment_enc = ? WHERE id = ?").run(enc, id);
     return this.get(id);
   },
   async markHired(id, { staffUserId, hireToken }) {

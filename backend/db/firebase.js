@@ -421,6 +421,10 @@ const applications = {
     });
     return this.get(id);
   },
+  async setPayDetails(id, enc) {
+    await col("applications").doc(String(id)).update({ payment_enc: enc });
+    return this.get(id);
+  },
   async markHired(id, { staffUserId, hireToken }) {
     await col("applications").doc(String(id)).update({
       status: "passed",

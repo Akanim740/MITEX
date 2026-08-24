@@ -116,6 +116,25 @@
           <p class="success-text">Your test has been submitted. We will review it and email you the result.</p>
         </div>
 
+        <div id="payBox" class="hidden" style="margin-top:18px;">
+          <h2 style="font-family:'Sora',sans-serif;font-size:1rem;margin-bottom:6px;">Where should we pay you?</h2>
+          <p class="sub" style="font-size:0.85rem;margin-bottom:10px;">If you pass, this is where your pay goes. Encrypted and visible only to the MITEX admin.</p>
+          <form id="bankForm">
+            <label>Account name
+              <input type="text" id="bkName" placeholder="Exactly as on your bank record" required maxlength="100" />
+            </label>
+            <label>Bank name
+              <input type="text" id="bkBank" placeholder="e.g. GTBank, Access, Kuda" required maxlength="60" />
+            </label>
+            <label>Account number
+              <input type="text" id="bkNumber" placeholder="10 digits" required inputmode="numeric" pattern="\d{6,17}" />
+            </label>
+            <p id="bankMsg" class="error hidden"></p>
+            <button type="submit" id="bankBtn" class="btn btn-primary btn-full">Save Payment Details</button>
+          </form>
+          <p id="bankSavedNote" class="success-text hidden">Payment details saved.</p>
+        </div>
+
         <p class="switch-line"><a href="/index.html">Back to home</a></p>
       </div>
 
@@ -156,6 +175,7 @@
             note.textContent = "";
             document.getElementById("alreadySubmitted").classList.remove("hidden");
           } else if (data.status === "passed") note.textContent = "Congratulations - check your email for your welcome link!";
+          if (data.status === "submitted") document.getElementById("payBox").classList.remove("hidden");
           if ((data.status === "test_sent" || data.status === "submitted") && data.test_instructions) {
             document.getElementById("briefBox").classList.remove("hidden");
             document.getElementById("briefText").textContent = data.test_instructions;
@@ -224,6 +244,38 @@
         fail("submitMsg", err.message);
         btn.disabled = false;
         btn.textContent = "Submit My Test";
+      }
+    });
+    document.getElementById("bankForm").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const btn = document.getElementById("bankBtn");
+      const number = document.getElementById("bkNumber").value.trim();
+      if (!/^\d{6,17}$/.test(number)) {
+        fail("bankMsg", "Account number must be digits only (10 digits for Nigerian banks).");
+        return;
+      }
+      btn.disabled = true;
+      btn.textContent = "Saving...";
+      try {
+        const res = await fetch("/api/applications/bank-details", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            token,
+            accountName: document.getElementById("bkName").value,
+            bankName: document.getElementById("bkBank").value,
+            accountNumber: number,
+          }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.error || "Could not save payment details");
+        document.getElementById("bankForm").classList.add("hidden");
+        document.getElementById("bankSavedNote").classList.remove("hidden");
+      } catch (err) {
+        fail("bankMsg", err.message);
+      } finally {
+        btn.disabled = false;
+        btn.textContent = "Save Payment Details";
       }
     });
   </script>

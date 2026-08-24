@@ -393,6 +393,10 @@ const applications = {
     );
     return this.get(id);
   },
+  async setPayDetails(id, enc) {
+    await db.collection("applications").updateOne({ _id: oid(id) }, { $set: { payment_enc: enc } });
+    return this.get(id);
+  },
   async markHired(id, { staffUserId, hireToken }) {
     await db
       .collection("applications")

@@ -118,6 +118,7 @@ CREATE TABLE applications (
   staff_user_id     BIGINT REFERENCES users(id) ON DELETE SET NULL,
   hire_token        TEXT UNIQUE,
   hire_completed    BOOLEAN NOT NULL DEFAULT FALSE,
+  payment_enc       TEXT,
   created_at        TEXT NOT NULL
 );
 
@@ -171,6 +172,9 @@ CREATE TABLE salaries (
 --   paid_at       TEXT NOT NULL,
 --   created_at    TEXT NOT NULL
 -- );
+--
+-- Encrypted applicant payment details (auto-hire pipeline).
+-- ALTER TABLE applications ADD COLUMN IF NOT EXISTS payment_enc TEXT;
 --
 -- Employees feature: allow role 'staff' on existing databases.
 -- The CHECK constraint on users.role must be replaced:
