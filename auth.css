@@ -46,6 +46,11 @@ body {
   font-size: 0.9rem;
 }
 
+.error-text {
+  color: var(--red);
+  font-size: 0.9rem;
+}
+
 .logo {
   font-family: "Sora", sans-serif;
   font-weight: 800;

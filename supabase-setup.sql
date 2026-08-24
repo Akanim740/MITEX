@@ -101,12 +101,53 @@ CREATE TABLE webauthn_credentials (
   created_at    TEXT NOT NULL
 );
 
+CREATE TABLE applications (
+  id                BIGSERIAL PRIMARY KEY,
+  name              TEXT NOT NULL,
+  email             TEXT NOT NULL,
+  phone             TEXT,
+  portfolio         TEXT,
+  message           TEXT NOT NULL,
+  status            TEXT NOT NULL DEFAULT 'new' CHECK (status IN ('new','test_sent','submitted','passed','rejected')),
+  test_token        TEXT UNIQUE,
+  test_instructions TEXT,
+  test_sent_at      TEXT,
+  submit_url        TEXT,
+  submit_notes      TEXT,
+  submitted_at      TEXT,
+  staff_user_id     BIGINT REFERENCES users(id) ON DELETE SET NULL,
+  hire_token        TEXT UNIQUE,
+  hire_completed    BOOLEAN NOT NULL DEFAULT FALSE,
+  created_at        TEXT NOT NULL
+);
+
 -- ============================================================
 -- UPGRADES (run only the lines you are missing, one at a time)
 -- ============================================================
 -- ALTER TABLE listings ADD COLUMN IF NOT EXISTS delivery_url TEXT;
 -- ALTER TABLE listings ADD COLUMN IF NOT EXISTS employee_id BIGINT REFERENCES users(id) ON DELETE SET NULL;
 -- ALTER TABLE users ADD COLUMN IF NOT EXISTS active BOOLEAN NOT NULL DEFAULT TRUE;
+--
+-- Recruitment pipeline: applications table for job applicants.
+-- CREATE TABLE applications (
+--   id                BIGSERIAL PRIMARY KEY,
+--   name              TEXT NOT NULL,
+--   email             TEXT NOT NULL,
+--   phone             TEXT,
+--   portfolio         TEXT,
+--   message           TEXT NOT NULL,
+--   status            TEXT NOT NULL DEFAULT 'new' CHECK (status IN ('new','test_sent','submitted','passed','rejected')),
+--   test_token        TEXT UNIQUE,
+--   test_instructions TEXT,
+--   test_sent_at      TEXT,
+--   submit_url        TEXT,
+--   submit_notes      TEXT,
+--   submitted_at      TEXT,
+--   staff_user_id     BIGINT REFERENCES users(id) ON DELETE SET NULL,
+--   hire_token        TEXT UNIQUE,
+--   hire_completed    BOOLEAN NOT NULL DEFAULT FALSE,
+--   created_at        TEXT NOT NULL
+-- );
 --
 -- Employees feature: allow role 'staff' on existing databases.
 -- The CHECK constraint on users.role must be replaced:

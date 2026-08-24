@@ -73,6 +73,7 @@ app.use("/api/enquiries", enquiryLimiter, require("./routes/enquiries"));
 app.use("/api/listings", require("./routes/listings"));
 app.use("/api/newsletter", require("./routes/newsletter"));
 app.use("/api/payments", require("./routes/payments"));
+app.use("/api/applications", require("./routes/applications"));
 
 app.get("/api/health", async (req, res) => {
   try {

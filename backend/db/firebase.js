@@ -356,6 +356,92 @@ const credentials = {
   },
 };
 
+const applications = {
+  async create(v) {
+    return addDoc("applications", {
+      name: v.name,
+      email: String(v.email).toLowerCase(),
+      phone: v.phone ?? null,
+      portfolio: v.portfolio ?? null,
+      message: v.message,
+      status: "new",
+      test_token: null,
+      test_instructions: null,
+      test_sent_at: null,
+      submit_url: null,
+      submit_notes: null,
+      submitted_at: null,
+      staff_user_id: null,
+      hire_token: null,
+      hire_completed: 0,
+      created_at: nowISO(),
+    });
+  },
+  async findByEmail(email) {
+    const snap = await col("applications").where("email", "==", String(email).toLowerCase()).get();
+    const rows = snap.docs.map((d) => ({ ...d.data(), id: d.id })).filter((r) => r.status !== "rejected");
+    rows.sort((a, b) => String(b.created_at).localeCompare(String(a.created_at)));
+    return rows[0] || null;
+  },
+  async get(id) {
+    const d = await col("applications").doc(String(id)).get();
+    return d.exists ? { ...d.data(), id: d.id } : null;
+  },
+  async getByTestToken(token) {
+    const snap = await col("applications").where("test_token", "==", token).limit(1).get();
+    return snap.empty ? null : { ...snap.docs[0].data(), id: snap.docs[0].id };
+  },
+  async getByHireToken(token) {
+    const snap = await col("applications").where("hire_token", "==", token).where("hire_completed", "==", 0).limit(1).get();
+    return snap.empty ? null : { ...snap.docs[0].data(), id: snap.docs[0].id };
+  },
+  async list(status) {
+    let query = col("applications");
+    if (status) query = query.where("status", "==", status);
+    const snap = await query.get();
+    return snap.docs
+      .map((d) => ({ ...d.data(), id: d.id }))
+      .sort((a, b) => String(b.created_at).localeCompare(String(a.created_at)));
+  },
+  async setTest(id, { testToken, instructions }) {
+    await col("applications").doc(String(id)).update({
+      status: "test_sent",
+      test_token: testToken,
+      test_instructions: instructions,
+      test_sent_at: nowISO(),
+    });
+    return this.get(id);
+  },
+  async setSubmission(id, { url, notes }) {
+    await col("applications").doc(String(id)).update({
+      status: "submitted",
+      submit_url: url,
+      submit_notes: notes ?? null,
+      submitted_at: nowISO(),
+    });
+    return this.get(id);
+  },
+  async markHired(id, { staffUserId, hireToken }) {
+    await col("applications").doc(String(id)).update({
+      status: "passed",
+      staff_user_id: String(staffUserId),
+      hire_token: hireToken,
+    });
+    return this.get(id);
+  },
+  async completeHire(id) {
+    await col("applications").doc(String(id)).update({ hire_completed: 1 });
+  },
+  async setStatus(id, status) {
+    await col("applications").doc(String(id)).update({ status });
+    return true;
+  },
+  async remove(id) {
+    await col("applications").doc(String(id)).delete();
+    return true;
+  },
+};
+
 const api = {
   name: "firebase",
   users,
@@ -366,6 +452,7 @@ const api = {
   subscribers,
   orders,
   credentials,
+  applications,
   _publicUser: toPublic,
 };
 

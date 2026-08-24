@@ -69,6 +69,7 @@
               <button type="button" data-view="orders" data-admin-only>Orders</button>
               <button type="button" data-view="subscribers" data-admin-only>Subscribers</button>
               <button type="button" data-view="employees" data-admin-only>Employees</button>
+              <button type="button" data-view="applications" data-admin-only>Applications</button>
             </div>
           </div>
 
@@ -184,6 +185,30 @@
               <tr><th>Name</th><th>Contact</th><th>Listings</th><th>Status</th><th></th></tr>
             </thead>
             <tbody id="employeesBody"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section id="view-applications" class="view hidden">
+        <div class="view-head">
+          <h2>Applications</h2>
+          <button class="btn btn-ghost btn-sm" id="refreshApplications" type="button">Refresh</button>
+        </div>
+        <p class="muted" style="margin-bottom:14px;">People who want to work at MITEX. Send them a test, review their submission, then pass or reject.</p>
+        <div class="app-filters">
+          <button class="chip active" data-app-filter="" type="button">All</button>
+          <button class="chip" data-app-filter="new" type="button">New</button>
+          <button class="chip" data-app-filter="test_sent" type="button">Test sent</button>
+          <button class="chip" data-app-filter="submitted" type="button">Submitted</button>
+          <button class="chip" data-app-filter="passed" type="button">Hired</button>
+          <button class="chip" data-app-filter="rejected" type="button">Rejected</button>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>Name</th><th>Contact</th><th>Status</th><th>Applied</th><th></th></tr>
+            </thead>
+            <tbody id="applicationsBody"></tbody>
           </table>
         </div>
       </section>

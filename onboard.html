@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Set Up Your Account | MITEX</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23070b14'/%3E%3Ctext x='32' y='44' font-family='Arial' font-size='34' font-weight='bold' fill='%23fbbf24' text-anchor='middle'%3EM%3C/text%3E%3C/svg%3E" />
+  <link rel="manifest" href="/manifest.webmanifest" />
+  <meta name="theme-color" content="#070b14" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;600;700;800&family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="auth.css" />
+</head>
+<body data-page="onboard">
+  <div class="auth-wrap">
+    <div class="auth-card">
+
+      <div id="onboardMode">
+        <a class="logo" href="/index.html">MIT<span>EX</span></a>
+        <h1>Welcome to the team!</h1>
+        <p class="sub">Choose a password for your MITEX work account. You will use it to sign in to your dashboard.</p>
+        <form id="onboardForm">
+          <label>New password
+            <input type="password" id="obPass" placeholder="At least 8 characters" required autocomplete="new-password" />
+          </label>
+          <label>Confirm password
+            <input type="password" id="obPass2" placeholder="Repeat it" required autocomplete="new-password" />
+          </label>
+          <p class="hint">Use at least 8 characters, with letters and numbers.</p>
+          <p id="obError" class="error hidden"></p>
+          <button type="submit" id="obBtn" class="btn btn-primary btn-full">Create My Work Account</button>
+        </form>
+      </div>
+
+      <div id="doneMode" class="hidden">
+        <h1>You are all set</h1>
+        <p class="success-text">Your work account is ready. Sign in with your email and the password you just chose.</p>
+        <a href="/login.html" class="btn btn-primary btn-full" style="margin-top:12px;">Go to Sign In</a>
+      </div>
+
+      <div id="invalidMode" class="hidden">
+        <h1>Link not valid</h1>
+        <p class="error-text">This onboarding link is invalid or has already been used. If you already set a password, just sign in normally.</p>
+        <a href="/login.html" class="btn btn-primary btn-full" style="margin-top:12px;">Go to Sign In</a>
+      </div>
+
+    </div>
+  </div>
+
+  <script>
+    const token = new URLSearchParams(location.search).get("token");
+
+    if (!token) {
+      document.getElementById("onboardMode").classList.add("hidden");
+      document.getElementById("invalidMode").classList.remove("hidden");
+    }
+
+    function fail(msg) {
+      const el = document.getElementById("obError");
+      el.textContent = msg;
+      el.classList.remove("hidden");
+    }
+
+    document.getElementById("onboardForm").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const pass = document.getElementById("obPass").value;
+      const pass2 = document.getElementById("obPass2").value;
+
+      if (pass !== pass2) return fail("Passwords do not match");
+      if (pass.length < 8 || !/[A-Za-z]/.test(pass) || !/[0-9]/.test(pass)) {
+        return fail("Password must be at least 8 characters and include letters and numbers");
+      }
+
+      const btn = document.getElementById("obBtn");
+      btn.disabled = true;
+      btn.textContent = "Setting up...";
+      try {
+        const res = await fetch("/api/auth/onboard", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ token, password: pass }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.error || "Could not set up your account");
+        document.getElementById("onboardMode").classList.add("hidden");
+        document.getElementById("doneMode").classList.remove("hidden");
+      } catch (err) {
+        fail(err.message);
+        btn.disabled = false;
+        btn.textContent = "Create My Work Account";
+      }
+    });
+  </script>
+</body>
+</html>

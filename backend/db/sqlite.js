@@ -104,6 +104,26 @@ db.exec(`
     backed_up     INTEGER NOT NULL DEFAULT 0,
     created_at    TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
   );
+
+  CREATE TABLE IF NOT EXISTS applications (
+    id                INTEGER PRIMARY KEY AUTOINCREMENT,
+    name              TEXT NOT NULL,
+    email             TEXT NOT NULL,
+    phone             TEXT,
+    portfolio         TEXT,
+    message           TEXT NOT NULL,
+    status            TEXT NOT NULL DEFAULT 'new' CHECK (status IN ('new','test_sent','submitted','passed','rejected')),
+    test_token        TEXT UNIQUE,
+    test_instructions TEXT,
+    test_sent_at      TEXT,
+    submit_url        TEXT,
+    submit_notes      TEXT,
+    submitted_at      TEXT,
+    staff_user_id     INTEGER,
+    hire_token        TEXT UNIQUE,
+    hire_completed    INTEGER NOT NULL DEFAULT 0,
+    created_at        TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+  );
 `);
 
 for (const col of ["delivery_url", "employee_id"]) {
@@ -407,6 +427,77 @@ const credentials = {
   },
 };
 
+const applications = {
+  _safe(row) {
+    if (!row) return row;
+    const { test_token, hire_token, ...rest } = row;
+    return rest;
+  },
+  async create(v) {
+    const res = db
+      .prepare("INSERT INTO applications (name, email, phone, portfolio, message) VALUES (?, ?, ?, ?, ?)")
+      .run(v.name, String(v.email).toLowerCase(), v.phone ?? null, v.portfolio ?? null, v.message);
+    return this.get(res.lastInsertRowid);
+  },
+  async findByEmail(email) {
+    return (
+      db
+        .prepare("SELECT * FROM applications WHERE email = ? AND status != 'rejected' ORDER BY created_at DESC LIMIT 1")
+        .get(String(email).toLowerCase()) || null
+    );
+  },
+  async get(id) {
+    return db.prepare("SELECT * FROM applications WHERE id = ?").get(id) || null;
+  },
+  async getByTestToken(token) {
+    return db.prepare("SELECT * FROM applications WHERE test_token = ?").get(token) || null;
+  },
+  async getByHireToken(token) {
+    return db.prepare("SELECT * FROM applications WHERE hire_token = ? AND hire_completed = 0").get(token) || null;
+  },
+  async list(status) {
+    if (status) {
+      return db.prepare("SELECT * FROM applications WHERE status = ? ORDER BY created_at DESC").all(status);
+    }
+    return db.prepare("SELECT * FROM applications ORDER BY created_at DESC").all();
+  },
+  async setTest(id, { testToken, instructions }) {
+    db.prepare("UPDATE applications SET status = 'test_sent', test_token = ?, test_instructions = ?, test_sent_at = ? WHERE id = ?").run(
+      testToken,
+      instructions,
+      nowISO(),
+      id
+    );
+    return this.get(id);
+  },
+  async setSubmission(id, { url, notes }) {
+    db.prepare("UPDATE applications SET status = 'submitted', submit_url = ?, submit_notes = ?, submitted_at = ? WHERE id = ?").run(
+      url,
+      notes ?? null,
+      nowISO(),
+      id
+    );
+    return this.get(id);
+  },
+  async markHired(id, { staffUserId, hireToken }) {
+    db.prepare("UPDATE applications SET status = 'passed', staff_user_id = ?, hire_token = ? WHERE id = ?").run(
+      String(staffUserId),
+      hireToken,
+      id
+    );
+    return this.get(id);
+  },
+  async completeHire(id) {
+    db.prepare("UPDATE applications SET hire_completed = 1 WHERE id = ?").run(id);
+  },
+  async setStatus(id, status) {
+    return db.prepare("UPDATE applications SET status = ? WHERE id = ?").run(status, id).changes > 0;
+  },
+  async remove(id) {
+    return db.prepare("DELETE FROM applications WHERE id = ?").run(id).changes > 0;
+  },
+};
+
 module.exports = {
   name: "sqlite",
   file: DB_FILE,
@@ -418,5 +509,6 @@ module.exports = {
   subscribers,
   orders,
   credentials,
+  applications,
   _publicUser: stripSecret,
 };

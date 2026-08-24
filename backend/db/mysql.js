@@ -149,6 +149,27 @@ async function init() {
       created_at    VARCHAR(32) NOT NULL,
       INDEX idx_wc_user (user_id)
     );
+
+    CREATE TABLE IF NOT EXISTS applications (
+      id                INT AUTO_INCREMENT PRIMARY KEY,
+      name              VARCHAR(120) NOT NULL,
+      email             VARCHAR(190) NOT NULL,
+      phone             VARCHAR(40),
+      portfolio         VARCHAR(500),
+      message           TEXT NOT NULL,
+      status            ENUM('new','test_sent','submitted','passed','rejected') NOT NULL DEFAULT 'new',
+      test_token        VARCHAR(64) UNIQUE,
+      test_instructions TEXT,
+      test_sent_at      VARCHAR(32),
+      submit_url        VARCHAR(800),
+      submit_notes      TEXT,
+      submitted_at      VARCHAR(32),
+      staff_user_id     VARCHAR(40),
+      hire_token        VARCHAR(64) UNIQUE,
+      hire_completed    TINYINT(1) NOT NULL DEFAULT 0,
+      created_at        VARCHAR(32) NOT NULL,
+      INDEX idx_applications_status (status)
+    );
   `);
 
   return api;
@@ -453,6 +474,73 @@ const credentials = {
   },
 };
 
+const applications = {
+  async create(v) {
+    const [res] = await pool.query(
+      "INSERT INTO applications (name, email, phone, portfolio, message, created_at) VALUES (?, ?, ?, ?, ?, ?)",
+      [v.name, String(v.email).toLowerCase(), v.phone ?? null, v.portfolio ?? null, v.message, nowISO()]
+    );
+    return this.get(res.insertId);
+  },
+  async findByEmail(email) {
+    const [rows] = await pool.query(
+      "SELECT * FROM applications WHERE email = ? AND status != 'rejected' ORDER BY created_at DESC LIMIT 1",
+      [String(email).toLowerCase()]
+    );
+    return rows[0] || null;
+  },
+  async get(id) {
+    const [rows] = await pool.query("SELECT * FROM applications WHERE id = ?", [id]);
+    return rows[0] || null;
+  },
+  async getByTestToken(token) {
+    const [rows] = await pool.query("SELECT * FROM applications WHERE test_token = ?", [token]);
+    return rows[0] || null;
+  },
+  async getByHireToken(token) {
+    const [rows] = await pool.query("SELECT * FROM applications WHERE hire_token = ? AND hire_completed = 0", [token]);
+    return rows[0] || null;
+  },
+  async list(status) {
+    const [rows] = status
+      ? await pool.query("SELECT * FROM applications WHERE status = ? ORDER BY created_at DESC", [status])
+      : await pool.query("SELECT * FROM applications ORDER BY created_at DESC");
+    return rows;
+  },
+  async setTest(id, { testToken, instructions }) {
+    await pool.query(
+      "UPDATE applications SET status = 'test_sent', test_token = ?, test_instructions = ?, test_sent_at = ? WHERE id = ?",
+      [testToken, instructions, nowISO(), id]
+    );
+    return this.get(id);
+  },
+  async setSubmission(id, { url, notes }) {
+    await pool.query(
+      "UPDATE applications SET status = 'submitted', submit_url = ?, submit_notes = ?, submitted_at = ? WHERE id = ?",
+      [url, notes ?? null, nowISO(), id]
+    );
+    return this.get(id);
+  },
+  async markHired(id, { staffUserId, hireToken }) {
+    await pool.query(
+      "UPDATE applications SET status = 'passed', staff_user_id = ?, hire_token = ? WHERE id = ?",
+      [String(staffUserId), hireToken, id]
+    );
+    return this.get(id);
+  },
+  async completeHire(id) {
+    await pool.query("UPDATE applications SET hire_completed = 1 WHERE id = ?", [id]);
+  },
+  async setStatus(id, status) {
+    const [res] = await pool.query("UPDATE applications SET status = ? WHERE id = ?", [status, id]);
+    return res.affectedRows > 0;
+  },
+  async remove(id) {
+    const [res] = await pool.query("DELETE FROM applications WHERE id = ?", [id]);
+    return res.affectedRows > 0;
+  },
+};
+
 const api = {
   name: "mysql",
   users,
@@ -463,6 +551,7 @@ const api = {
   subscribers,
   orders,
   credentials,
+  applications,
   _publicUser: stripSecret,
 };
 

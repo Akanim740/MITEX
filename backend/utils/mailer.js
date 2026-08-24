@@ -55,4 +55,22 @@ function resetEmail(user, rawToken) {
   };
 }
 
-module.exports = { sendMail, verificationEmail, resetEmail, smtpConfigured, APP_URL };
+function testEmail(app, rawToken, instructions) {
+  const url = `${APP_URL}/careers.html?token=${rawToken}`;
+  return {
+    subject: "MITEX employment test - your next step",
+    text: `Hi ${app.name},\n\nCongratulations! Your application to join the MITEX team has been reviewed and you are moving to the next stage.\n\nYOUR TEST\n${instructions}\n\nWhen your test website is ready, submit it through your private application page:\n${url}\n\nKeep this link safe - it is your personal window into your application status.\n\n- MITEX team`,
+    url,
+  };
+}
+
+function hireEmail(app, rawToken) {
+  const url = `${APP_URL}/onboard.html?token=${rawToken}`;
+  return {
+    subject: "Welcome to the MITEX team, " + app.name + "!",
+    text: `Hi ${app.name},\n\nGreat news - you PASSED. We are officially welcoming you to the MITEX team.\n\nSet up your work account password by opening this private link:\n${url}\n\nAfter choosing a password you will go straight to your work dashboard.\nThis link works once, so do it soon.\n\n- MITEX team`,
+    url,
+  };
+}
+
+module.exports = { sendMail, verificationEmail, resetEmail, testEmail, hireEmail, smtpConfigured, APP_URL };

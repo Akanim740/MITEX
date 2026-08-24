@@ -296,6 +296,34 @@ router.get("/dashboard", requireAuth, requireRole("admin", "editor"), async (req
   }
 });
 
+// POST /api/auth/onboard - new employee sets their password from the private hire link
+router.post("/onboard", async (req, res) => {
+  try {
+    const store = req.store;
+    const token = String(req.body.token || "");
+    const password = String(req.body.password || "");
+
+    if (!token) return res.status(400).json({ error: "Onboarding token is required" });
+    if (password.length < 8 || !/[A-Za-z]/.test(password) || !/[0-9]/.test(password)) {
+      return res.status(400).json({ error: "Password must be at least 8 characters and include letters and numbers" });
+    }
+
+    const app = await store.applications.getByHireToken(token);
+    if (!app || !app.staff_user_id) {
+      return res.status(400).json({ error: "This onboarding link is invalid or has already been used" });
+    }
+
+    await store.users.updatePassword(app.staff_user_id, await bcrypt.hash(password, 12));
+    await store.applications.completeHire(app.id);
+    await store.sessions.revokeAllForUser(app.staff_user_id);
+
+    res.json({ message: "Password set! You can now sign in to your work dashboard." });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
 // ---------------------------------------------------------------------------
 // Employees (staff) - managed by admin, max 21 people
 // ---------------------------------------------------------------------------

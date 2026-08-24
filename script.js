@@ -238,3 +238,36 @@ if (sellForm) {
 }
 
 document.getElementById("year").textContent = new Date().getFullYear();
+
+/* ===== Welcome gate ===== */
+(function initWelcomeGate() {
+  const gate = document.getElementById("welcomeGate");
+  if (!gate) return;
+
+  // Signed-in team members and returning visitors skip the gate
+  let user = null;
+  try {
+    user = JSON.parse(localStorage.getItem("mitex_user"));
+  } catch {}
+  const isTeam = user && (user.role === "admin" || user.role === "editor" || user.role === "staff");
+  if (isTeam || localStorage.getItem("mitex_audience")) return;
+
+  gate.classList.remove("hidden");
+  gate.setAttribute("aria-hidden", "false");
+
+  function closeGate(choice) {
+    if (choice) localStorage.setItem("mitex_audience", choice);
+    gate.classList.add("hidden");
+    gate.setAttribute("aria-hidden", "true");
+  }
+
+  gate.querySelectorAll("[data-gate-choice]").forEach((link) => {
+    link.addEventListener("click", () => closeGate(link.dataset.gateChoice));
+  });
+
+  document.getElementById("gateSkip").addEventListener("click", () => closeGate("customer"));
+
+  gate.addEventListener("click", (e) => {
+    if (e.target === gate) closeGate("customer");
+  });
+})();

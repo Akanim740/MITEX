@@ -463,17 +463,18 @@
         <a href="#home" class="logo">MIT<span>EX</span></a>
         <p>Premium websites for ambitious businesses. Buy ready-made or request custom — either way, you launch ahead.</p>
       </div>
-      <div class="footer-links">
-        <h4>Explore</h4>
-        <a href="#packages">Packages</a>
-        <a href="#showcase">Our Work</a>
-        <a href="/marketplace.html">Marketplace</a>
-        <a href="#how">How It Works</a>
-        <a href="#author">About the Author</a>
-        <a href="/login.html">Sign In</a>
-        <a href="/register.html">Create Account</a>
-        <a href="/account.html">My Account</a>
-      </div>
+        <div class="footer-links">
+          <h4>Explore</h4>
+          <a href="#packages">Packages</a>
+          <a href="#showcase">Our Work</a>
+          <a href="/marketplace.html">Marketplace</a>
+          <a href="#how">How It Works</a>
+          <a href="#author">About the Author</a>
+          <a href="/careers.html">Work With Us</a>
+          <a href="/login.html">Sign In</a>
+          <a href="/register.html">Create Account</a>
+          <a href="/account.html">My Account</a>
+        </div>
       <div class="footer-contact">
         <h4>Contact</h4>
         <a href="tel:+2347011633770">+234 701 163 3770</a>
@@ -486,6 +487,31 @@
       <p>&copy; <span id="year"></span> MITEX. All rights reserved.</p>
     </div>
   </footer>
+
+  <!-- Welcome gate: choose your path -->
+  <div class="gate-overlay" id="welcomeGate" aria-hidden="true">
+    <div class="gate-card" role="dialog" aria-modal="true" aria-label="Welcome to MITEX">
+      <p class="gate-kicker">Welcome to MITEX</p>
+      <h2>How do you want to enter?</h2>
+      <div class="gate-options">
+        <a class="gate-option" href="/marketplace.html" data-gate-choice="customer">
+          <span class="gate-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/></svg>
+          </span>
+          <strong>I want to buy a website</strong>
+          <span>Browse premium, ready-to-launch websites and own one today.</span>
+        </a>
+        <a class="gate-option gate-option-work" href="/careers.html" data-gate-choice="worker">
+          <span class="gate-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg>
+          </span>
+          <strong>I want to work at MITEX</strong>
+          <span>Apply to join the team. Pass our website test and start building.</span>
+        </a>
+      </div>
+      <button type="button" class="gate-skip" id="gateSkip">Just let me look around</button>
+    </div>
+  </div>
 
   <script src="script.js"></script>
 </body>

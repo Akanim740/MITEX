@@ -405,6 +405,102 @@ const credentials = {
   },
 };
 
+const applications = {
+  async create(v) {
+    const { data, error } = await supabase
+      .from("applications")
+      .insert({
+        name: v.name,
+        email: String(v.email).toLowerCase(),
+        phone: v.phone ?? null,
+        portfolio: v.portfolio ?? null,
+        message: v.message,
+        status: "new",
+        created_at: nowISO(),
+      })
+      .select()
+      .single();
+    if (error) throw error;
+    return data;
+  },
+  async findByEmail(email) {
+    const { data } = await supabase
+      .from("applications")
+      .select("*")
+      .eq("email", String(email).toLowerCase())
+      .neq("status", "rejected")
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    return data || null;
+  },
+  async get(id) {
+    const { data } = await supabase.from("applications").select("*").eq("id", id).maybeSingle();
+    return data || null;
+  },
+  async getByTestToken(token) {
+    const { data } = await supabase.from("applications").select("*").eq("test_token", token).maybeSingle();
+    return data || null;
+  },
+  async getByHireToken(token) {
+    const { data } = await supabase
+      .from("applications")
+      .select("*")
+      .eq("hire_token", token)
+      .eq("hire_completed", false)
+      .maybeSingle();
+    return data || null;
+  },
+  async list(status) {
+    let query = supabase.from("applications").select("*").order("created_at", { ascending: false });
+    if (status) query = query.eq("status", status);
+    const { data } = await query;
+    return data || [];
+  },
+  async setTest(id, { testToken, instructions }) {
+    const { data, error } = await supabase
+      .from("applications")
+      .update({ status: "test_sent", test_token: testToken, test_instructions: instructions, test_sent_at: nowISO() })
+      .eq("id", id)
+      .select()
+      .single();
+    if (error) throw error;
+    return data;
+  },
+  async setSubmission(id, { url, notes }) {
+    const { data, error } = await supabase
+      .from("applications")
+      .update({ status: "submitted", submit_url: url, submit_notes: notes ?? null, submitted_at: nowISO() })
+      .eq("id", id)
+      .select()
+      .single();
+    if (error) throw error;
+    return data;
+  },
+  async markHired(id, { staffUserId, hireToken }) {
+    const { data, error } = await supabase
+      .from("applications")
+      .update({ status: "passed", staff_user_id: String(staffUserId), hire_token: hireToken })
+      .eq("id", id)
+      .select()
+      .single();
+    if (error) throw error;
+    return data;
+  },
+  async completeHire(id) {
+    const { error } = await supabase.from("applications").update({ hire_completed: true }).eq("id", id);
+    if (error) throw error;
+  },
+  async setStatus(id, status) {
+    const { error } = await supabase.from("applications").update({ status }).eq("id", id);
+    return !error;
+  },
+  async remove(id) {
+    const { error } = await supabase.from("applications").delete().eq("id", id);
+    return !error;
+  },
+};
+
 const api = {
   name: "supabase",
   users,
@@ -415,6 +511,7 @@ const api = {
   subscribers,
   orders,
   credentials,
+  applications,
   _publicUser: toPublic,
 };
 

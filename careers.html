@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Work With Us | MITEX</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23070b14'/%3E%3Ctext x='32' y='44' font-family='Arial' font-size='34' font-weight='bold' fill='%23fbbf24' text-anchor='middle'%3EM%3C/text%3E%3C/svg%3E" />
+  <link rel="manifest" href="/manifest.webmanifest" />
+  <meta name="theme-color" content="#070b14" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;600;700;800&family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="auth.css" />
+  <style>
+    .app-status {
+      border: 1px solid var(--card-border, rgba(255, 255, 255, 0.12));
+      background: rgba(255, 255, 255, 0.03);
+      border-radius: 14px;
+      padding: 16px;
+      margin-bottom: 16px;
+    }
+    .app-status h2 { font-family: "Sora", sans-serif; font-size: 1.05rem; margin-bottom: 6px; }
+    .status-chip {
+      display: inline-block;
+      padding: 4px 12px;
+      border-radius: 999px;
+      font-size: 0.75rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+    .status-new { color: #9b9ba8; background: rgba(155, 155, 168, 0.12); }
+    .status-test_sent { color: #fbbf24; background: rgba(251, 191, 36, 0.12); }
+    .status-submitted { color: #60a5fa; background: rgba(96, 165, 250, 0.12); }
+    .status-passed { color: #34d399; background: rgba(52, 211, 153, 0.12); }
+    .test-brief {
+      white-space: pre-wrap;
+      color: #cfcfd8;
+      font-size: 0.92rem;
+      line-height: 1.65;
+      margin-top: 10px;
+    }
+    textarea {
+      width: 100%;
+      min-height: 90px;
+      resize: vertical;
+    }
+  </style>
+</head>
+<body data-page="careers">
+  <div class="auth-wrap">
+    <div class="auth-card">
+
+      <!-- Apply form -->
+      <div id="applyMode">
+        <a class="logo" href="/index.html">MIT<span>EX</span></a>
+        <h1>Work at MITEX</h1>
+        <p class="sub">Join the team building premium websites for clients worldwide. Apply below — if your application looks promising, we will email you a short test.</p>
+        <form id="applyForm">
+          <label>Full name
+            <input type="text" id="apName" placeholder="Your full name" required maxlength="80" autocomplete="name" />
+          </label>
+          <label>Email address
+            <input type="email" id="apEmail" placeholder="you@example.com" required autocomplete="email" />
+          </label>
+          <label>Phone / WhatsApp <span style="font-weight:400;color:#9b9ba8">(optional)</span>
+            <input type="tel" id="apPhone" placeholder="+234 ..." autocomplete="tel" />
+          </label>
+          <label>Portfolio or social link <span style="font-weight:400;color:#9b9ba8">(optional)</span>
+            <input type="url" id="apPortfolio" placeholder="https://..." />
+          </label>
+          <label>Tell us about yourself
+            <textarea id="apMessage" required minlength="20" maxlength="2000" placeholder="Who are you? What can you build? Why MITEX?"></textarea>
+          </label>
+          <p class="hint">No CV needed. Your words and (later) your test website are all we judge.</p>
+          <p id="applyError" class="error hidden"></p>
+          <button type="submit" id="applyBtn" class="btn btn-primary btn-full">Submit Application</button>
+        </form>
+        <p class="switch-line"><a href="/index.html">Back to home</a></p>
+      </div>
+
+      <!-- Application received -->
+      <div id="receivedMode" class="hidden">
+        <a class="logo" href="/index.html">MIT<span>EX</span></a>
+        <h1>Application received</h1>
+        <p class="success-text">Thank you! We review every application personally and will email you the next step. Keep an eye on your inbox.</p>
+        <p class="switch-line"><a href="/index.html">Back to home</a></p>
+      </div>
+
+      <!-- Private applicant page (?token=...) -->
+      <div id="statusMode" class="hidden">
+        <a class="logo" href="/index.html">MIT<span>EX</span></a>
+        <h1>Your application</h1>
+        <div class="app-status">
+          <p><strong id="stName"></strong> &middot; <span id="stEmail"></span></p>
+          <p style="margin-top:8px;">Status: <span class="status-chip" id="stChip"></span></p>
+          <div id="stStatusNote" class="sub" style="margin-top:10px;"></div>
+        </div>
+
+        <div id="briefBox" class="hidden">
+          <h2 style="font-family:'Sora',sans-serif;font-size:1rem;margin-bottom:6px;">Your test</h2>
+          <div class="test-brief" id="briefText"></div>
+          <form id="submitTestForm" style="margin-top:14px;">
+            <label>Link to your finished website
+              <input type="url" id="subUrl" placeholder="https://your-test.netlify.app" required />
+            </label>
+            <label>Anything we should know? <span style="font-weight:400;color:#9b9ba8">(optional)</span>
+              <textarea id="subNotes" placeholder="What you built, what you would improve..."></textarea>
+            </label>
+            <p id="submitMsg" class="error hidden"></p>
+            <button type="submit" id="submitBtn" class="btn btn-primary btn-full">Submit My Test</button>
+          </form>
+        </div>
+
+        <div id="alreadySubmitted" class="hidden">
+          <p class="success-text">Your test has been submitted. We will review it and email you the result.</p>
+        </div>
+
+        <p class="switch-line"><a href="/index.html">Back to home</a></p>
+      </div>
+
+    </div>
+  </div>
+
+  <script>
+    const params = new URLSearchParams(location.search);
+    const token = params.get("token");
+
+    function show(mode) {
+      ["applyMode", "receivedMode", "statusMode"].forEach((id) =>
+        document.getElementById(id).classList.toggle("hidden", id !== mode)
+      );
+    }
+
+    function fail(elId, msg) {
+      const el = document.getElementById(elId);
+      el.textContent = msg;
+      el.classList.remove("hidden");
+    }
+
+    if (token) {
+      show("statusMode");
+      fetch(`/api/applications/status/${encodeURIComponent(token)}`)
+        .then(async (res) => {
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.error || "Application not found");
+          document.getElementById("stName").textContent = data.name;
+          document.getElementById("stEmail").textContent = data.email;
+          const chip = document.getElementById("stChip");
+          chip.className = `status-chip status-${data.status}`;
+          chip.textContent = data.status.replace("_", " ");
+          const note = document.getElementById("stStatusNote");
+          if (data.status === "new") note.textContent = "We are reviewing your application. You will hear from us soon.";
+          else if (data.status === "test_sent") note.textContent = "You have a test waiting. Read the brief below.";
+          else if (data.status === "submitted") {
+            note.textContent = "";
+            document.getElementById("alreadySubmitted").classList.remove("hidden");
+          } else if (data.status === "passed") note.textContent = "Congratulations - check your email for your welcome link!";
+          if ((data.status === "test_sent" || data.status === "submitted") && data.test_instructions) {
+            document.getElementById("briefBox").classList.remove("hidden");
+            document.getElementById("briefText").textContent = data.test_instructions;
+            if (data.submit_url) document.getElementById("subUrl").value = data.submit_url;
+            if (data.status === "submitted") {
+              document.getElementById("submitTestForm").classList.add("hidden");
+              document.getElementById("submitBtn").disabled = true;
+            }
+          }
+        })
+        .catch((err) => {
+          show("applyMode");
+          fail("applyError", err.message);
+          document.getElementById("applyForm").classList.add("hidden");
+        });
+    }
+
+    document.getElementById("applyForm").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const btn = document.getElementById("applyBtn");
+      btn.disabled = true;
+      btn.textContent = "Sending...";
+      try {
+        const res = await fetch("/api/applications", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            name: document.getElementById("apName").value,
+            email: document.getElementById("apEmail").value,
+            phone: document.getElementById("apPhone").value,
+            portfolio: document.getElementById("apPortfolio").value,
+            message: document.getElementById("apMessage").value,
+          }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.error || "Could not send application");
+        localStorage.setItem("mitex_audience", "worker");
+        show("receivedMode");
+      } catch (err) {
+        fail("applyError", err.message);
+      } finally {
+        btn.disabled = false;
+        btn.textContent = "Submit Application";
+      }
+    });
+
+    document.getElementById("submitTestForm").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const btn = document.getElementById("submitBtn");
+      btn.disabled = true;
+      btn.textContent = "Submitting...";
+      try {
+        const res = await fetch("/api/applications/submit-test", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            token,
+            url: document.getElementById("subUrl").value,
+            notes: document.getElementById("subNotes").value,
+          }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.error || "Submission failed");
+        location.reload();
+      } catch (err) {
+        fail("submitMsg", err.message);
+        btn.disabled = false;
+        btn.textContent = "Submit My Test";
+      }
+    });
+  </script>
+</body>
+</html>

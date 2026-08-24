@@ -181,6 +181,7 @@ const loaders = {
   orders: loadOrders,
   subscribers: loadSubscribers,
   employees: loadEmployees,
+  applications: loadApplications,
 };
 
 let currentView = null;
@@ -209,6 +210,15 @@ $("#refreshListings").addEventListener("click", loadListings);
 $("#refreshOrders").addEventListener("click", loadOrders);
 $("#refreshSubs").addEventListener("click", loadSubscribers);
 $("#refreshEmployees").addEventListener("click", loadEmployees);
+$("#refreshApplications").addEventListener("click", loadApplications);
+
+document.querySelectorAll("[data-app-filter]").forEach((chip) =>
+  chip.addEventListener("click", () => {
+    document.querySelectorAll("[data-app-filter]").forEach((c) => c.classList.remove("active"));
+    chip.classList.add("active");
+    loadApplications(chip.dataset.appFilter);
+  })
+);
 
 async function loadOverview() {
   const grid = $("#statsGrid");
@@ -545,6 +555,112 @@ async function loadEmployees() {
   } catch (err) {
     body.innerHTML = `<tr><td colspan="5" class="empty-state">${esc(err.message)}</td></tr>`;
   }
+}
+
+async function loadApplications(status) {
+  const body = $("#applicationsBody");
+  body.innerHTML = '<tr><td colspan="5" class="empty-state">Loading...</td></tr>';
+  try {
+    const rows = await API.get(`/api/applications${status ? `?status=${encodeURIComponent(status)}` : ""}`);
+    if (!rows.length) {
+      body.innerHTML =
+        '<tr><td colspan="5" class="empty-state">No applications yet. They apply through the "Work With Us" page.</td></tr>';
+      return;
+    }
+    const badgeClass = { new: "", test_sent: "pending", submitted: "contacted", passed: "available", rejected: "sold" };
+    body.innerHTML = rows
+      .map(
+        (r) => `
+        <tr>
+          <td><strong>${esc(r.name)}</strong></td>
+          <td>${esc(r.email)}${r.phone ? `<br /><span class="muted">${esc(r.phone)}</span>` : ""}</td>
+          <td><span class="badge ${badgeClass[r.status] || ""}">${esc(r.status.replace("_", " "))}</span></td>
+          <td class="muted">${fmtDate(r.created_at)}</td>
+          <td>
+            <div class="row-actions">
+              <button class="icon-btn" data-aview="${r.id}">Details</button>
+              ${["new", "test_sent", "submitted"].includes(r.status) ? `<button class="icon-btn" data-asend="${r.id}">${r.status === "test_sent" ? "Resend Test" : "Send Test"}</button>` : ""}
+              ${r.status === "submitted" ? `<button class="icon-btn pass" data-apass="${r.id}">Pass</button>` : ""}
+              ${!["rejected", "passed"].includes(r.status) ? `<button class="icon-btn delete" data-areject="${r.id}">Reject</button>` : ""}
+            </div>
+          </td>
+        </tr>`
+      )
+      .join("");
+
+    let cache = rows;
+
+    body.querySelectorAll("[data-aview]").forEach((btn) =>
+      btn.addEventListener("click", () => {
+        const r = cache.find((x) => String(x.id) === btn.dataset.aview);
+        if (!r) return;
+        const lines = [
+          `Name: ${r.name}`,
+          `Email: ${r.email}`,
+          r.phone ? `Phone: ${r.phone}` : null,
+          r.portfolio ? `Portfolio: ${r.portfolio}` : null,
+          "",
+          `Message: ${r.message || "-"}`,
+          "",
+          r.test_instructions ? `Test brief sent: ${r.test_instructions}` : null,
+          r.submit_url ? `Submitted site: ${r.submit_url}` : null,
+          r.submit_notes ? `Submission notes: ${r.submit_notes}` : null,
+        ]
+          .filter(Boolean)
+          .join("\n");
+        alert(lines);
+      })
+    );
+
+    body.querySelectorAll("[data-asend]").forEach((btn) =>
+      btn.addEventListener("click", async () => {
+        const instructions = prompt(
+          "Test instructions for the applicant (leave empty to use the default website-building brief):",
+          ""
+        );
+        if (instructions === null) return;
+        try {
+          const res = await API.post(`/api/applications/${btn.dataset.asend}/send-test`, { instructions });
+          alert(res.devLink ? `Email system not configured yet.\n\nShare this link manually:\n${res.devLink}` : res.message);
+          loadApplications(currentFilter());
+        } catch (err) {
+          alert(err.message);
+        }
+      })
+    );
+
+    body.querySelectorAll("[data-apass]").forEach((btn) =>
+      btn.addEventListener("click", async () => {
+        if (!confirm("Mark this applicant as PASSED and hire them? A staff account will be created and they get an email link to set their password.")) return;
+        try {
+          const res = await API.post(`/api/applications/${btn.dataset.apass}/pass`, {});
+          alert(res.devLink ? `${res.message}\n\nSMTP not configured - share this link manually:\n${res.devLink}` : res.message);
+          loadApplications(currentFilter());
+        } catch (err) {
+          alert(err.message);
+        }
+      })
+    );
+
+    body.querySelectorAll("[data-areject]").forEach((btn) =>
+      btn.addEventListener("click", async () => {
+        if (!confirm("Reject this application?")) return;
+        try {
+          await API.post(`/api/applications/${btn.dataset.areject}/reject`, {});
+          loadApplications(currentFilter());
+        } catch (err) {
+          alert(err.message);
+        }
+      })
+    );
+  } catch (err) {
+    body.innerHTML = `<tr><td colspan="5" class="empty-state">${esc(err.message)}</td></tr>`;
+  }
+}
+
+function currentFilter() {
+  const activeChip = document.querySelector("[data-app-filter].active");
+  return activeChip ? activeChip.dataset.appFilter : "";
 }
 
 async function loadOrders() {

@@ -332,6 +332,84 @@ const credentials = {
   },
 };
 
+const applications = {
+  async create(v) {
+    const row = await insertOne("applications", {
+      name: v.name,
+      email: String(v.email).toLowerCase(),
+      phone: v.phone ?? null,
+      portfolio: v.portfolio ?? null,
+      message: v.message,
+      status: "new",
+      test_token: null,
+      test_instructions: null,
+      test_sent_at: null,
+      submit_url: null,
+      submit_notes: null,
+      submitted_at: null,
+      staff_user_id: null,
+      hire_token: null,
+      hire_completed: 0,
+      created_at: nowISO(),
+    });
+    return { ...row, id: String(row._id) };
+  },
+  async findByEmail(email) {
+    return (
+      (await db
+        .collection("applications")
+        .findOne({ email: String(email).toLowerCase(), status: { $ne: "rejected" } }, { sort: { created_at: -1 } })) || null
+    );
+  },
+  async get(id) {
+    try {
+      const row = await db.collection("applications").findOne({ _id: oid(id) });
+      return row ? { ...row, id: String(row._id) } : null;
+    } catch {
+      return null;
+    }
+  },
+  async getByTestToken(token) {
+    return (await db.collection("applications").findOne({ test_token: token })) || null;
+  },
+  async getByHireToken(token) {
+    return (await db.collection("applications").findOne({ hire_token: token, hire_completed: 0 })) || null;
+  },
+  async list(status) {
+    const filter = status ? { status } : {};
+    return db.collection("applications").find(filter).sort({ created_at: -1 }).toArray();
+  },
+  async setTest(id, { testToken, instructions }) {
+    await db.collection("applications").updateOne(
+      { _id: oid(id) },
+      { $set: { status: "test_sent", test_token: testToken, test_instructions: instructions, test_sent_at: nowISO() } }
+    );
+    return this.get(id);
+  },
+  async setSubmission(id, { url, notes }) {
+    await db.collection("applications").updateOne(
+      { _id: oid(id) },
+      { $set: { status: "submitted", submit_url: url, submit_notes: notes ?? null, submitted_at: nowISO() } }
+    );
+    return this.get(id);
+  },
+  async markHired(id, { staffUserId, hireToken }) {
+    await db
+      .collection("applications")
+      .updateOne({ _id: oid(id) }, { $set: { status: "passed", staff_user_id: String(staffUserId), hire_token: hireToken } });
+    return this.get(id);
+  },
+  async completeHire(id) {
+    await db.collection("applications").updateOne({ _id: oid(id) }, { $set: { hire_completed: 1 } });
+  },
+  async setStatus(id, status) {
+    return (await db.collection("applications").updateOne({ _id: oid(id) }, { $set: { status } })).modifiedCount > 0;
+  },
+  async remove(id) {
+    return (await db.collection("applications").deleteOne({ _id: oid(id) })).deletedCount > 0;
+  },
+};
+
 const api = {
   name: "mongo",
   users,
@@ -342,6 +420,7 @@ const api = {
   subscribers,
   orders,
   credentials,
+  applications,
   _publicUser: toPublic,
   _close: () => client && client.close(),
 };
