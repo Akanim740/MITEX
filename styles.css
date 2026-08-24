@@ -1179,25 +1179,6 @@ ul {
   transition-delay: 0.48s;
 }
 
-@media (max-width: 900px) {
-  .hero-inner {
-    grid-template-columns: 1fr;
-    gap: 44px;
-  }
-
-  .hero-visual {
-    max-width: 480px;
-    margin-inline: auto;
-  }
-
-  .stats {
-    grid-template-columns: repeat(2, 1fr);
-  }
-
-.showcase-grid {
-  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-}
-
 .type-card {
   display: flex;
   flex-direction: column;
@@ -1289,6 +1270,25 @@ ul {
   border: 1px solid rgba(251, 191, 36, 0.35);
   padding: 5px 12px;
   border-radius: 999px;
+}
+
+@media (max-width: 900px) {
+  .hero-inner {
+    grid-template-columns: 1fr;
+    gap: 44px;
+  }
+
+  .hero-visual {
+    max-width: 480px;
+    margin-inline: auto;
+  }
+
+  .stats {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+.showcase-grid {
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
 }
 
 .steps-grid {

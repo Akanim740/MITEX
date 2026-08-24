@@ -246,6 +246,7 @@ textarea:focus {
   top: calc(100% + 10px);
   left: 0;
   min-width: 200px;
+  max-width: calc(100vw - 24px);
   background: #10182b;
   border: 1px solid var(--card-border);
   border-radius: 14px;
@@ -514,6 +515,7 @@ tbody tr:hover {
 
 .row-actions {
   display: flex;
+  flex-wrap: wrap;
   gap: 8px;
   justify-content: flex-end;
 }
@@ -653,5 +655,25 @@ tbody tr:hover {
 
   .listing-form .span-2 {
     grid-column: span 1;
+  }
+}
+
+@media (max-width: 480px) {
+  .topnav {
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  .view-head h2 {
+    font-size: 1.25rem;
+  }
+
+  table {
+    font-size: 0.82rem;
+  }
+
+  th,
+  td {
+    padding: 9px 10px;
   }
 }
