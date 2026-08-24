@@ -567,7 +567,7 @@ async function loadApplications(status) {
         '<tr><td colspan="5" class="empty-state">No applications yet. They apply through the "Work With Us" page.</td></tr>';
       return;
     }
-    const badgeClass = { new: "", test_sent: "pending", submitted: "contacted", passed: "available", rejected: "sold" };
+    const badgeClass = { new: "new", test_sent: "pending", submitted: "contacted", passed: "available", rejected: "sold" };
     body.innerHTML = rows
       .map(
         (r) => `
@@ -587,8 +587,6 @@ async function loadApplications(status) {
         </tr>`
       )
       .join("");
-
-    let cache = rows;
 
     body.querySelectorAll("[data-aview]").forEach((btn) =>
       btn.addEventListener("click", () => {
