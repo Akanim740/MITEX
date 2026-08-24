@@ -306,6 +306,7 @@ router.get("/mail-status", requireAuth, requireRole("admin", "editor"), async (r
     host_value: process.env.SMTP_HOST || null,
     user_value: process.env.SMTP_USER ? `${String(process.env.SMTP_USER).slice(0, 2)}***@${(String(process.env.SMTP_USER).split("@")[1] || "")}` : null,
     configured: Boolean(process.env.SMTP_HOST && process.env.SMTP_USER),
+    library_loaded: require("../utils/mailer").libraryLoaded(),
     node_env: process.env.NODE_ENV || null,
   });
 });

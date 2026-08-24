@@ -584,8 +584,10 @@ async function loadApplications(status) {
   if (mailBox) {
     try {
       const ms = await API.get("/api/auth/mail-status");
-      if (ms.configured) {
+      if (ms.configured && ms.library_loaded) {
         mailBox.innerHTML = `<span style="color:var(--green);">Email system: connected (${ms.host_value}, ${esc(ms.user_value)})</span>`;
+      } else if (ms.configured && !ms.library_loaded) {
+        mailBox.innerHTML = `<span style="color:var(--red);">Settings are correct, but the email library is missing on the server. Trigger a fresh deploy in Render (Manual Deploy &rarr; Deploy latest commit) so it installs properly.</span>`;
       } else {
         const missing = [];
         if (!ms.host_set) missing.push("SMTP_HOST");

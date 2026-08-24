@@ -2,6 +2,15 @@ const APP_URL = process.env.APP_URL || "http://localhost:3000";
 
 const smtpConfigured = () => Boolean(process.env.SMTP_HOST && process.env.SMTP_USER);
 
+function libraryLoaded() {
+  try {
+    require("nodemailer");
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 async function sendMail({ to, subject, text }) {
   if (!smtpConfigured()) {
     console.warn(`\n[mailer:dev] SMTP not configured. Email not really sent.`);
@@ -91,4 +100,4 @@ function salaryEmail(staff, payment) {
   };
 }
 
-module.exports = { sendMail, verificationEmail, resetEmail, testEmail, hireEmail, receiptEmail, salaryEmail, smtpConfigured, APP_URL };
+module.exports = { sendMail, verificationEmail, resetEmail, testEmail, hireEmail, receiptEmail, salaryEmail, smtpConfigured, libraryLoaded, APP_URL };
