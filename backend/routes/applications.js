@@ -138,7 +138,17 @@ router.post("/:id/send-test", requireAuth, requireRole("admin"), async (req, res
     await store.applications.setTest(app.id, { testToken: token, instructions });
 
     const mail = testEmail(app, token, instructions);
-    const result = await sendMail({ to: app.email, subject: mail.subject, text: mail.text });
+    let result;
+    try {
+      result = await sendMail({ to: app.email, subject: mail.subject, text: mail.text });
+    } catch (mailErr) {
+      console.error("send-test mail failed:", mailErr.message);
+      return res.json({
+        message: `Test saved, but the email failed to send (${mailErr.message}). Share this link manually.`,
+        devLink: mail.url,
+        devNote: "Email delivery problem - check your SMTP settings in Render",
+      });
+    }
 
     res.json({
       message: `Test sent to ${app.email}`,
@@ -198,7 +208,17 @@ router.post("/:id/pass", requireAuth, requireRole("admin"), async (req, res) => 
     await store.applications.markHired(app.id, { staffUserId: user.id, hireToken });
 
     const mail = hireEmail(app, hireToken);
-    const result = await sendMail({ to: app.email, subject: mail.subject, text: mail.text });
+    let result;
+    try {
+      result = await sendMail({ to: app.email, subject: mail.subject, text: mail.text });
+    } catch (mailErr) {
+      console.error("pass mail failed:", mailErr.message);
+      return res.json({
+        message: `${app.name} passed and their staff account is ready. Email failed to send (${mailErr.message}) - share this link manually.`,
+        devLink: mail.url,
+        devNote: "Email delivery problem - check your SMTP settings in Render",
+      });
+    }
 
     res.json({
       message: `${app.name} passed. Onboarding link emailed.`,
