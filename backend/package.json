@@ -18,7 +18,8 @@
     "express": "^4.21.0",
     "express-rate-limit": "^7.4.0",
     "helmet": "^7.1.0",
-    "jsonwebtoken": "^9.0.2"
+    "jsonwebtoken": "^9.0.2",
+    "nodemailer": "^9.0.5"
   },
   "optionalDependencies": {
     "@supabase/supabase-js": "^2.45.0",
