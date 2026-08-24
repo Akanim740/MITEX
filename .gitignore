@@ -24,3 +24,4 @@ backend/test-results/
 
 # Delivery packages (built locally, uploaded to Drive)
 deliveries/
+backend/scripts/security-report.txt
