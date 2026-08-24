@@ -558,6 +558,23 @@ async function loadEmployees() {
 }
 
 async function loadApplications(status) {
+  const mailBox = $("#mailStatus");
+  if (mailBox) {
+    try {
+      const ms = await API.get("/api/auth/mail-status");
+      if (ms.configured) {
+        mailBox.innerHTML = `<span style="color:var(--green);">Email system: connected (${ms.host_value}, ${esc(ms.user_value)})</span>`;
+      } else {
+        const missing = [];
+        if (!ms.host_set) missing.push("SMTP_HOST");
+        if (!ms.user_set) missing.push("SMTP_USER");
+        if (!ms.pass_set) missing.push("SMTP_PASS (needed for actual sending)");
+        mailBox.innerHTML = `<span style="color:var(--red);">Email not configured - server is missing: ${missing.join(", ")}. Set them in Render &rarr; Environment, save, wait for live.</span>`;
+      }
+    } catch {
+      mailBox.textContent = "";
+    }
+  }
   const body = $("#applicationsBody");
   body.innerHTML = '<tr><td colspan="5" class="empty-state">Loading...</td></tr>';
   try {

@@ -296,6 +296,20 @@ router.get("/dashboard", requireAuth, requireRole("admin", "editor"), async (req
   }
 });
 
+// GET /api/auth/mail-status - admin diagnostic: what does the server actually see?
+router.get("/mail-status", requireAuth, requireRole("admin", "editor"), async (req, res) => {
+  res.json({
+    host_set: Boolean(process.env.SMTP_HOST),
+    port_set: Boolean(process.env.SMTP_PORT),
+    user_set: Boolean(process.env.SMTP_USER),
+    pass_set: Boolean(process.env.SMTP_PASS),
+    host_value: process.env.SMTP_HOST || null,
+    user_value: process.env.SMTP_USER ? `${String(process.env.SMTP_USER).slice(0, 2)}***@${(String(process.env.SMTP_USER).split("@")[1] || "")}` : null,
+    configured: Boolean(process.env.SMTP_HOST && process.env.SMTP_USER),
+    node_env: process.env.NODE_ENV || null,
+  });
+});
+
 // POST /api/auth/onboard - new employee sets their password from the private hire link
 router.post("/onboard", async (req, res) => {
   try {
