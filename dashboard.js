@@ -24,7 +24,9 @@ const API = {
 
     const data = await res.json().catch(() => ({}));
     if (!res.ok) {
-      throw new Error(data.error || `Request failed (${res.status})`);
+      const err = new Error(data.error || `Request failed (${res.status})`);
+      if (data.detail) err.detail = data.detail;
+      throw err;
     }
     return data;
   },
@@ -608,6 +610,7 @@ async function loadApplications(status) {
         '<tr><td colspan="5" class="empty-state">No applications yet. They apply through the "Work With Us" page.</td></tr>';
       return;
     }
+    const cache = rows;
     const badgeClass = { new: "new", test_sent: "pending", submitted: "contacted", passed: "available", rejected: "sold" };
     body.innerHTML = rows
       .map(
@@ -678,7 +681,7 @@ async function loadApplications(status) {
           alert(res.devLink ? `${res.message}\n\nShare this link manually:\n${res.devLink}` : res.message);
           loadApplications(currentFilter());
         } catch (err) {
-          alert(err.message);
+          alert(err.message + (err.detail ? `\n\nTechnical detail: ${err.detail}` : ""));
         }
       })
     );

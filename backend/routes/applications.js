@@ -331,8 +331,8 @@ router.post("/:id/pass", requireAuth, requireRole("admin"), async (req, res) => 
       ...(result.dev ? { devLink: mail.url, devNote: "SMTP not configured - share this link manually" } : {}),
     });
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: "Internal server error" });
+    console.error("pass failed:", err);
+    res.status(500).json({ error: "Internal server error", detail: String(err.message || err) });
   }
 });
 
