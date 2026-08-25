@@ -103,7 +103,6 @@ function showApp(user) {
 
   const staffUser = user.role === "staff";
   document.querySelectorAll("[data-admin-only]").forEach((el) => el.classList.toggle("hidden", staffUser));
-  document.querySelectorAll("[data-staff-only]").forEach((el) => el.classList.toggle("hidden", !staffUser));
 }
 
 async function initAuth() {
@@ -112,8 +111,9 @@ async function initAuth() {
   try {
     const user = await API.get("/api/auth/me");
     localStorage.setItem("mitex_user", JSON.stringify(user));
+    if (user.role === "staff") { location.href = "/worker.html"; return; }
     showApp(user);
-    setView(user.role === "staff" ? "my-projects" : "overview");
+    setView("overview");
   } catch {
     showLogin();
   }
@@ -186,7 +186,6 @@ const loaders = {
   employees: loadEmployees,
   applications: loadApplications,
   salaries: loadSalaries,
-  "my-projects": loadMyProjects,
 };
 
 let currentView = null;
@@ -841,65 +840,6 @@ $("#salaryForm").addEventListener("submit", async (e) => {
     alert(err.message);
   }
 });
-
-async function loadMyProjects() {
-  const body = $("#myProjectsBody");
-  body.innerHTML = '<p class="empty-state">Loading your assignments...</p>';
-  try {
-    const rows = await API.get("/api/listings/mine");
-    if (!rows.length) {
-      body.innerHTML = '<p class="empty-state">No projects assigned to you yet.</p>';
-      return;
-    }
-    body.innerHTML = rows
-      .map(
-        (r) => `
-        <div class="my-project-row" data-mp-id="${r.id}">
-          <div class="mp-info">
-            <strong>${esc(r.title)}</strong>
-            <span class="badge ${esc(r.status)}">${esc(r.status)}</span>
-          </div>
-          <label class="mp-url-label">Delivery URL
-            <input type="url"
-                   class="mp-url-input"
-                   data-mp-url="${r.id}"
-                   placeholder="https://your-site.netlify.app"
-                   value="${esc(r.delivery_url || "")}" />
-          </label>
-          <div class="mp-actions">
-            <button class="btn btn-primary btn-sm" data-mp-save="${r.id}">Save Delivery Link</button>
-            <span class="mp-status-msg" data-mp-msg="${r.id}">${r.delivery_url ? "Saved — buyers can download" : "Not yet submitted"}</span>
-          </div>
-        </div>`
-      )
-      .join("");
-
-    body.querySelectorAll("[data-mp-save]").forEach((btn) =>
-      btn.addEventListener("click", async () => {
-        const id = btn.dataset.mpSave;
-        const url = body.querySelector(`[data-mp-url="${id}"]`).value.trim();
-        if (!url) return alert("Paste the live URL of your finished work first (e.g. a Netlify or Vercel link).");
-        if (!/^https?:\/\//i.test(url)) return alert("URL must start with http:// or https://");
-        btn.disabled = true;
-        btn.textContent = "Saving...";
-        try {
-          await API.put(`/api/listings/${id}`, { deliveryUrl: url });
-          const msg = body.querySelector(`[data-mp-msg="${id}"]`);
-          msg.textContent = "Saved — buyers can download";
-          msg.style.color = "var(--green)";
-          alert("Work submitted! Buyers can now access this website via their download link.");
-        } catch (err) {
-          alert(err.message);
-        } finally {
-          btn.disabled = false;
-          btn.textContent = "Save Delivery Link";
-        }
-      })
-    );
-  } catch (err) {
-    body.innerHTML = `<p class="empty-state">${esc(err.message)}</p>`;
-  }
-}
 
 async function loadOrders() {
   const body = $("#ordersBody");

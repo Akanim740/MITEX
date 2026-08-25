@@ -221,7 +221,9 @@ function initLogin() {
       localStorage.setItem("mitex_token", data.accessToken);
       localStorage.setItem("mitex_user", JSON.stringify(data.user));
       const next = new URLSearchParams(location.search).get("next");
-      location.href = next && next.startsWith("/") ? next : "/account.html";
+      if (next && next.startsWith("/")) location.href = next;
+      else if (data.user.role === "staff") location.href = "/worker.html";
+      else location.href = "/account.html";
     } catch (err) {
       showFormError(errEl, err.message);
       setLoading(btn, false, "Sign In");
@@ -255,7 +257,9 @@ async function biometricLogin() {
     localStorage.setItem("mitex_token", data.accessToken);
     localStorage.setItem("mitex_user", JSON.stringify(data.user));
     const next = new URLSearchParams(location.search).get("next");
-    location.href = next && next.startsWith("/") ? next : "/account.html";
+    if (next && next.startsWith("/")) location.href = next;
+    else if (data.user.role === "staff") location.href = "/worker.html";
+    else location.href = "/account.html";
   } catch (err) {
     showFormError(errEl, friendlyAuthError(err));
     setLoading(btn, false, "Use fingerprint or face ID");
@@ -323,6 +327,8 @@ function initReset() {
 
 function initAccount() {
   wireDropdown();
+  const user = JSON.parse(localStorage.getItem("mitex_user") || "{}");
+  if (user.role === "staff") { location.href = "/worker.html"; return; }
 
   $("#logoutBtn").addEventListener("click", async () => {
     try {
