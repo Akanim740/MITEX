@@ -34,6 +34,8 @@ async function sendMail({ to, subject, text }) {
     port: Number(process.env.SMTP_PORT || 587),
     secure: process.env.SMTP_SECURE === "true",
     auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS },
+    // Some hosts (Render) cannot route outbound IPv6 to Gmail - force IPv4
+    family: 4,
   });
 
   await transporter.sendMail({
