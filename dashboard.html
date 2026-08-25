@@ -56,7 +56,7 @@
         <a class="logo" href="/index.html">MIT<span>EX</span><em>Admin</em></a>
 
         <nav class="topnav">
-          <button class="navlink active" data-view="overview">Overview</button>
+          <button class="navlink active" data-view="overview" data-admin-only>Overview</button>
 
           <div class="dropdown" data-dropdown>
             <button class="navlink drop-btn" type="button" aria-expanded="false">
@@ -71,6 +71,7 @@
               <button type="button" data-view="employees" data-admin-only>Employees</button>
               <button type="button" data-view="applications" data-admin-only>Applications</button>
               <button type="button" data-view="salaries">Salaries</button>
+              <button type="button" data-view="my-projects" data-staff-only>My Projects</button>
             </div>
           </div>
 
@@ -276,6 +277,18 @@
         </div>
         <ul id="subsList" class="subs-list"></ul>
       </section>
+
+      <section id="view-my-projects" class="view hidden">
+        <div class="view-head">
+          <h2>My Projects</h2>
+          <button class="btn btn-ghost btn-sm" id="refreshMyProjects" type="button">Refresh</button>
+        </div>
+        <p class="muted" style="margin-bottom:14px;">Websites assigned to you. When finished, paste the live URL and save — buyers will be able to download their work immediately.</p>
+        <div id="myProjectsBody">
+          <p class="empty-state">Loading...</p>
+        </div>
+      </section>
+
     </main>
   </div>
 
