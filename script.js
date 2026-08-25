@@ -39,6 +39,9 @@ function escHtml(str) {
   document.getElementById("mobileSignIn").innerHTML = '<a href="/account.html">My Account</a>';
   document.getElementById("mobileCreate").innerHTML = '<a href="/marketplace.html">Marketplace</a>';
 
+  document.querySelectorAll('.footer-links a[href="/login.html"], .footer-links a[href="/register.html"]').forEach((a) => a.classList.add("hidden"));
+  document.querySelector('.footer-contact a[href="/dashboard.html"]')?.classList.add("hidden");
+
   const wrap = document.getElementById("navUser");
   const btn = document.getElementById("navUserBtn");
   btn.addEventListener("click", (e) => {
