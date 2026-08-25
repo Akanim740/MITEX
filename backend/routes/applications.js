@@ -376,5 +376,41 @@ function startAutomation(storePromiseOrStore) {
     .catch((err) => console.error("[automation] could not start:", err.message));
 }
 
+// POST /api/applications/:id/resend-hire - admin re-sends the onboarding link (e.g. after a mail failure)
+router.post("/:id/resend-hire", requireAuth, requireRole("admin"), async (req, res) => {
+  try {
+    const store = req.store;
+    const app = await store.applications.get(req.params.id);
+    if (!app) return res.status(404).json({ error: "Application not found" });
+    if (app.status !== "passed") return res.status(400).json({ error: "Only passed applications have a welcome link" });
+    if (app.hire_completed) return res.status(400).json({ error: "This person already finished setting up their account" });
+
+    const user = await store.users.findById(app.staff_user_id);
+    if (!user) return res.status(404).json({ error: "Their staff account no longer exists" });
+
+    const hireToken = randomToken(32);
+    await store.applications.markHired(app.id, { staffUserId: user.id, hireToken });
+
+    const mail = hireEmail(app, hireToken);
+    let result;
+    try {
+      result = await sendMail({ to: app.email, subject: mail.subject, text: mail.text });
+    } catch (mailErr) {
+      console.error("resend-hire mail failed:", mailErr.message);
+      return res.json({
+        message: `Still failing (${mailErr.message}). Share this link manually.`,
+        devLink: mail.url,
+      });
+    }
+    res.json({
+      message: `Welcome link emailed to ${app.email}.`,
+      ...(result.dev ? { devLink: mail.url, devNote: "SMTP not configured" } : {}),
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
 module.exports = router;
 module.exports.startAutomation = startAutomation;

@@ -627,6 +627,7 @@ async function loadApplications(status) {
               ${r.wa_link ? `<a class="icon-btn" href="${esc(r.wa_link)}" target="_blank" rel="noopener" title="Send the test link by WhatsApp">WhatsApp</a>` : ""}
               ${r.status === "submitted" ? `<button class="icon-btn" data-abank="${r.id}">Bank</button>` : ""}
               ${r.status === "submitted" ? `<button class="icon-btn pass" data-apass="${r.id}">Approve</button>` : ""}
+              ${r.status === "passed" && !r.hire_completed ? `<button class="icon-btn" data-aresend="${r.id}">Resend Link</button>` : ""}
               ${!["rejected", "passed"].includes(r.status) ? `<button class="icon-btn delete" data-areject="${r.id}">Reject</button>` : ""}
             </div>
           </td>
@@ -680,6 +681,17 @@ async function loadApplications(status) {
           const res = await API.post(`/api/applications/${btn.dataset.apass}/pass`, {});
           alert(res.devLink ? `${res.message}\n\nShare this link manually:\n${res.devLink}` : res.message);
           loadApplications(currentFilter());
+        } catch (err) {
+          alert(err.message + (err.detail ? `\n\nTechnical detail: ${err.detail}` : ""));
+        }
+      })
+    );
+
+    body.querySelectorAll("[data-aresend]").forEach((btn) =>
+      btn.addEventListener("click", async () => {
+        try {
+          const res = await API.post(`/api/applications/${btn.dataset.aresend}/resend-hire`, {});
+          alert(res.devLink ? `${res.message}\n\nShare this link manually:\n${res.devLink}` : res.message);
         } catch (err) {
           alert(err.message + (err.detail ? `\n\nTechnical detail: ${err.detail}` : ""));
         }
