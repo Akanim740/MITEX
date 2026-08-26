@@ -55,7 +55,7 @@ const users = {
       return null;
     }
   },
-  async create({ name, email, passwordHash, role = "customer", emailVerified = 0, phone = null, bio = null, avatar_url = null, active }) {
+  async create({ name, email, passwordHash, role = "customer", emailVerified = 0, phone = null, bio = null, avatar_url = null, active, country = "NG", locale = "en" }) {
     const doc = {
       name,
       email: String(email).toLowerCase(),
@@ -66,6 +66,8 @@ const users = {
       bio,
       avatar_url,
       active: active === undefined ? 1 : active ? 1 : 0,
+      country,
+      locale,
       created_at: nowISO(),
       updated_at: null,
     };
@@ -73,7 +75,7 @@ const users = {
     return { ...row, id: String(row._id) };
   },
   async update(id, patch) {
-    const allowed = ["name", "phone", "bio", "avatar_url", "role", "email_verified", "active"];
+    const allowed = ["name", "phone", "bio", "avatar_url", "role", "email_verified", "active", "country", "locale"];
     const set = {};
     for (const k of allowed) if (k in patch) set[k] = typeof patch[k] === "boolean" ? (patch[k] ? 1 : 0) : patch[k];
     if (!Object.keys(set).length) return this.findById(id);

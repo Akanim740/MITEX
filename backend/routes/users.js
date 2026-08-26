@@ -43,6 +43,12 @@ router.put("/me", requireAuth, async (req, res) => {
     if (req.body.avatar_url !== undefined) {
       patch.avatar_url = String(req.body.avatar_url).trim().slice(0, 500) || null;
     }
+    if (req.body.country !== undefined) {
+      patch.country = String(req.body.country).trim().toUpperCase().slice(0, 2) || "NG";
+    }
+    if (req.body.locale !== undefined) {
+      patch.locale = String(req.body.locale).trim().toLowerCase().slice(0, 5) || "en";
+    }
 
     const updated = await store.users.update(req.user.id, patch);
     res.json({ message: "Profile updated", user: publicProfile(updated) });

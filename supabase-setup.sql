@@ -19,6 +19,8 @@ CREATE TABLE users (
   bio            TEXT,
   avatar_url     TEXT,
   active         BOOLEAN NOT NULL DEFAULT TRUE,
+  country        TEXT NOT NULL DEFAULT 'NG',
+  locale         TEXT NOT NULL DEFAULT 'en',
   created_at     TEXT NOT NULL,
   updated_at     TEXT
 );
@@ -139,6 +141,8 @@ CREATE TABLE salaries (
 -- ALTER TABLE listings ADD COLUMN IF NOT EXISTS delivery_url TEXT;
 -- ALTER TABLE listings ADD COLUMN IF NOT EXISTS employee_id BIGINT REFERENCES users(id) ON DELETE SET NULL;
 -- ALTER TABLE users ADD COLUMN IF NOT EXISTS active BOOLEAN NOT NULL DEFAULT TRUE;
+-- ALTER TABLE users ADD COLUMN IF NOT EXISTS country TEXT NOT NULL DEFAULT 'NG';
+-- ALTER TABLE users ADD COLUMN IF NOT EXISTS locale TEXT NOT NULL DEFAULT 'en';
 --
 -- Recruitment pipeline: applications table for job applicants.
 -- CREATE TABLE applications (

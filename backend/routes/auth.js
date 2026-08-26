@@ -37,6 +37,8 @@ router.post("/register", async (req, res) => {
     const name = String(req.body.name || "").trim();
     const email = String(req.body.email || "").trim().toLowerCase();
     const password = String(req.body.password || "");
+    const country = String(req.body.country || "NG").trim().toUpperCase().slice(0, 2);
+    const locale = String(req.body.locale || "en").trim().toLowerCase().slice(0, 5);
 
     if (name.length < 2 || name.length > 80) {
       return res.status(400).json({ error: "Name must be 2-80 characters" });
@@ -54,7 +56,7 @@ router.post("/register", async (req, res) => {
     }
 
     const passwordHash = await bcrypt.hash(password, 12);
-    const user = await store.users.create({ name, email, passwordHash, role: "customer", emailVerified: 0 });
+    const user = await store.users.create({ name, email, passwordHash, role: "customer", emailVerified: 0, country, locale });
 
     const rawVerify = randomToken(32);
     await store.tokens.deleteByUser(user.id, "verify");

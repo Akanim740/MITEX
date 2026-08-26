@@ -47,7 +47,7 @@ const users = {
     const { data } = await supabase.from("users").select("*").eq("id", id).maybeSingle();
     return data || null;
   },
-  async create({ name, email, passwordHash, role = "customer", emailVerified = 0, phone = null, bio = null, avatar_url = null, active }) {
+  async create({ name, email, passwordHash, role = "customer", emailVerified = 0, phone = null, bio = null, avatar_url = null, active, country = "NG", locale = "en" }) {
     const { data, error } = await supabase
       .from("users")
       .insert({
@@ -60,6 +60,8 @@ const users = {
         bio,
         avatar_url,
         active: active === undefined ? true : !!active,
+        country,
+        locale,
         created_at: nowISO(),
       })
       .select()
@@ -68,7 +70,7 @@ const users = {
     return data;
   },
   async update(id, patch) {
-    const allowed = ["name", "phone", "bio", "avatar_url", "role", "email_verified", "active"];
+    const allowed = ["name", "phone", "bio", "avatar_url", "role", "email_verified", "active", "country", "locale"];
     const set = {};
     for (const k of allowed) if (k in patch) set[k] = patch[k];
     set.updated_at = nowISO();

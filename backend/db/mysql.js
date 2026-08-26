@@ -40,6 +40,12 @@ async function init() {
     if (!activeCol[0].n) {
       await pool.query("ALTER TABLE users ADD COLUMN active TINYINT(1) NOT NULL DEFAULT 1");
     }
+    const [countryCol] = await pool.query(
+      "SELECT COUNT(*) AS n FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'users' AND COLUMN_NAME = 'country'"
+    );
+    if (!countryCol[0].n) {
+      await pool.query("ALTER TABLE users ADD COLUMN country VARCHAR(2) NOT NULL DEFAULT 'NG', ADD COLUMN locale VARCHAR(5) NOT NULL DEFAULT 'en'");
+    }
     const [empCol] = await pool.query(
       "SELECT COUNT(*) AS n FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'listings' AND COLUMN_NAME = 'employee_id'"
     );
@@ -60,6 +66,8 @@ async function init() {
       bio            TEXT,
       avatar_url     VARCHAR(500),
       active         TINYINT(1) NOT NULL DEFAULT 1,
+      country        VARCHAR(2) NOT NULL DEFAULT 'NG',
+      locale         VARCHAR(5) NOT NULL DEFAULT 'en',
       created_at     VARCHAR(32) NOT NULL,
       updated_at     VARCHAR(32)
     );
@@ -218,15 +226,15 @@ const users = {
     const [rows] = await pool.query("SELECT * FROM users WHERE id = ?", [id]);
     return rows[0] || null;
   },
-  async create({ name, email, passwordHash, role = "customer", emailVerified = 0, phone = null, bio = null, avatar_url = null, active }) {
+  async create({ name, email, passwordHash, role = "customer", emailVerified = 0, phone = null, bio = null, avatar_url = null, active, country = "NG", locale = "en" }) {
     const [res] = await pool.query(
-      "INSERT INTO users (name, email, password_hash, role, email_verified, phone, bio, avatar_url, active, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-      [name, String(email).toLowerCase(), passwordHash, role, emailVerified ? 1 : 0, phone, bio, avatar_url, active === undefined ? 1 : active ? 1 : 0, nowISO()]
+      "INSERT INTO users (name, email, password_hash, role, email_verified, phone, bio, avatar_url, active, country, locale, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+      [name, String(email).toLowerCase(), passwordHash, role, emailVerified ? 1 : 0, phone, bio, avatar_url, active === undefined ? 1 : active ? 1 : 0, country, locale, nowISO()]
     );
     return this.findById(res.insertId);
   },
   async update(id, patch) {
-    const allowed = ["name", "phone", "bio", "avatar_url", "role", "email_verified", "active"];
+    const allowed = ["name", "phone", "bio", "avatar_url", "role", "email_verified", "active", "country", "locale"];
     const keys = Object.keys(patch).filter((k) => allowed.includes(k));
     if (!keys.length) return this.findById(id);
     const vals = keys.map((k) => (typeof patch[k] === "boolean" ? (patch[k] ? 1 : 0) : patch[k]));

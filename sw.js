@@ -1,4 +1,4 @@
-const VERSION = "mitex-v1";
+const VERSION = "mitex-v2";
 const CACHE = VERSION + "-cache";
 
 const CORE_ASSETS = [
@@ -11,12 +11,17 @@ const CORE_ASSETS = [
   "/reset-password.html",
   "/checkout-demo.html",
   "/payment-success.html",
+  "/worker.html",
   "/styles.css",
   "/script.js",
   "/auth.css",
   "/auth.js",
+  "/currencies.js",
+  "/i18n.js",
   "/dashboard.css",
   "/dashboard.js",
+  "/worker.css",
+  "/worker.js",
   "/pwa.js",
   "/manifest.webmanifest",
   "/icons/icon-192.png",

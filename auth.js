@@ -55,6 +55,10 @@ if (page === "demo-checkout") initDemoCheckout();
 if (page === "payment-success") initPaymentSuccess();
 
 function naira(value) {
+  if (typeof formatPriceWithOriginal === "function") {
+    const cc = localStorage.getItem("mitex_country") || "NG";
+    return formatPriceWithOriginal(value, cc);
+  }
   return "\u20A6" + Number(value).toLocaleString("en-NG");
 }
 
@@ -150,6 +154,12 @@ function initRegister() {
   const bars = [$("#s1"), $("#s2"), $("#s3")];
   const label = $("#strengthLabel");
 
+  if (typeof detectCountry === "function" && !localStorage.getItem("mitex_country")) {
+    const cc = detectCountry();
+    localStorage.setItem("mitex_country", cc);
+    localStorage.setItem("mitex_locale", typeof detectLocale === "function" ? detectLocale(cc) : "en");
+  }
+
   passInput.addEventListener("input", () => {
     const score = passwordScore(passInput.value);
     bars.forEach((b, i) => {
@@ -178,7 +188,7 @@ function initRegister() {
     const btn = $("#submitBtn");
     setLoading(btn, true, "Creating account...");
     try {
-      const data = await api("/api/auth/register", { method: "POST", auth: false, body: { name, email, password } });
+      const data = await api("/api/auth/register", { method: "POST", auth: false, body: { name, email, password, country: localStorage.getItem("mitex_country") || "NG", locale: localStorage.getItem("mitex_locale") || "en" } });
       $("#registerForm").classList.add("hidden");
       $("#successBox").classList.remove("hidden");
       $("#successMsg").textContent = data.message;
@@ -220,6 +230,8 @@ function initLogin() {
       });
       localStorage.setItem("mitex_token", data.accessToken);
       localStorage.setItem("mitex_user", JSON.stringify(data.user));
+      if (data.user.country) localStorage.setItem("mitex_country", data.user.country);
+      if (data.user.locale) localStorage.setItem("mitex_locale", data.user.locale);
       const next = new URLSearchParams(location.search).get("next");
       if (next && next.startsWith("/")) location.href = next;
       else if (data.user.role === "staff") location.href = "/worker.html";
@@ -369,6 +381,9 @@ async function loadProfile() {
   } catch {
     return;
   }
+  localStorage.setItem("mitex_user", JSON.stringify(currentUser));
+  if (currentUser.country) localStorage.setItem("mitex_country", currentUser.country);
+  if (currentUser.locale) localStorage.setItem("mitex_locale", currentUser.locale);
 
   const initial = (currentUser.name || "?").charAt(0).toUpperCase();
   $("#topAvatar").textContent = initial;
@@ -409,6 +424,40 @@ async function loadProfile() {
   $("#devVerifyBtn").addEventListener("click", devVerify);
   $("#profileForm").addEventListener("submit", saveProfile);
   $("#passwordForm").addEventListener("submit", changePassword);
+
+  if (typeof CURRENCIES !== "undefined" && typeof LANG_LABELS !== "undefined") {
+    const ccSel = $("#eCountry");
+    const localeSel = $("#eLocale");
+    if (ccSel) {
+      ccSel.innerHTML = Object.entries(CURRENCIES)
+        .filter(([code, cur], i, arr) => arr.findIndex(([c]) => c === code) === i)
+        .map(([code, cur]) => `<option value="${code}"${code === (currentUser.country || "NG") ? " selected" : ""}>${cur.name} (${cur.symbol})</option>`)
+        .join("");
+    }
+    if (localeSel) {
+      localeSel.innerHTML = Object.entries(LANG_LABELS)
+        .map(([code, name]) => `<option value="${code}"${code === (currentUser.locale || "en") ? " selected" : ""}>${name}</option>`)
+        .join("");
+    }
+    const prefsForm = $("#prefsForm");
+    if (prefsForm) {
+      prefsForm.addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const newCountry = $("#eCountry").value;
+        const newLocale = $("#eLocale").value;
+        try {
+          await api("/api/users/me", { method: "PUT", body: { country: newCountry, locale: newLocale } });
+          localStorage.setItem("mitex_country", newCountry);
+          localStorage.setItem("mitex_locale", newLocale);
+          const msg = $("#prefsMsg");
+          msg.classList.remove("hidden");
+          setTimeout(() => msg.classList.add("hidden"), 2500);
+        } catch (err) {
+          alert(err.message);
+        }
+      });
+    }
+  }
 
   initBiometrics();
   loadMyOrders();
@@ -555,12 +604,14 @@ let marketplaceListings = [];
 
 async function initMarketplace() {
   renderMarketNav();
+  if (typeof applyTranslations === "function") applyTranslations();
+  if (typeof initLangSwitcher === "function") initLangSwitcher();
   const grid = $("#listingsGrid");
   const searchInput = $("#marketSearch");
   try {
     marketplaceListings = await api("/api/listings", { auth: false });
     if (!marketplaceListings.length) {
-      grid.innerHTML = '<p class="empty-market">No premium websites are available right now. Check back soon or call +234 7011633770.</p>';
+      grid.innerHTML = `<p class="empty-market">${t("market_empty")}</p>`;
       return;
     }
     if (searchInput) {
@@ -570,6 +621,39 @@ async function initMarketplace() {
   } catch (err) {
     grid.innerHTML = `<p class="empty-market">${esc(err.message)}</p>`;
   }
+}
+
+function initLangSwitcher() {
+  const btn = $("#langBtn");
+  const dropdown = $("#langDropdown");
+  const label = $("#langLabel");
+  if (!btn || !dropdown) return;
+
+  const cc = localStorage.getItem("mitex_country") || "NG";
+  const cur = typeof getCurrency === "function" ? getCurrency(cc) : { code: "NGN" };
+  label.textContent = (localStorage.getItem("mitex_locale") || "en").toUpperCase();
+
+  const langEntries = typeof LANG_LABELS !== "undefined" ? Object.entries(LANG_LABELS) : [["en", "English"]];
+  dropdown.innerHTML = langEntries
+    .map(([code, name]) => `<button type="button" data-lang="${code}" style="display:block;width:100%;text-align:left;padding:7px 10px;border:none;background:none;color:var(--text);cursor:pointer;border-radius:6px;font-size:0.84rem;${code === (localStorage.getItem("mitex_locale") || "en") ? "background:rgba(251,191,36,.15);color:#fbbf24;" : ""}">${name}</button>`)
+    .join("");
+
+  btn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    dropdown.style.display = dropdown.style.display === "none" ? "block" : "none";
+  });
+  document.addEventListener("click", () => { dropdown.style.display = "none"; });
+
+  dropdown.querySelectorAll("[data-lang]").forEach((b) => {
+    b.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const locale = b.dataset.lang;
+      if (typeof setLocale === "function") setLocale(locale);
+      label.textContent = locale.toUpperCase();
+      dropdown.style.display = "none";
+      renderListings($("#marketSearch") ? $("#marketSearch").value : "");
+    });
+  });
 }
 
 function renderListings(query) {
@@ -587,12 +671,12 @@ function renderListings(query) {
 
   if (count) {
     count.textContent = q
-      ? `${matches.length} website${matches.length === 1 ? "" : "s"} found for "${query.trim()}"`
-      : `${matches.length} website${matches.length === 1 ? "" : "s"} available`;
+      ? `${matches.length} ${matches.length === 1 ? t("market_found_one") : t("market_found_many")} "${query.trim()}"`
+      : `${matches.length} ${matches.length === 1 ? t("market_count_one") : t("market_count_many")}`;
   }
 
   if (!matches.length) {
-    grid.innerHTML = '<p class="empty-market">No websites match your search. Try a different keyword - or request a custom build on our homepage.</p>';
+    grid.innerHTML = `<p class="empty-market">${t("market_no_match")}</p>`;
     return;
   }
 
@@ -617,7 +701,7 @@ function renderListings(query) {
               }</div>`
             : ""
         }
-        <button class="btn btn-primary btn-full" data-buy="${l.id}">Buy Now</button>
+        <button class="btn btn-primary btn-full" data-buy="${l.id}">${t("buy_now")}</button>
       </article>`
     )
     .join("");
@@ -638,7 +722,7 @@ async function buyListing(listingId, btn) {
     location.href = data.authorization_url;
   } catch (err) {
     alert(err.message);
-    setLoading(btn, false, "Buy Now");
+    setLoading(btn, false, t("buy_now"));
   }
 }
 

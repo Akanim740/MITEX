@@ -47,17 +47,27 @@
   <header class="topbar">
     <div class="topbar-inner">
       <a class="logo" href="/index.html">MIT<span>EX</span></a>
-      <div id="navAuthArea"></div>
+      <div style="display:flex;align-items:center;gap:12px;">
+        <div class="lang-switcher" id="langSwitcher" style="position:relative;">
+          <button type="button" id="langBtn" style="background:var(--card);border:1px solid var(--card-border);border-radius:8px;padding:6px 10px;cursor:pointer;color:var(--text);font-size:0.85rem;display:flex;align-items:center;gap:6px;">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" style="opacity:0.7;"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+            <span id="langLabel">EN</span>
+            <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+          </button>
+          <div id="langDropdown" style="display:none;position:absolute;right:0;top:100%;margin-top:4px;background:var(--card);border:1px solid var(--card-border);border-radius:10px;padding:6px;min-width:160px;max-height:280px;overflow-y:auto;z-index:200;box-shadow:0 8px 24px rgba(0,0,0,.4);"></div>
+        </div>
+        <div id="navAuthArea"></div>
+      </div>
     </div>
   </header>
 
   <main class="market-main">
     <div class="market-head">
-      <h1>Premium Website <span style="color:#fbbf24;">Marketplace</span></h1>
-      <p>Ready-to-launch websites, hand-built by MITEX. Pay securely with Paystack and take ownership fast.</p>
+      <h1 data-i18n="market_title">Premium Website <span style="color:#fbbf24;">Marketplace</span></h1>
+      <p data-i18n="market_sub">Ready-to-launch websites, hand-built by MITEX. Pay securely with Paystack and take ownership fast.</p>
       <div class="search-wrap">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.5" y2="16.5"/></svg>
-        <input type="search" id="marketSearch" placeholder="Search websites - e.g. e-commerce, portfolio, school, blog..." autocomplete="off" />
+        <input type="search" id="marketSearch" data-i18n-placeholder="market_search" placeholder="Search websites - e.g. e-commerce, portfolio, school, blog..." autocomplete="off" />
       </div>
       <p class="result-count muted" id="resultCount"></p>
     </div>
@@ -67,6 +77,8 @@
     </div>
   </main>
 
+  <script src="/currencies.js"></script>
+  <script src="/i18n.js"></script>
   <script src="auth.js"></script>
 </body>
 </html>

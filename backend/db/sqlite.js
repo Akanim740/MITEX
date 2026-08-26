@@ -24,6 +24,8 @@ db.exec(`
     phone          TEXT,
     bio            TEXT,
     avatar_url     TEXT,
+    country        TEXT NOT NULL DEFAULT 'NG',
+    locale         TEXT NOT NULL DEFAULT 'en',
     created_at     TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
     updated_at     TEXT
   );
@@ -161,11 +163,13 @@ if (usersTableSql && !String(usersTableSql.sql).includes("'staff'")) {
       bio            TEXT,
       avatar_url     TEXT,
       active         INTEGER NOT NULL DEFAULT 1,
+      country        TEXT NOT NULL DEFAULT 'NG',
+      locale         TEXT NOT NULL DEFAULT 'en',
       created_at     TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
       updated_at     TEXT
     );
-    INSERT INTO users_new (id, name, email, password_hash, role, email_verified, phone, bio, avatar_url, created_at, updated_at)
-      SELECT id, name, email, password_hash, role, email_verified, phone, bio, avatar_url, created_at, updated_at FROM users;
+    INSERT INTO users_new (id, name, email, password_hash, role, email_verified, phone, bio, avatar_url, country, locale, created_at, updated_at)
+      SELECT id, name, email, password_hash, role, email_verified, phone, bio, avatar_url, 'NG', 'en', created_at, updated_at FROM users;
     DROP TABLE users;
     ALTER TABLE users_new RENAME TO users;
   `);
@@ -176,6 +180,8 @@ if (usersTableSql && !String(usersTableSql.sql).includes("'staff'")) {
 {
   const userCols = db.prepare("PRAGMA table_info(users)").all().map((c) => c.name);
   if (!userCols.includes("active")) db.exec("ALTER TABLE users ADD COLUMN active INTEGER NOT NULL DEFAULT 1");
+  if (!userCols.includes("country")) db.exec("ALTER TABLE users ADD COLUMN country TEXT NOT NULL DEFAULT 'NG'");
+  if (!userCols.includes("locale")) db.exec("ALTER TABLE users ADD COLUMN locale TEXT NOT NULL DEFAULT 'en'");
 }
 
 {
@@ -201,14 +207,14 @@ const users = {
   async findById(id) {
     return db.prepare("SELECT * FROM users WHERE id = ?").get(id) || null;
   },
-  async create({ name, email, passwordHash, role = "customer", emailVerified = 0, phone = null, bio = null, avatar_url = null, active }) {
+  async create({ name, email, passwordHash, role = "customer", emailVerified = 0, phone = null, bio = null, avatar_url = null, active, country = "NG", locale = "en" }) {
     const res = db
-      .prepare("INSERT INTO users (name, email, password_hash, role, email_verified, phone, bio, avatar_url, active) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)")
-      .run(name, String(email).toLowerCase(), passwordHash, role, emailVerified ? 1 : 0, phone, bio, avatar_url, active === undefined ? 1 : active ? 1 : 0);
+      .prepare("INSERT INTO users (name, email, password_hash, role, email_verified, phone, bio, avatar_url, active, country, locale) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
+      .run(name, String(email).toLowerCase(), passwordHash, role, emailVerified ? 1 : 0, phone, bio, avatar_url, active === undefined ? 1 : active ? 1 : 0, country, locale);
     return this.findById(res.lastInsertRowid);
   },
   async update(id, patch) {
-    const allowed = ["name", "phone", "bio", "avatar_url", "role", "email_verified", "active"];
+    const allowed = ["name", "phone", "bio", "avatar_url", "role", "email_verified", "active", "country", "locale"];
     const keys = Object.keys(patch).filter((k) => allowed.includes(k));
     if (!keys.length) return this.findById(id);
     const sets = keys.map((k) => `${k} = ?`).join(", ");

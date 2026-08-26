@@ -94,6 +94,25 @@
           </form>
         </section>
 
+        <section class="panel" id="preferences-panel">
+          <h2>Country &amp; Language</h2>
+          <p class="muted" style="margin-bottom:16px;">Prices and text on the marketplace will adjust to your preferences.</p>
+          <form id="prefsForm">
+            <div class="form-grid">
+              <label>Country
+                <select id="eCountry"></select>
+              </label>
+              <label>Language
+                <select id="eLocale"></select>
+              </label>
+            </div>
+            <div class="form-actions">
+              <button type="submit" class="btn btn-primary btn-sm" id="prefsSaveBtn">Save Preferences</button>
+              <span id="prefsMsg" class="success-text hidden">Saved!</span>
+            </div>
+          </form>
+        </section>
+
         <section class="panel" id="orders-panel">
           <h2>My Orders</h2>
           <div class="table-wrap" style="overflow-x:auto;">
@@ -139,6 +158,8 @@
       </div>
     </div>
   </main>
+  <script src="/currencies.js"></script>
+  <script src="/i18n.js"></script>
   <script src="auth.js"></script>
 </body>
 </html>
