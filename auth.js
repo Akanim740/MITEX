@@ -172,6 +172,9 @@ function initRegister() {
         : ["Too weak", "Weak", "Good", "Strong"][score];
   });
 
+  const dobs = document.querySelectorAll('input[type="date"]');
+  dobs.forEach((el) => (el.max = new Date().toISOString().split("T")[0]));
+
   $("#registerForm").addEventListener("submit", async (e) => {
     e.preventDefault();
     const errEl = $("#formError");
@@ -180,6 +183,12 @@ function initRegister() {
     const name = $("#rName").value.trim();
     const email = $("#rEmail").value.trim();
     const password = passInput.value;
+    const dob = $("#rDob") ? $("#rDob").value : "";
+    const saveCard = $("#rSaveCard") ? $("#rSaveCard").checked : false;
+
+    if (!dob) {
+      return showFormError(errEl, "Your date of birth is required (you must be 18 or older).");
+    }
 
     if (password.length < 8 || !/[A-Za-z]/.test(password) || !/[0-9]/.test(password)) {
       return showFormError(errEl, "Password must be at least 8 characters and include letters and numbers.");
@@ -188,10 +197,14 @@ function initRegister() {
     const btn = $("#submitBtn");
     setLoading(btn, true, "Creating account...");
     try {
-      const data = await api("/api/auth/register", { method: "POST", auth: false, body: { name, email, password, country: localStorage.getItem("mitex_country") || "NG", locale: localStorage.getItem("mitex_locale") || "en" } });
+      const data = await api("/api/auth/register", {
+        method: "POST",
+        auth: false,
+        body: { name, email, dob, saveCard, password, country: localStorage.getItem("mitex_country") || "NG", locale: localStorage.getItem("mitex_locale") || "en" },
+      });
       $("#registerForm").classList.add("hidden");
       $("#successBox").classList.remove("hidden");
-      $("#successMsg").textContent = data.message;
+      $("#successMsg").textContent = data.message + (data.payment_saved ? " One-tap checkout is enabled." : "");
 
       if (data.devToken) {
         $("#devBox").classList.remove("hidden");
@@ -415,6 +428,11 @@ async function loadProfile() {
   $("#ePhone").value = currentUser.phone || "";
   $("#eAvatar").value = currentUser.avatar_url || "";
   $("#eBio").value = currentUser.bio || "";
+  const eDobEl = $("#eDob");
+  if (eDobEl) {
+    eDobEl.max = new Date().toISOString().split("T")[0];
+    eDobEl.value = currentUser.dob || "";
+  }
 
   if (currentUser.avatar_url) {
     $("#bigAvatar").innerHTML = `<img src="${esc(currentUser.avatar_url)}" alt="avatar" onerror="this.remove()" />`;
@@ -424,6 +442,8 @@ async function loadProfile() {
   $("#devVerifyBtn").addEventListener("click", devVerify);
   $("#profileForm").addEventListener("submit", saveProfile);
   $("#passwordForm").addEventListener("submit", changePassword);
+
+  wireCardPanel(currentUser);
 
   if (typeof CURRENCIES !== "undefined" && typeof LANG_LABELS !== "undefined") {
     const ccSel = $("#eCountry");
@@ -483,6 +503,56 @@ async function loadProfile() {
         msg.classList.remove("hidden");
         delBtn.disabled = false;
         delBtn.textContent = "Delete my account";
+      }
+    });
+  }
+}
+
+function wireCardPanel(user) {
+  const enableBtn = $("#enableCardBtn");
+  const disableBtn = $("#disableCardBtn");
+  const msg = $("#cardMsg");
+  if (!enableBtn && !disableBtn) return;
+
+  const renderCard = (paymentSaved) => {
+    if (enableBtn) enableBtn.classList.toggle("hidden", Boolean(paymentSaved));
+    if (disableBtn) disableBtn.classList.toggle("hidden", !paymentSaved);
+    if (msg) msg.textContent = paymentSaved ? "One-tap checkout is enabled. Your card is tokenized securely." : "No saved card yet.";
+  };
+
+  renderCard(Boolean(user && user.payment_saved));
+
+  if (enableBtn) {
+    enableBtn.addEventListener("click", async () => {
+      if (!confirm("This will tokenize a card via Paystack so you can buy with one click. In demo mode this is simulated - continue?")) return;
+      enableBtn.disabled = true;
+      enableBtn.textContent = "Saving...";
+      try {
+        const data = await api("/api/users/me", { method: "PUT", body: { saveCard: true } });
+        currentUser = data.user;
+        renderCard(Boolean(data.user && data.user.payment_saved));
+        enableBtn.disabled = false;
+        enableBtn.textContent = "Save card for one-tap checkout";
+      } catch (err) {
+        alert(err.message);
+        enableBtn.disabled = false;
+        enableBtn.textContent = "Save card for one-tap checkout";
+      }
+    });
+  }
+  if (disableBtn) {
+    disableBtn.addEventListener("click", async () => {
+      if (!confirm("Remove your saved card? You'll return to the normal checkout.")) return;
+      disableBtn.disabled = true;
+      try {
+        const data = await api("/api/users/me", { method: "PUT", body: { saveCard: false } });
+        const fresh = data.user || currentUser;
+        currentUser = fresh;
+        renderCard(false);
+        disableBtn.disabled = false;
+      } catch (err) {
+        alert(err.message);
+        disableBtn.disabled = false;
       }
     });
   }
@@ -628,6 +698,7 @@ function renderMarketNav() {
 let marketplaceListings = [];
 let marketplacePage = 1;
 const MARKET_PAGE_SIZE = 8;
+let marketplaceCanOneTap = false;
 
 function skeletonCards(n = 6) {
   let out = "";
@@ -659,6 +730,14 @@ async function initMarketplace() {
   grid.innerHTML = skeletonCards();
   try {
     marketplaceListings = await api("/api/listings", { auth: false });
+    if (isLoggedIn()) {
+      try {
+        const me = await api("/api/auth/me");
+        marketplaceCanOneTap = Boolean(me && me.payment_saved);
+      } catch {
+        marketplaceCanOneTap = false;
+      }
+    }
     renderListings(searchInput ? searchInput.value : "");
   } catch (err) {
     grid.innerHTML = `<p class="empty-market">${esc(err.message)}</p>`;
@@ -751,12 +830,16 @@ function renderListings(query, page) {
             : ""
         }
         <button class="btn btn-primary btn-full" data-buy="${l.id}">${t("buy_now")}</button>
+        ${marketplaceCanOneTap ? `<button class="btn btn-full" data-buyonetap="${l.id}" style="margin-top:8px;">One-tap checkout</button>` : ""}
       </article>`
     )
     .join("");
 
   grid.querySelectorAll("[data-buy]").forEach((btn) => {
     btn.addEventListener("click", () => buyListing(btn.dataset.buy, btn));
+  });
+  grid.querySelectorAll("[data-buyonetap]").forEach((btn) => {
+    btn.addEventListener("click", () => buyListingOneTap(btn.dataset.buyonetap, btn));
   });
 
   if (totalPages > 1) {
@@ -791,13 +874,42 @@ async function buyListing(listingId, btn) {
     location.href = "/login.html?next=/marketplace.html";
     return;
   }
-  setLoading(btn, true, "Starting checkout...");
+
+  let listingNotes = "";
+  const notes = prompt(
+    "Tell us how you'd like this website customized (e.g. add a logo, change colours, new pages, your business name).\n\nLeave empty for no customisation."
+  );
+  listingNotes = (notes || "").trim();
+
+  if (btn) setLoading(btn, true, "Starting checkout...");
   try {
-    const data = await api("/api/payments/initialize", { method: "POST", body: { listingId } });
+    const data = await api("/api/payments/initialize", { method: "POST", body: { listingId, notes: listingNotes } });
     location.href = data.authorization_url;
   } catch (err) {
     alert(err.message);
-    setLoading(btn, false, t("buy_now"));
+    if (btn) setLoading(btn, false, t("buy_now"));
+  }
+}
+
+async function buyListingOneTap(listingId, btn) {
+  if (!isLoggedIn()) {
+    location.href = "/login.html?next=/marketplace.html";
+    return;
+  }
+
+  let listingNotes = "";
+  const notes = prompt(
+    "Tell us how you'd like this website customized (e.g. add a logo, change colours, new pages, your business name).\n\nLeave empty for no customisation."
+  );
+  listingNotes = (notes || "").trim();
+
+  if (btn) setLoading(btn, true, "Charging saved card...");
+  try {
+    const data = await api("/api/payments/one-tap", { method: "POST", body: { listingId, notes: listingNotes } });
+    location.href = `/payment-success.html?reference=${encodeURIComponent(data.reference)}`;
+  } catch (err) {
+    alert(err.message);
+    if (btn) setLoading(btn, false, "Buy Now");
   }
 }
 
@@ -939,6 +1051,7 @@ async function saveProfile(e) {
         phone: $("#ePhone").value.trim(),
         avatar_url: $("#eAvatar").value.trim(),
         bio: $("#eBio").value.trim(),
+        dob: $(`#eDob`) && $(`#eDob`).value ? $(`#eDob`).value : undefined,
       },
     });
 

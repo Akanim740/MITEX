@@ -172,6 +172,8 @@
           <label>Email (their login)<input type="email" id="eEmail" required placeholder="adebayo@mitex.store" /></label>
           <label>Password<input type="text" id="ePassword" required minlength="8" placeholder="Min 8 chars, letters + numbers" /></label>
           <label>WhatsApp number<input type="tel" id="ePhone" placeholder="+234 801 234 5678" /></label>
+          <label>Date of birth<input type="date" id="eDob" required /></label>
+          <label>NIN or BVN<input type="text" id="eNin" required pattern="[0-9]{11}" maxlength="11" inputmode="numeric" placeholder="11-digit NIN or BVN" /></label>
           <label class="span-2">Job title<input type="text" id="eTitle" maxlength="120" placeholder="e.g. Sales Executive - shown to buyers" /></label>
           <div class="form-actions span-2">
             <button type="submit" class="btn btn-primary btn-sm" id="employeeSubmit">Add Employee</button>

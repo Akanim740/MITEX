@@ -51,7 +51,7 @@ const users = {
     const d = await col("users").doc(String(id)).get();
     return d.exists ? { ...d.data(), id: d.id } : null;
   },
-  async create({ name, email, passwordHash, role = "customer", emailVerified = 0, phone = null, bio = null, avatar_url = null, active, country = "NG", locale = "en" }) {
+  async create({ name, email, passwordHash, role = "customer", emailVerified = 0, phone = null, bio = null, avatar_url = null, active, country = "NG", locale = "en", dob = null, nin_bvn = null, nin_file = null, payment_enc = null }) {
     return addDoc("users", {
       name,
       email: String(email).toLowerCase(),
@@ -64,12 +64,16 @@ const users = {
       active: active === undefined ? 1 : active ? 1 : 0,
       country,
       locale,
+      dob,
+      nin_bvn,
+      nin_file,
+      payment_enc,
       created_at: nowISO(),
       updated_at: null,
     });
   },
   async update(id, patch) {
-    const allowed = ["name", "phone", "bio", "avatar_url", "role", "email_verified", "active", "country", "locale"];
+    const allowed = ["name", "phone", "bio", "avatar_url", "role", "email_verified", "active", "country", "locale", "dob", "nin_bvn", "nin_file", "payment_enc"];
     const set = { updated_at: nowISO() };
     for (const k of allowed) if (k in patch) set[k] = typeof patch[k] === "boolean" ? (patch[k] ? 1 : 0) : patch[k];
     await col("users").doc(String(id)).update(set);
@@ -277,6 +281,7 @@ const orders = {
       currency: v.currency || "NGN",
       email: v.email,
       name: v.name ?? null,
+      notes: v.notes ?? null,
       status: "pending",
       paid_at: null,
       created_at: nowISO(),
@@ -372,6 +377,8 @@ const applications = {
       phone: v.phone ?? null,
       portfolio: v.portfolio ?? null,
       message: v.message,
+      dob: v.dob ?? null,
+      nin_bvn: v.nin_bvn ?? null,
       status: "new",
       test_token: null,
       test_instructions: null,

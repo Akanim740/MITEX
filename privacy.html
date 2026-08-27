@@ -39,8 +39,9 @@
     <h2>1. Information We Collect</h2>
     <p>We collect the following types of information:</p>
     <ul>
-      <li><strong>Account information:</strong> Name, email address, password (encrypted), phone number, and country when you create an account.</li>
-      <li><strong>Payment information:</strong> When you make a purchase, payment is processed by Paystack. We do not store your card number, CVV, or bank details on our servers. Paystack handles all card data in compliance with PCI-DSS standards.</li>
+      <li><strong>Account information:</strong> Name, email address, password (encrypted), phone number, date of birth, and country when you create an account.</li>
+      <li><strong>Payment information:</strong> When you make a purchase, payment is processed by Paystack. We do not store your card number, CVV, or bank details on our servers. If you opt in to <strong>one-tap checkout</strong>, Paystack gives us a secure token that lets us charge the card on future purchases — we never see or store the actual card number.</li>
+      <li><strong>Identity verification (workers):</strong> Staff and workers must submit an 11-digit NIN or BVN. These are encrypted at rest and only visible to MITEX administrators.</li>
       <li><strong>Usage data:</strong> Browser type, device information, pages visited, and time spent on our platform, collected through cookies and server logs.</li>
       <li><strong>Communication data:</strong> Messages you send us through contact forms, email, or WhatsApp.</li>
       <li><strong>Employment applications:</strong> If you apply to work with us, we collect your name, email, phone, and any work samples you submit.</li>
@@ -57,7 +58,7 @@
     </ul>
 
     <h2>3. Payment Processing</h2>
-    <p>All payments are processed through <strong>Paystack</strong> (paystack.com). When you make a purchase, Paystack collects your card or bank details directly. We only receive your email, name, and a payment reference — we never see or store your full card number.</p>
+    <p>All payments are processed through <strong>Paystack</strong> (paystack.com). When you make a purchase, Paystack collects your card or bank details directly. We only receive your email, name, and a payment reference — we never see or store your full card number. If you enable one-tap checkout, Paystack stores a token on our behalf; you can remove it at any time from your account settings, after which one-tap charges stop.</p>
 
     <h2>4. Cookies</h2>
     <p>We use the following cookies:</p>
@@ -95,7 +96,7 @@
     <p>We implement industry-standard security measures including HTTPS encryption, JWT-based authentication, encrypted password storage (bcrypt), and role-based access controls. However, no method of transmission over the Internet is 100% secure, and we cannot guarantee absolute security.</p>
 
     <h2>9. Children's Privacy</h2>
-    <p>MITEX is not intended for use by anyone under the age of 16. We do not knowingly collect personal information from children.</p>
+    <p>MITEX is intended for users aged <strong>18 and over</strong>. We do not knowingly collect personal information from minors.</p>
 
     <h2>10. Changes to This Policy</h2>
     <p>We may update this Privacy Policy from time to time. Material changes will be communicated via email or a prominent notice on our website. Your continued use of MITEX after changes constitutes acceptance of the updated policy.</p>

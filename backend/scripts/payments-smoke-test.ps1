@@ -24,6 +24,9 @@ if ($LASTEXITCODE -ne 0) { Write-Output "Seed failed"; exit 1 }
 Write-Output "`n== Starting server on :3102 (demo payments mode) =="
 $env:PORT = "3102"
 $env:PAYSTACK_SECRET_KEY = ""
+$dotEnvPath = Join-Path (Get-Location) ".env"
+$dotEnvBak = Join-Path $env:TEMP "mitex-pay-.env.bak"
+if (Test-Path $dotEnvPath) { Move-Item $dotEnvPath $dotEnvBak -Force }
 $out = Join-Path $env:TEMP "mitex-pay-out.log"
 $errLog = Join-Path $env:TEMP "mitex-pay-err.log"
 $p = Start-Process node -ArgumentList "server.js" -WorkingDirectory (Get-Location) -PassThru -WindowStyle Hidden -RedirectStandardOutput $out -RedirectStandardError $errLog
@@ -47,7 +50,7 @@ try {
 
   # ---- Buyer + admin accounts ----
   $email = "paybuyer$([int](Get-Date -UFormat %s))@example.com"
-  $reg = Invoke-RestMethod -Method Post -Uri "$base/api/auth/register" -ContentType application/json -Body (@{ name = "Pay Buyer"; email = $email; password = "Passw0rd123" } | ConvertTo-Json)
+  $reg = Invoke-RestMethod -Method Post -Uri "$base/api/auth/register" -ContentType application/json -Body (@{ name = "Pay Buyer"; email = $email; password = "Passw0rd123"; dob = "1993-02-20" } | ConvertTo-Json)
   Invoke-RestMethod "$base/api/auth/verify-email?token=$($reg.devToken)" | Out-Null
 
   $custLogin = Invoke-RestMethod -Method Post -Uri "$base/api/auth/login" -ContentType application/json -Body (@{ email = $email; password = "Passw0rd123" } | ConvertTo-Json)
@@ -145,6 +148,7 @@ try {
 
 } finally {
   if ($p -and -not $p.HasExited) { Stop-Process -Id $p.Id -Force }
+  if (Test-Path $dotEnvBak) { Move-Item $dotEnvBak $dotEnvPath -Force }
 }
 
 Write-Output ""

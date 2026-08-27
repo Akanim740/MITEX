@@ -46,7 +46,7 @@ try {
 
   # ---- Registration + email verification ----
   $email = "buyer$([int](Get-Date -UFormat %s))@example.com"
-  $reg = Invoke-RestMethod -Method Post -Uri "$base/api/auth/register" -ContentType application/json -Body (@{ name = "Test Buyer"; email = $email; password = "Passw0rd123" } | ConvertTo-Json)
+  $reg = Invoke-RestMethod -Method Post -Uri "$base/api/auth/register" -ContentType application/json -Body (@{ name = "Test Buyer"; email = $email; password = "Passw0rd123"; dob = "1995-06-15" } | ConvertTo-Json)
   Check "register returns 201 + devToken" ($reg.devToken -ne $null)
 
   $verify = Invoke-RestMethod "$base/api/auth/verify-email?token=$($reg.devToken)"
@@ -55,7 +55,7 @@ try {
   # duplicate register rejected
   $dup = $false
   try {
-    Invoke-RestMethod -Method Post -Uri "$base/api/auth/register" -ContentType application/json -Body (@{ name = "Test Buyer"; email = $email; password = "Passw0rd123" } | ConvertTo-Json) | Out-Null
+    Invoke-RestMethod -Method Post -Uri "$base/api/auth/register" -ContentType application/json -Body (@{ name = "Test Buyer"; email = $email; password = "Passw0rd123"; dob = "1995-06-15" } | ConvertTo-Json) | Out-Null
   } catch { $dup = (StatusOf $_) -eq 409 }
   Check "duplicate registration rejected (409)" $dup
 

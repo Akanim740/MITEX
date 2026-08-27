@@ -47,7 +47,7 @@ const users = {
     const { data } = await supabase.from("users").select("*").eq("id", id).maybeSingle();
     return data || null;
   },
-  async create({ name, email, passwordHash, role = "customer", emailVerified = 0, phone = null, bio = null, avatar_url = null, active, country = "NG", locale = "en" }) {
+  async create({ name, email, passwordHash, role = "customer", emailVerified = 0, phone = null, bio = null, avatar_url = null, active, country = "NG", locale = "en", dob = null, nin_bvn = null, nin_file = null, payment_enc = null }) {
     const { data, error } = await supabase
       .from("users")
       .insert({
@@ -62,6 +62,10 @@ const users = {
         active: active === undefined ? true : !!active,
         country,
         locale,
+        dob,
+        nin_bvn,
+        nin_file,
+        payment_enc,
         created_at: nowISO(),
       })
       .select()
@@ -70,7 +74,7 @@ const users = {
     return data;
   },
   async update(id, patch) {
-    const allowed = ["name", "phone", "bio", "avatar_url", "role", "email_verified", "active", "country", "locale"];
+    const allowed = ["name", "phone", "bio", "avatar_url", "role", "email_verified", "active", "country", "locale", "dob", "nin_bvn", "nin_file", "payment_enc"];
     const set = {};
     for (const k of allowed) if (k in patch) set[k] = patch[k];
     set.updated_at = nowISO();
@@ -320,6 +324,7 @@ const orders = {
         currency: v.currency || "NGN",
         email: v.email,
         name: v.name ?? null,
+        notes: v.notes ?? null,
         status: "pending",
         created_at: nowISO(),
       })
@@ -421,6 +426,8 @@ const applications = {
         phone: v.phone ?? null,
         portfolio: v.portfolio ?? null,
         message: v.message,
+        dob: v.dob ?? null,
+        nin_bvn: v.nin_bvn ?? null,
         status: "new",
         created_at: nowISO(),
       })

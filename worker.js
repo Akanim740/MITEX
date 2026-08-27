@@ -11,6 +11,7 @@ const API = {
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
         ...(options.headers || {}),
       },
+      ...(options.body ? { body: typeof options.body === "string" ? options.body : JSON.stringify(options.body) } : {}),
     });
     if (res.status === 401 && !retried && !path.startsWith("/api/auth/")) {
       const refreshed = await fetch("/api/auth/refresh", { method: "POST" });
@@ -73,6 +74,49 @@ function showApp(user) {
   $("#profileEmail").textContent = user.email;
   $("#profileRole").textContent = user.role;
   $("#profilePhone").textContent = user.phone || "No phone set";
+
+  const verEl = $("#verificationBody");
+  if (verEl) {
+    if (user.verified_id) {
+      verEl.innerHTML = `
+        <p class="empty-state">✓ Your ID is verified.</p>
+        <p class="muted" style="font-size:.85rem;">Your NIN/BVN is stored encrypted and is only visible to the MITEX admin.</p>
+      `;
+    } else {
+      verEl.innerHTML = `
+        <p class="muted" style="margin-bottom:16px;">You haven't submitted your 11-digit NIN/BVN yet. MITEX requires every worker to be verified.</p>
+        <div class="project-actions">
+          <input type="text" id="workerNin" maxlength="11" placeholder="11-digit NIN or BVN" class="project-url" style="flex:1;min-width:200px;" />
+          <button class="btn btn-primary btn-sm" id="workerNinBtn">Submit verification</button>
+        </div>
+        <p class="muted" id="workerNinMsg" style="font-size:.85rem;"></p>
+        <p class="muted" style="font-size:.82rem;margin-top:6px;">Upload a photo of your ID is optional but speeds up verification. You can submit the photo after entering your number.</p>
+      `;
+      const btn = $("#workerNinBtn");
+      const msg = $("#workerNinMsg");
+      btn.addEventListener("click", async () => {
+        const value = $("#workerNin").value.trim();
+        if (!/^\d{11}$/.test(value)) {
+          msg.textContent = "NIN/BVN must be exactly 11 digits.";
+          return;
+        }
+        btn.disabled = true;
+        btn.textContent = "Submitting...";
+        try {
+          await API.put("/api/users/me", { ninBvn: value });
+          msg.textContent = "Saved. Your admin has been notified.";
+          const me = await API.get("/api/auth/me");
+          currentUser = me;
+          verEl.innerHTML = `<p class="empty-state">✓ Your ID is verified.</p>`;
+        } catch (err) {
+          msg.textContent = err.message;
+        } finally {
+          btn.disabled = false;
+          btn.textContent = "Submit verification";
+        }
+      });
+    }
+  }
 }
 
 async function initAuth() {

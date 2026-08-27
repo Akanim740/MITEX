@@ -5,6 +5,7 @@ const { requireAuth, requireRole, requireAuthFlexible } = require("../middleware
 const { randomToken } = require("../utils/tokens");
 const { sendMail, receiptEmail } = require("../utils/mailer");
 const paystack = require("../utils/paystack");
+const cryptoBox = require("../utils/crypto-box");
 
 function newReference() {
   return `MITEX-${Date.now()}-${randomToken(4).toUpperCase()}`;
@@ -50,6 +51,7 @@ router.post("/initialize", requireAuth, async (req, res) => {
       currency: "NGN",
       email: req.user.email,
       name: req.user.name,
+      notes: String(req.body.notes || "").trim().slice(0, 2000) || null,
     });
 
     const init = await paystack.initializeTransaction({
@@ -65,6 +67,70 @@ router.post("/initialize", requireAuth, async (req, res) => {
       authorization_url: init.authorization_url,
       demo: Boolean(init.demo),
     });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: err.message || "Internal server error" });
+  }
+});
+
+// POST /api/payments/one-tap - charge a previously saved card (tokenized at signup)
+router.post("/one-tap", requireAuth, async (req, res) => {
+  try {
+    const store = req.store;
+    const { listingId } = req.body;
+    if (!listingId) return res.status(400).json({ error: "listingId is required" });
+
+    const listing = await store.listings.get(listingId);
+    if (!listing) return res.status(404).json({ error: "Listing not found" });
+    if (listing.status !== "available") return res.status(409).json({ error: "This listing has already been sold" });
+
+    const user = await store.users.findById(req.user.id);
+    if (!user || !user.payment_enc) {
+      return res.status(409).json({ error: "No saved card on your account. Save a card to use one-tap checkout." });
+    }
+    let saved;
+    try {
+      saved = JSON.parse(cryptoBox.decrypt(user.payment_enc) || "null");
+    } catch {
+      saved = null;
+    }
+    if (!saved || (!saved.authorization_code && !saved.demo)) {
+      return res.status(409).json({ error: "No saved card on your account. Save a card to use one-tap checkout." });
+    }
+
+    const reference = newReference();
+    const order = await store.orders.create({
+      userId: user.id,
+      listingId: listing.id,
+      reference,
+      title: listing.title,
+      amount: listing.price,
+      currency: "NGN",
+      email: user.email,
+      name: user.name,
+      notes: String(req.body.notes || "").trim().slice(0, 2000) || null,
+    });
+
+    if (saved.demo || !paystack.isConfigured()) {
+      await settleOrder(store, order);
+      return res.json({ message: "Payment successful (simulated one-tap)", reference, status: "paid", demo: true });
+    }
+
+    const charged = await paystack.chargeAuthorization({
+      email: user.email,
+      amountNaira: listing.price,
+      authorizationCode: saved.authorization_code,
+      customerCode: saved.customer_code,
+      reference,
+      metadata: { orderId: order.id, listingId: String(listing.id), buyer: user.email, oneTap: true },
+    });
+    if (charged.status === "success") {
+      await settleOrder(store, order);
+      return res.json({ message: "Payment successful", reference, status: "paid", demo: false });
+    }
+
+    await store.orders.markFailed(order.reference);
+    return res.status(402).json({ error: "Your saved card could not be charged. Please retry with the full checkout." });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: err.message || "Internal server error" });

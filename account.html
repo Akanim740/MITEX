@@ -80,6 +80,9 @@
               <label>Phone
                 <input type="tel" id="ePhone" placeholder="+234 800 000 0000" />
               </label>
+              <label>Date of birth (must be 18+)
+                <input type="date" id="eDob" max="" />
+              </label>
               <label class="span-2">Avatar URL
                 <input type="url" id="eAvatar" placeholder="https://example.com/photo.jpg" />
               </label>
@@ -111,6 +114,16 @@
               <span id="prefsMsg" class="success-text hidden">Saved!</span>
             </div>
           </form>
+        </section>
+
+        <section class="panel" id="payment-panel">
+          <h2>One-tap Checkout</h2>
+          <p class="muted" style="margin-bottom:16px;">Store a tokenized card (via Paystack) to buy marketplace websites in a single click. MITEX never keeps your card number - only a secure token.</p>
+          <div class="form-actions">
+            <button type="button" class="btn btn-primary btn-sm" id="enableCardBtn">Save card for one-tap checkout</button>
+            <button type="button" class="btn btn-sm hidden" id="disableCardBtn" style="color:var(--red,#ef4444);border-color:var(--red,#ef4444);">Remove saved card</button>
+            <span id="cardMsg" class="muted hint"></span>
+          </div>
         </section>
 
         <section class="panel" id="orders-panel">

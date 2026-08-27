@@ -5,6 +5,8 @@ const router = express.Router();
 const { signAccessToken, requireAuth, requireRole, resolveRefreshSession, ACCESS_TTL } = require("../middleware/auth");
 const { randomToken, sha256 } = require("../utils/tokens");
 const { sendMail, verificationEmail, resetEmail, smtpConfigured } = require("../utils/mailer");
+const { validateDob, encNin } = require("../utils/verify");
+const paystack = require("../utils/paystack");
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const REFRESH_COOKIE = "mitex_refresh";
@@ -39,6 +41,7 @@ router.post("/register", async (req, res) => {
     const password = String(req.body.password || "");
     const country = String(req.body.country || "NG").trim().toUpperCase().slice(0, 2);
     const locale = String(req.body.locale || "en").trim().toLowerCase().slice(0, 5);
+    const dob = String(req.body.dob || "").trim();
 
     if (name.length < 2 || name.length > 80) {
       return res.status(400).json({ error: "Name must be 2-80 characters" });
@@ -50,13 +53,42 @@ router.post("/register", async (req, res) => {
       return res.status(400).json({ error: "Password must be at least 8 characters and include letters and numbers" });
     }
 
+    const dobCheck = validateDob(dob);
+    if (!dobCheck.ok) {
+      return res.status(400).json({ error: dobCheck.error });
+    }
+
     const existing = await store.users.findByEmail(email);
     if (existing) {
       return res.status(409).json({ error: "An account with this email already exists" });
     }
 
     const passwordHash = await bcrypt.hash(password, 12);
-    const user = await store.users.create({ name, email, passwordHash, role: "customer", emailVerified: 0, country, locale });
+    const user = await store.users.create({ name, email, passwordHash, role: "customer", emailVerified: 0, country, locale, dob });
+
+    // One-tap checkout: tokenize the card at signup (MITEX never stores card numbers).
+    let paymentSaved = false;
+    if (req.body.saveCard) {
+      try {
+        if (paystack.isConfigured()) {
+          const token = String(req.body.cardToken || "").trim();
+          if (!token) return res.status(400).json({ error: "Card tokenization failed - please try again" });
+          const tok = await paystack.tokenizeCard({ email: user.email, token });
+          const enc = require("../utils/crypto-box").encrypt(
+            JSON.stringify({ provider: "paystack", authorization_code: tok.authorization_code, customer_code: tok.customer_code })
+          );
+          await store.users.update(user.id, { payment_enc: enc });
+          paymentSaved = true;
+        } else {
+          // Demo mode: no card is touched, we just record an opt-in for one-tap payments.
+          const enc = require("../utils/crypto-box").encrypt(JSON.stringify({ provider: "paystack", demo: true }));
+          await store.users.update(user.id, { payment_enc: enc });
+          paymentSaved = true;
+        }
+      } catch (err) {
+        console.error("card enrollment failed:", err.message);
+      }
+    }
 
     const rawVerify = randomToken(32);
     await store.tokens.deleteByUser(user.id, "verify");
@@ -74,6 +106,7 @@ router.post("/register", async (req, res) => {
       message: "Account created. Check your email to verify your address.",
       ...(result.dev ? { devToken: rawVerify, devVerifyUrl: mail.url } : {}),
       user: { id: user.id, name: user.name, email: user.email, role: user.role, email_verified: 0 },
+      payment_saved: paymentSaved,
     });
   } catch (err) {
     console.error(err);
@@ -164,7 +197,24 @@ router.post("/logout", async (req, res) => {
 
 // GET /api/auth/me
 router.get("/me", requireAuth, async (req, res) => {
-  res.json(req.user);
+  try {
+    const user = await req.store.users.findById(req.user.id);
+    if (!user) return res.status(404).json({ error: "User not found" });
+    const { password_hash, nin_bvn, nin_file, payment_enc, ...pub } = user;
+    let payment_saved = false;
+    if (payment_enc) {
+      try {
+        const parsed = JSON.parse(require("../utils/crypto-box").decrypt(payment_enc) || "null");
+        payment_saved = Boolean(parsed && (parsed.demo || parsed.authorization_code));
+      } catch {
+        payment_saved = false;
+      }
+    }
+    res.json({ ...pub, id: user.id, payment_saved, verified_id: Boolean(nin_bvn) });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Internal server error" });
+  }
 });
 
 // GET /api/auth/verify-email?token=...
@@ -357,6 +407,8 @@ function staffPublic(u) {
     phone: u.phone || null,
     title: u.bio || null,
     active: u.active === undefined ? 1 : Number(u.active) ? 1 : 0,
+    dob: u.dob || null,
+    verified_id: Boolean(u.nin_bvn),
     created_at: u.created_at,
   };
 }
@@ -395,6 +447,7 @@ router.post("/staff", requireAuth, requireRole("admin"), async (req, res) => {
     const password = String(req.body.password || "");
     const phone = String(req.body.phone || "").trim() || null;
     const title = String(req.body.title || "").trim().slice(0, 120) || null;
+    const dob = String(req.body.dob || "").trim();
 
     if (name.length < 2 || name.length > 80) {
       return res.status(400).json({ error: "Name must be 2-80 characters" });
@@ -404,6 +457,20 @@ router.post("/staff", requireAuth, requireRole("admin"), async (req, res) => {
     }
     if (password.length < 8 || !/[A-Za-z]/.test(password) || !/[0-9]/.test(password)) {
       return res.status(400).json({ error: "Password must be at least 8 characters and include letters and numbers" });
+    }
+
+    const dobCheck = validateDob(dob);
+    if (!dobCheck.ok) {
+      return res.status(400).json({ error: dobCheck.error });
+    }
+
+    const ninCheck = require("../utils/verify").validateNin(req.body.ninBvn);
+    if (!ninCheck.ok) {
+      return res.status(400).json({ error: ninCheck.error });
+    }
+    const ninFileCheck = require("../utils/verify").validateNinFile(req.body.ninFile);
+    if (!ninFileCheck.ok) {
+      return res.status(400).json({ error: ninFileCheck.error });
     }
 
     const existing = await store.users.findByEmail(email);
@@ -421,6 +488,9 @@ router.post("/staff", requireAuth, requireRole("admin"), async (req, res) => {
       phone,
       bio: title,
       active: 1,
+      dob,
+      nin_bvn: encNin(req.body.ninBvn),
+      nin_file: encNin(ninFileCheck.value),
     });
 
     res.status(201).json({ message: `${name} added to the team`, employee: staffPublic(await store.users.findByEmail(email)) });
@@ -448,6 +518,21 @@ router.patch("/staff/:id", requireAuth, requireRole("admin"), async (req, res) =
     if (req.body.phone !== undefined) patch.phone = String(req.body.phone || "").trim() || null;
     if (req.body.title !== undefined) patch.bio = String(req.body.title || "").trim().slice(0, 120) || null;
     if (req.body.active !== undefined) patch.active = req.body.active ? 1 : 0;
+    if (req.body.dob !== undefined) {
+      const dobCheck = validateDob(req.body.dob);
+      if (!dobCheck.ok) return res.status(400).json({ error: dobCheck.error });
+      patch.dob = String(req.body.dob).trim();
+    }
+    if (req.body.ninBvn !== undefined) {
+      const ninCheck = require("../utils/verify").validateNin(req.body.ninBvn);
+      if (!ninCheck.ok) return res.status(400).json({ error: ninCheck.error });
+      patch.nin_bvn = encNin(req.body.ninBvn);
+    }
+    if (req.body.ninFile !== undefined) {
+      const fileCheck = require("../utils/verify").validateNinFile(req.body.ninFile);
+      if (!fileCheck.ok) return res.status(400).json({ error: fileCheck.error });
+      patch.nin_file = encNin(fileCheck.value);
+    }
     if (req.body.newPassword !== undefined && String(req.body.newPassword)) {
       const pw = String(req.body.newPassword);
       if (pw.length < 8 || !/[A-Za-z]/.test(pw) || !/[0-9]/.test(pw)) {
@@ -461,6 +546,28 @@ router.patch("/staff/:id", requireAuth, requireRole("admin"), async (req, res) =
 
     const updated = await store.users.findById(user.id);
     res.json({ message: "Employee updated", employee: staffPublic(updated) });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// GET /api/auth/staff/:id/verification - admin: decrypt and view a worker's NIN/BVN (PII - admin only)
+router.get("/staff/:id/verification", requireAuth, requireRole("admin"), async (req, res) => {
+  try {
+    const store = req.store;
+    const user = await store.users.findById(req.params.id);
+    if (!user || user.role !== "staff") {
+      return res.status(404).json({ error: "Employee not found" });
+    }
+    const { decNin } = require("../utils/verify");
+    res.json({
+      id: user.id,
+      state: user.nin_bvn ? "submitted" : "missing",
+      nin_bvn: decNin(user.nin_bvn),
+      nin_file: decNin(user.nin_file),
+      submitted_at: user.updated_at || user.created_at,
+    });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "Internal server error" });

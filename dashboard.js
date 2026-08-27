@@ -449,6 +449,8 @@ async function loadListings() {
 
 // ---- Employees ----
 const employeeForm = $("#employeeForm");
+const eDobInput = $("#eDob");
+if (eDobInput) eDobInput.max = new Date().toISOString().split("T")[0];
 
 employeeForm.addEventListener("submit", async (e) => {
   e.preventDefault();
@@ -461,6 +463,8 @@ employeeForm.addEventListener("submit", async (e) => {
         title: $("#eTitle").value.trim(),
       };
       if ($("#ePassword").value) patch.newPassword = $("#ePassword").value;
+      if ($("#eDob").value) patch.dob = $("#eDob").value;
+      if ($("#eNin").value) patch.ninBvn = $("#eNin").value;
       await API.patch(`/api/auth/staff/${id}`, patch);
     } else {
       await API.post("/api/auth/staff", {
@@ -469,6 +473,8 @@ employeeForm.addEventListener("submit", async (e) => {
         password: $("#ePassword").value,
         phone: $("#ePhone").value.trim(),
         title: $("#eTitle").value.trim(),
+        dob: $("#eDob").value,
+        ninBvn: $("#eNin").value,
       });
     }
     resetEmployeeForm();
@@ -486,6 +492,8 @@ function resetEmployeeForm() {
   $("#employeeId").value = "";
   $("#employeeSubmit").textContent = "Add Employee";
   $("#cancelEmployeeEdit").classList.add("hidden");
+  $("#eDob").required = true;
+  $("#eNin").required = true;
 }
 
 async function loadEmployees() {
@@ -505,7 +513,7 @@ async function loadEmployees() {
           <td><strong>${esc(r.name)}</strong>${r.title ? `<br /><span class="muted">${esc(r.title)}</span>` : ""}</td>
           <td>${esc(r.email)}${r.phone ? `<br /><span class="muted">${esc(r.phone)}</span>` : ""}</td>
           <td>${r.listingCount}</td>
-          <td><span class="badge ${Number(r.active) ? "available" : "sold"}">${Number(r.active) ? "active" : "inactive"}</span></td>
+          <td><span class="badge ${Number(r.active) ? "available" : "sold"}">${Number(r.active) ? "active" : "inactive"}</span>${Number(r.verified_id) ? ' <span class="badge available" title="NIN/BVN verified">verified</span>' : ""}</td>
           <td>
             <div class="row-actions">
               <button class="icon-btn" data-eedit="${r.id}">Edit</button>
@@ -529,6 +537,10 @@ async function loadEmployees() {
         $("#ePassword").value = "";
         $("#ePhone").value = row.phone || "";
         $("#eTitle").value = row.title || "";
+        $("#eDob").value = row.dob || "";
+        $("#eDob").required = false;
+        $("#eNin").value = "";
+        $("#eNin").required = false;
         $("#employeeSubmit").textContent = "Save Changes";
         $("#cancelEmployeeEdit").classList.remove("hidden");
         window.scrollTo({ top: 0, behavior: "smooth" });
@@ -855,7 +867,7 @@ async function loadOrders() {
         (r) => `
         <tr>
           <td class="muted">${esc(r.reference)}</td>
-          <td><strong>${esc(r.title)}</strong></td>
+          <td><strong>${esc(r.title)}</strong>${r.notes ? `<br /><span class="muted" style="font-size:.8rem;">📝 ${esc(r.notes)}</span>` : ""}</td>
           <td>${esc(r.email)}${r.name ? `<br /><span class="muted">${esc(r.name)}</span>` : ""}</td>
           <td>${naira(r.amount)}</td>
           <td><span class="badge ${esc(r.status)}">${esc(r.status)}</span></td>

@@ -26,6 +26,10 @@ db.exec(`
     avatar_url     TEXT,
     country        TEXT NOT NULL DEFAULT 'NG',
     locale         TEXT NOT NULL DEFAULT 'en',
+    dob            TEXT,
+    nin_bvn        TEXT,
+    nin_file       TEXT,
+    payment_enc    TEXT,
     created_at     TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
     updated_at     TEXT
   );
@@ -81,7 +85,7 @@ db.exec(`
     created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
   );
 
-  CREATE TABLE IF NOT EXISTS orders (
+CREATE TABLE IF NOT EXISTS orders (
     id         INTEGER PRIMARY KEY AUTOINCREMENT,
     user_id    INTEGER REFERENCES users(id) ON DELETE SET NULL,
     listing_id INTEGER,
@@ -91,7 +95,8 @@ db.exec(`
     currency   TEXT NOT NULL DEFAULT 'NGN',
     email      TEXT NOT NULL,
     name       TEXT,
-    status     TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','paid','failed')),
+    notes      TEXT,
+    status     TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','paid','failed','refunded')),
     paid_at    TEXT,
     created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
   );
@@ -125,6 +130,8 @@ db.exec(`
     hire_token        TEXT UNIQUE,
     hire_completed    INTEGER NOT NULL DEFAULT 0,
     payment_enc       TEXT,
+    dob               TEXT,
+    nin_bvn           TEXT,
     created_at        TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
   );
 
@@ -175,6 +182,10 @@ if (usersTableSql && !String(usersTableSql.sql).includes("'staff'")) {
       active         INTEGER NOT NULL DEFAULT 1,
       country        TEXT NOT NULL DEFAULT 'NG',
       locale         TEXT NOT NULL DEFAULT 'en',
+      dob            TEXT,
+      nin_bvn        TEXT,
+      nin_file       TEXT,
+      payment_enc    TEXT,
       created_at     TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
       updated_at     TEXT
     );
@@ -192,11 +203,17 @@ if (usersTableSql && !String(usersTableSql.sql).includes("'staff'")) {
   if (!userCols.includes("active")) db.exec("ALTER TABLE users ADD COLUMN active INTEGER NOT NULL DEFAULT 1");
   if (!userCols.includes("country")) db.exec("ALTER TABLE users ADD COLUMN country TEXT NOT NULL DEFAULT 'NG'");
   if (!userCols.includes("locale")) db.exec("ALTER TABLE users ADD COLUMN locale TEXT NOT NULL DEFAULT 'en'");
+  if (!userCols.includes("dob")) db.exec("ALTER TABLE users ADD COLUMN dob TEXT");
+  if (!userCols.includes("nin_bvn")) db.exec("ALTER TABLE users ADD COLUMN nin_bvn TEXT");
+  if (!userCols.includes("nin_file")) db.exec("ALTER TABLE users ADD COLUMN nin_file TEXT");
+  if (!userCols.includes("payment_enc")) db.exec("ALTER TABLE users ADD COLUMN payment_enc TEXT");
 }
 
 {
   const appCols = db.prepare("PRAGMA table_info(applications)").all().map((c) => c.name);
   if (!appCols.includes("payment_enc")) db.exec("ALTER TABLE applications ADD COLUMN payment_enc TEXT");
+  if (!appCols.includes("dob")) db.exec("ALTER TABLE applications ADD COLUMN dob TEXT");
+  if (!appCols.includes("nin_bvn")) db.exec("ALTER TABLE applications ADD COLUMN nin_bvn TEXT");
 }
 
 // Older databases were created with an orders status CHECK that lacks 'refunded'.
@@ -216,6 +233,7 @@ if (ordersTableSql && !String(ordersTableSql.sql).includes("'refunded'")) {
       currency   TEXT NOT NULL DEFAULT 'NGN',
       email      TEXT NOT NULL,
       name       TEXT,
+      notes      TEXT,
       status     TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','paid','failed','refunded')),
       paid_at    TEXT,
       created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
@@ -227,6 +245,11 @@ if (ordersTableSql && !String(ordersTableSql.sql).includes("'refunded'")) {
   `);
   db.exec("COMMIT");
   db.exec("PRAGMA foreign_keys = ON");
+}
+
+{
+  const orderCols = db.prepare("PRAGMA table_info(orders)").all().map((c) => c.name);
+  if (!orderCols.includes("notes")) db.exec("ALTER TABLE orders ADD COLUMN notes TEXT");
 }
 
 const nowISO = () => new Date().toISOString();
@@ -247,14 +270,14 @@ const users = {
   async findById(id) {
     return db.prepare("SELECT * FROM users WHERE id = ?").get(id) || null;
   },
-  async create({ name, email, passwordHash, role = "customer", emailVerified = 0, phone = null, bio = null, avatar_url = null, active, country = "NG", locale = "en" }) {
+  async create({ name, email, passwordHash, role = "customer", emailVerified = 0, phone = null, bio = null, avatar_url = null, active, country = "NG", locale = "en", dob = null, nin_bvn = null, nin_file = null, payment_enc = null }) {
     const res = db
-      .prepare("INSERT INTO users (name, email, password_hash, role, email_verified, phone, bio, avatar_url, active, country, locale) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
-      .run(name, String(email).toLowerCase(), passwordHash, role, emailVerified ? 1 : 0, phone, bio, avatar_url, active === undefined ? 1 : active ? 1 : 0, country, locale);
+      .prepare("INSERT INTO users (name, email, password_hash, role, email_verified, phone, bio, avatar_url, active, country, locale, dob, nin_bvn, nin_file, payment_enc) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
+      .run(name, String(email).toLowerCase(), passwordHash, role, emailVerified ? 1 : 0, phone, bio, avatar_url, active === undefined ? 1 : active ? 1 : 0, country, locale, dob, nin_bvn, nin_file, payment_enc);
     return this.findById(res.lastInsertRowid);
   },
   async update(id, patch) {
-    const allowed = ["name", "phone", "bio", "avatar_url", "role", "email_verified", "active", "country", "locale"];
+    const allowed = ["name", "phone", "bio", "avatar_url", "role", "email_verified", "active", "country", "locale", "dob", "nin_bvn", "nin_file", "payment_enc"];
     const keys = Object.keys(patch).filter((k) => allowed.includes(k));
     if (!keys.length) return this.findById(id);
     const sets = keys.map((k) => `${k} = ?`).join(", ");
@@ -435,9 +458,9 @@ const orders = {
   async create(v) {
     const res = db
       .prepare(
-        "INSERT INTO orders (user_id, listing_id, reference, title, amount, currency, email, name) VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
+        "INSERT INTO orders (user_id, listing_id, reference, title, amount, currency, email, name, notes) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
       )
-      .run(v.userId ?? null, v.listingId ?? null, v.reference, v.title, v.amount, v.currency || "NGN", v.email, v.name ?? null);
+      .run(v.userId ?? null, v.listingId ?? null, v.reference, v.title, v.amount, v.currency || "NGN", v.email, v.name ?? null, v.notes ?? null);
     return this.findByReference(v.reference);
   },
   async findByReference(reference) {
@@ -501,8 +524,8 @@ const applications = {
   },
   async create(v) {
     const res = db
-      .prepare("INSERT INTO applications (name, email, phone, portfolio, message) VALUES (?, ?, ?, ?, ?)")
-      .run(v.name, String(v.email).toLowerCase(), v.phone ?? null, v.portfolio ?? null, v.message);
+      .prepare("INSERT INTO applications (name, email, phone, portfolio, message, dob, nin_bvn) VALUES (?, ?, ?, ?, ?, ?, ?)")
+      .run(v.name, String(v.email).toLowerCase(), v.phone ?? null, v.portfolio ?? null, v.message, v.dob ?? null, v.nin_bvn ?? null);
     return this.get(res.lastInsertRowid);
   },
   async findByEmail(email) {

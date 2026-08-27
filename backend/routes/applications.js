@@ -6,6 +6,7 @@ const { requireAuth, requireRole } = require("../middleware/auth");
 const { randomToken } = require("../utils/tokens");
 const { sendMail, testEmail, hireEmail, APP_URL } = require("../utils/mailer");
 const cryptoBox = require("../utils/crypto-box");
+const { validateDob, validateNin, encNin } = require("../utils/verify");
 
 // Staff accounts are capped at 21 - shared rule with routes/auth.js
 const MAX_STAFF = Number(process.env.MAX_STAFF || 21);
@@ -65,6 +66,7 @@ router.post("/", publicLimiter, async (req, res) => {
     const phone = String(req.body.phone || "").trim() || null;
     const portfolio = String(req.body.portfolio || "").trim() || null;
     const message = String(req.body.message || "").trim();
+    const dob = String(req.body.dob || "").trim();
 
     if (name.length < 2 || name.length > 80) {
       return res.status(400).json({ error: "Name must be 2-80 characters" });
@@ -79,12 +81,21 @@ router.post("/", publicLimiter, async (req, res) => {
       return res.status(400).json({ error: "Portfolio link must start with http:// or https://" });
     }
 
+    const dobCheck = validateDob(dob);
+    if (!dobCheck.ok) {
+      return res.status(400).json({ error: dobCheck.error });
+    }
+    const ninCheck = validateNin(req.body.ninBvn);
+    if (!ninCheck.ok) {
+      return res.status(400).json({ error: ninCheck.error });
+    }
+
     const existing = await store.applications.findByEmail(email);
     if (existing && ["new", "test_sent", "submitted", "passed"].includes(existing.status)) {
       return res.status(409).json({ error: "You already have an active application with this email." });
     }
 
-    const app = await store.applications.create({ name, email, phone, portfolio, message });
+    const app = await store.applications.create({ name, email, phone, portfolio, message, dob, nin_bvn: encNin(req.body.ninBvn) });
     res.status(201).json({ message: "Application received. We review every application and will contact you by email.", application: { id: app.id, status: app.status } });
   } catch (err) {
     console.error(err);
@@ -280,6 +291,16 @@ router.post("/:id/pass", requireAuth, requireRole("admin"), async (req, res) => 
       return res.status(403).json({ error: `Staff limit reached (${MAX_STAFF} employees max)` });
     }
 
+    const dobCheck = validateDob(app.dob);
+    if (!dobCheck.ok) {
+      return res.status(400).json({ error: `Applicant ${dobCheck.error.toLowerCase()}` });
+    }
+    const decryptedNin = app.nin_bvn ? cryptoBox.decrypt(app.nin_bvn) : null;
+    const ninCheck = validateNin(decryptedNin);
+    if (!ninCheck.ok) {
+      return res.status(400).json({ error: `Applicant ${ninCheck.error.toLowerCase()}` });
+    }
+
     let user = await store.users.findByEmail(app.email);
     if (!user) {
       // Password is unusable until the applicant sets it via their private link
@@ -292,6 +313,8 @@ router.post("/:id/pass", requireAuth, requireRole("admin"), async (req, res) => 
         phone: app.phone,
         bio: "MITEX Team Member",
         active: 1,
+        dob: app.dob,
+        nin_bvn: app.nin_bvn,
       });
     } else if (user.role !== "staff") {
       await store.users.update(user.id, { role: "staff", active: 1 });

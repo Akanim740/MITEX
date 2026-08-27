@@ -72,6 +72,12 @@
           <label>Tell us about yourself
             <textarea id="apMessage" required minlength="20" maxlength="2000" placeholder="Who are you? What can you build? Why MITEX?"></textarea>
           </label>
+          <label>Date of birth
+            <input type="date" id="apDob" required />
+          </label>
+          <label>NIN or BVN
+            <input type="text" id="apNin" required pattern="[0-9]{11}" maxlength="11" inputmode="numeric" placeholder="11-digit NIN or BVN" />
+          </label>
           <p class="hint">No CV needed. Your words and (later) your test website are all we judge.</p>
           <p id="applyError" class="error hidden"></p>
           <button type="submit" id="applyBtn" class="btn btn-primary btn-full">Submit Application</button>
@@ -145,6 +151,9 @@
     const params = new URLSearchParams(location.search);
     const token = params.get("token");
 
+    const dobInput = document.getElementById("apDob");
+    if (dobInput) dobInput.max = new Date().toISOString().split("T")[0];
+
     function show(mode) {
       ["applyMode", "receivedMode", "statusMode"].forEach((id) =>
         document.getElementById(id).classList.toggle("hidden", id !== mode)
@@ -208,6 +217,8 @@
             phone: document.getElementById("apPhone").value,
             portfolio: document.getElementById("apPortfolio").value,
             message: document.getElementById("apMessage").value,
+            dob: document.getElementById("apDob").value,
+            ninBvn: document.getElementById("apNin").value,
           }),
         });
         const data = await res.json().catch(() => ({}));

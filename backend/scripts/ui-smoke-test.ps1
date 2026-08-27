@@ -36,7 +36,7 @@ try {
 
   # Simulate exactly what the UI does
   $email = "uiuser$([int](Get-Date -UFormat %s))@example.com"
-  $reg = Invoke-RestMethod -Method Post -Uri "$base/api/auth/register" -ContentType application/json -Body (@{ name = "UI Tester"; email = $email; password = "Passw0rd123" } | ConvertTo-Json)
+  $reg = Invoke-RestMethod -Method Post -Uri "$base/api/auth/register" -ContentType application/json -Body (@{ name = "UI Tester"; email = $email; password = "Passw0rd123"; dob = "1997-11-03" } | ConvertTo-Json)
   Check "register page flow -> account created" ($reg.devToken -ne $null)
 
   Invoke-RestMethod "$base/api/auth/verify-email?token=$($reg.devToken)" | Out-Null

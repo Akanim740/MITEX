@@ -3,18 +3,50 @@ const bcrypt = require("bcryptjs");
 const router = express.Router();
 
 const { requireAuth, requireRole } = require("../middleware/auth");
+const { validateDob, validateNin, validateNinFile, encNin, decNin } = require("../utils/verify");
+const cryptoBox = require("../utils/crypto-box");
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 function publicProfile(user) {
   if (!user) return null;
-  const { password_hash, ...rest } = user;
+  const { password_hash, nin_bvn, nin_file, payment_enc, ...rest } = user;
   return rest;
+}
+
+// Decorate a fresh user row with derived flags for the account/worker dashboards.
+function selfView(user) {
+  if (!user) return null;
+  const { password_hash, nin_bvn, nin_file, payment_enc, ...rest } = user;
+  let payment_saved = false;
+  if (payment_enc) {
+    try {
+      const parsed = JSON.parse(cryptoBox.decrypt(payment_enc) || "null");
+      payment_saved = Boolean(parsed && (parsed.demo || parsed.authorization_code));
+    } catch {
+      payment_saved = false;
+    }
+  }
+  return {
+    ...rest,
+    id: user.id,
+    payment_saved,
+    verified_id: Boolean(nin_bvn),
+    nin_bvn: decNin(nin_bvn),
+    nin_file: decNin(nin_file),
+  };
 }
 
 // GET /api/users/me - own full profile
 router.get("/me", requireAuth, async (req, res) => {
-  res.json(publicProfile(req.user));
+  try {
+    const user = await req.store.users.findById(req.user.id);
+    if (!user) return res.status(404).json({ error: "User not found" });
+    res.json(selfView(user));
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Internal server error" });
+  }
 });
 
 // PUT /api/users/me - edit own profile
@@ -49,9 +81,50 @@ router.put("/me", requireAuth, async (req, res) => {
     if (req.body.locale !== undefined) {
       patch.locale = String(req.body.locale).trim().toLowerCase().slice(0, 5) || "en";
     }
+    if (req.body.dob !== undefined) {
+      const dob = String(req.body.dob).trim();
+      const dobCheck = validateDob(dob);
+      if (!dobCheck.ok) {
+        return res.status(400).json({ error: dobCheck.error });
+      }
+      patch.dob = dob;
+    }
+    if (req.body.ninBvn !== undefined) {
+      const ninCheck = validateNin(req.body.ninBvn);
+      if (!ninCheck.ok) {
+        return res.status(400).json({ error: ninCheck.error });
+      }
+      patch.nin_bvn = encNin(req.body.ninBvn);
+    }
+    if (req.body.ninFile !== undefined) {
+      const fileCheck = validateNinFile(req.body.ninFile);
+      if (!fileCheck.ok) {
+        return res.status(400).json({ error: fileCheck.error });
+      }
+      patch.nin_file = encNin(fileCheck.value);
+    }
+    if (req.body.saveCard !== undefined) {
+      if (req.body.saveCard) {
+        const paystack = require("../utils/paystack");
+        if (paystack.isConfigured()) {
+          const token = String(req.body.cardToken || "").trim();
+          if (!token) {
+            return res.status(400).json({ error: "Card tokenization failed - please try again" });
+          }
+          const tok = await paystack.tokenizeCard({ email: req.user.email, token });
+          patch.payment_enc = cryptoBox.encrypt(
+            JSON.stringify({ provider: "paystack", authorization_code: tok.authorization_code, customer_code: tok.customer_code })
+          );
+        } else {
+          patch.payment_enc = cryptoBox.encrypt(JSON.stringify({ provider: "paystack", demo: true }));
+        }
+      } else {
+        patch.payment_enc = null;
+      }
+    }
 
     const updated = await store.users.update(req.user.id, patch);
-    res.json({ message: "Profile updated", user: publicProfile(updated) });
+    res.json({ message: "Profile updated", user: selfView(updated) });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "Internal server error" });

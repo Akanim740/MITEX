@@ -52,6 +52,22 @@ async function init() {
     if (!empCol[0].n) {
       await pool.query("ALTER TABLE listings ADD COLUMN employee_id INT NULL, ADD INDEX idx_listings_employee (employee_id)");
     }
+    const addUsersCol = async (col, ddl) => {
+      const [r] = await pool.query(
+        "SELECT COUNT(*) AS n FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'users' AND COLUMN_NAME = ?",
+        [col]
+      );
+      if (!r[0].n) await pool.query(`ALTER TABLE users ADD COLUMN ${ddl}`);
+    };
+    await addUsersCol("dob", "dob VARCHAR(20)");
+    await addUsersCol("nin_bvn", "nin_bvn VARCHAR(30)");
+    await addUsersCol("nin_file", "nin_file VARCHAR(500)");
+    await addUsersCol("payment_enc", "payment_enc TEXT");
+    const [notesCol] = await pool.query(
+      "SELECT COUNT(*) AS n FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'orders' AND COLUMN_NAME = 'notes'"
+    );
+    if (!notesCol[0].n) await pool.query("ALTER TABLE orders ADD COLUMN notes TEXT");
+    await pool.query("ALTER TABLE orders MODIFY COLUMN status ENUM('pending','paid','failed','refunded') NOT NULL DEFAULT 'pending'");
   } catch {}
 
   await pool.query(`
@@ -68,6 +84,10 @@ async function init() {
       active         TINYINT(1) NOT NULL DEFAULT 1,
       country        VARCHAR(2) NOT NULL DEFAULT 'NG',
       locale         VARCHAR(5) NOT NULL DEFAULT 'en',
+      dob            VARCHAR(20),
+      nin_bvn        VARCHAR(30),
+      nin_file       VARCHAR(500),
+      payment_enc    TEXT,
       created_at     VARCHAR(32) NOT NULL,
       updated_at     VARCHAR(32)
     );
@@ -139,7 +159,8 @@ async function init() {
       currency   VARCHAR(8) NOT NULL DEFAULT 'NGN',
       email      VARCHAR(190) NOT NULL,
       name       VARCHAR(120),
-      status     ENUM('pending','paid','failed') NOT NULL DEFAULT 'pending',
+      notes      TEXT,
+      status     ENUM('pending','paid','failed','refunded') NOT NULL DEFAULT 'pending',
       paid_at    VARCHAR(32),
       created_at VARCHAR(32) NOT NULL,
       INDEX idx_orders_user (user_id),
@@ -176,6 +197,8 @@ async function init() {
       hire_token        VARCHAR(64) UNIQUE,
       hire_completed    TINYINT(1) NOT NULL DEFAULT 0,
       payment_enc       TEXT,
+      dob               VARCHAR(20),
+      nin_bvn           TEXT,
       created_at        VARCHAR(32) NOT NULL,
       INDEX idx_applications_status (status)
     );
@@ -212,6 +235,18 @@ async function init() {
   if (!appCols[0].n) {
     await pool.query("ALTER TABLE applications ADD COLUMN payment_enc TEXT");
   }
+  const [appDob] = await pool.query(
+    "SELECT COUNT(*) AS n FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'applications' AND COLUMN_NAME = 'dob'"
+  );
+  if (!appDob[0].n) {
+    await pool.query("ALTER TABLE applications ADD COLUMN dob VARCHAR(20)");
+  }
+  const [appNin] = await pool.query(
+    "SELECT COUNT(*) AS n FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'applications' AND COLUMN_NAME = 'nin_bvn'"
+  );
+  if (!appNin[0].n) {
+    await pool.query("ALTER TABLE applications ADD COLUMN nin_bvn TEXT");
+  }
 
   return api;
 }
@@ -237,15 +272,15 @@ const users = {
     const [rows] = await pool.query("SELECT * FROM users WHERE id = ?", [id]);
     return rows[0] || null;
   },
-  async create({ name, email, passwordHash, role = "customer", emailVerified = 0, phone = null, bio = null, avatar_url = null, active, country = "NG", locale = "en" }) {
+  async create({ name, email, passwordHash, role = "customer", emailVerified = 0, phone = null, bio = null, avatar_url = null, active, country = "NG", locale = "en", dob = null, nin_bvn = null, nin_file = null, payment_enc = null }) {
     const [res] = await pool.query(
-      "INSERT INTO users (name, email, password_hash, role, email_verified, phone, bio, avatar_url, active, country, locale, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-      [name, String(email).toLowerCase(), passwordHash, role, emailVerified ? 1 : 0, phone, bio, avatar_url, active === undefined ? 1 : active ? 1 : 0, country, locale, nowISO()]
+      "INSERT INTO users (name, email, password_hash, role, email_verified, phone, bio, avatar_url, active, country, locale, dob, nin_bvn, nin_file, payment_enc, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+      [name, String(email).toLowerCase(), passwordHash, role, emailVerified ? 1 : 0, phone, bio, avatar_url, active === undefined ? 1 : active ? 1 : 0, country, locale, dob, nin_bvn, nin_file, payment_enc, nowISO()]
     );
     return this.findById(res.insertId);
   },
   async update(id, patch) {
-    const allowed = ["name", "phone", "bio", "avatar_url", "role", "email_verified", "active", "country", "locale"];
+    const allowed = ["name", "phone", "bio", "avatar_url", "role", "email_verified", "active", "country", "locale", "dob", "nin_bvn", "nin_file", "payment_enc"];
     const keys = Object.keys(patch).filter((k) => allowed.includes(k));
     if (!keys.length) return this.findById(id);
     const vals = keys.map((k) => (typeof patch[k] === "boolean" ? (patch[k] ? 1 : 0) : patch[k]));
@@ -449,8 +484,8 @@ const subscribers = {
 const orders = {
   async create(v) {
     await pool.query(
-      "INSERT INTO orders (user_id, listing_id, reference, title, amount, currency, email, name, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-      [v.userId ?? null, v.listingId ?? null, v.reference, v.title, v.amount, v.currency || "NGN", v.email, v.name ?? null, nowISO()]
+      "INSERT INTO orders (user_id, listing_id, reference, title, amount, currency, email, name, notes, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+      [v.userId ?? null, v.listingId ?? null, v.reference, v.title, v.amount, v.currency || "NGN", v.email, v.name ?? null, v.notes ?? null, nowISO()]
     );
     return this.findByReference(v.reference);
   },
@@ -522,8 +557,8 @@ const credentials = {
 const applications = {
   async create(v) {
     const [res] = await pool.query(
-      "INSERT INTO applications (name, email, phone, portfolio, message, created_at) VALUES (?, ?, ?, ?, ?, ?)",
-      [v.name, String(v.email).toLowerCase(), v.phone ?? null, v.portfolio ?? null, v.message, nowISO()]
+      "INSERT INTO applications (name, email, phone, portfolio, message, dob, nin_bvn, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+      [v.name, String(v.email).toLowerCase(), v.phone ?? null, v.portfolio ?? null, v.message, v.dob ?? null, v.nin_bvn ?? null, nowISO()]
     );
     return this.get(res.insertId);
   },

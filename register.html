@@ -35,6 +35,9 @@
         <label>Email address
           <input type="email" id="rEmail" placeholder="you@example.com" required autocomplete="email" />
         </label>
+        <label>Date of birth (you must be 18 or older)
+          <input type="date" id="rDob" required autocomplete="bday" />
+        </label>
         <label>Password
           <input type="password" id="rPass" placeholder="Create a strong password" required autocomplete="new-password" />
         </label>
@@ -43,6 +46,11 @@
           <em id="strengthLabel">Password strength</em>
         </div>
         <p class="hint">Use at least 8 characters, with letters and numbers.</p>
+        <label class="opt-in">
+          <input type="checkbox" id="rSaveCard" />
+          <span>Enable one-tap checkout</span>
+        </label>
+        <p class="hint" id="cardHint">We'll save a secure token (via Paystack) so you can buy marketplace websites in one click. MITEX never stores your card number. Simulated in demo mode.</p>
         <p id="formError" class="error hidden"></p>
         <button type="submit" id="submitBtn" class="btn btn-primary btn-full">Create Account</button>
       </form>

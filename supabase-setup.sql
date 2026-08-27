@@ -21,6 +21,10 @@ CREATE TABLE users (
   active         BOOLEAN NOT NULL DEFAULT TRUE,
   country        TEXT NOT NULL DEFAULT 'NG',
   locale         TEXT NOT NULL DEFAULT 'en',
+  dob            TEXT,
+  nin_bvn        TEXT,
+  nin_file       TEXT,
+  payment_enc    TEXT,
   created_at     TEXT NOT NULL,
   updated_at     TEXT
 );
@@ -87,6 +91,7 @@ CREATE TABLE orders (
   currency   TEXT NOT NULL DEFAULT 'NGN',
   email      TEXT NOT NULL,
   name       TEXT,
+  notes      TEXT,
   status     TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','paid','failed','refunded')),
   paid_at    TEXT,
   created_at TEXT NOT NULL
@@ -131,6 +136,8 @@ CREATE TABLE applications (
   hire_token        TEXT UNIQUE,
   hire_completed    BOOLEAN NOT NULL DEFAULT FALSE,
   payment_enc       TEXT,
+  dob               TEXT,
+  nin_bvn           TEXT,
   created_at        TEXT NOT NULL
 );
 
@@ -190,6 +197,10 @@ CREATE TABLE salaries (
 -- Encrypted applicant payment details (auto-hire pipeline).
 -- ALTER TABLE applications ADD COLUMN IF NOT EXISTS payment_enc TEXT;
 --
+-- Worker verification: date of birth + NIN/BVN on applications.
+-- ALTER TABLE applications ADD COLUMN IF NOT EXISTS dob TEXT;
+-- ALTER TABLE applications ADD COLUMN IF NOT EXISTS nin_bvn TEXT;
+--
 -- Employees feature: allow role 'staff' on existing databases.
 -- The CHECK constraint on users.role must be replaced:
 --   ALTER TABLE users DROP CONSTRAINT users_role_check;
@@ -198,6 +209,15 @@ CREATE TABLE salaries (
 -- (If that DROP errors, find the exact name first:
 --   SELECT conname FROM pg_constraint WHERE conrelid = 'users'::regclass AND contype = 'c';
 --  then drop/add using that name.)
+--
+-- Customer profile additions (date of birth, NIN/BVN verification, tokenized card).
+--   ALTER TABLE users ADD COLUMN IF NOT EXISTS dob TEXT;
+--   ALTER TABLE users ADD COLUMN IF NOT EXISTS nin_bvn TEXT;
+--   ALTER TABLE users ADD COLUMN IF NOT EXISTS nin_file TEXT;
+--   ALTER TABLE users ADD COLUMN IF NOT EXISTS payment_enc TEXT;
+--
+-- Purchase customisation notes on orders.
+--   ALTER TABLE orders ADD COLUMN IF NOT EXISTS notes TEXT;
 --
 -- Refunds: allow order status 'refunded' on existing databases.
 --   ALTER TABLE orders DROP CONSTRAINT orders_status_check;
