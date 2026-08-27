@@ -461,6 +461,31 @@ async function loadProfile() {
 
   initBiometrics();
   loadMyOrders();
+
+  const delBtn = $("#delAccountBtn");
+  if (delBtn) {
+    delBtn.addEventListener("click", async () => {
+      const password = $("#delPass").value;
+      if (!password) return alert("Enter your password to confirm deletion.");
+      if (!confirm("This will permanently deactivate your account. Your purchases and data will be anonymized. Continue?")) return;
+      delBtn.disabled = true;
+      delBtn.textContent = "Deleting...";
+      try {
+        await api("/api/users/me", { method: "DELETE", body: { password } });
+        localStorage.removeItem("mitex_token");
+        localStorage.removeItem("mitex_user");
+        localStorage.removeItem("mitex_country");
+        localStorage.removeItem("mitex_locale");
+        location.href = "/index.html";
+      } catch (err) {
+        const msg = $("#delMsg");
+        msg.textContent = err.message;
+        msg.classList.remove("hidden");
+        delBtn.disabled = false;
+        delBtn.textContent = "Delete my account";
+      }
+    });
+  }
 }
 
 function initBiometrics() {
@@ -601,6 +626,23 @@ function renderMarketNav() {
 }
 
 let marketplaceListings = [];
+let marketplacePage = 1;
+const MARKET_PAGE_SIZE = 8;
+
+function skeletonCards(n = 6) {
+  let out = "";
+  for (let i = 0; i < n; i++) {
+    out += `
+      <article class="listing-card" aria-hidden="true">
+        <div class="skel" style="height:14px;width:60%;"></div>
+        <div class="skel" style="height:22px;width:85%;"></div>
+        <div class="skel" style="height:14px;width:100%;"></div>
+        <div class="skel" style="height:14px;width:70%;"></div>
+        <div class="skel" style="height:34px;width:100%;"></div>
+      </article>`;
+  }
+  return out;
+}
 
 async function initMarketplace() {
   renderMarketNav();
@@ -608,16 +650,16 @@ async function initMarketplace() {
   if (typeof initLangSwitcher === "function") initLangSwitcher();
   const grid = $("#listingsGrid");
   const searchInput = $("#marketSearch");
+  if (searchInput) {
+    searchInput.addEventListener("input", () => {
+      marketplacePage = 1;
+      renderListings(searchInput.value);
+    });
+  }
+  grid.innerHTML = skeletonCards();
   try {
     marketplaceListings = await api("/api/listings", { auth: false });
-    if (!marketplaceListings.length) {
-      grid.innerHTML = `<p class="empty-market">${t("market_empty")}</p>`;
-      return;
-    }
-    if (searchInput) {
-      searchInput.addEventListener("input", () => renderListings(searchInput.value));
-    }
-    renderListings("");
+    renderListings(searchInput ? searchInput.value : "");
   } catch (err) {
     grid.innerHTML = `<p class="empty-market">${esc(err.message)}</p>`;
   }
@@ -656,10 +698,12 @@ function initLangSwitcher() {
   });
 }
 
-function renderListings(query) {
+function renderListings(query, page) {
   const grid = $("#listingsGrid");
   const count = $("#resultCount");
+  const pager = $("#pager");
   const q = (query || "").trim().toLowerCase();
+  const pg = Math.max(1, page || marketplacePage);
 
   const matches = !q
     ? marketplaceListings
@@ -677,10 +721,15 @@ function renderListings(query) {
 
   if (!matches.length) {
     grid.innerHTML = `<p class="empty-market">${t("market_no_match")}</p>`;
+    if (pager) pager.style.display = "none";
     return;
   }
 
-  grid.innerHTML = matches
+  const totalPages = Math.ceil(matches.length / MARKET_PAGE_SIZE);
+  if (pg > totalPages) { marketplacePage = totalPages; renderListings(query, totalPages); return; }
+  const pageItems = matches.slice((pg - 1) * MARKET_PAGE_SIZE, pg * MARKET_PAGE_SIZE);
+
+  grid.innerHTML = pageItems
     .map(
       (l) => `
       <article class="listing-card">
@@ -709,6 +758,32 @@ function renderListings(query) {
   grid.querySelectorAll("[data-buy]").forEach((btn) => {
     btn.addEventListener("click", () => buyListing(btn.dataset.buy, btn));
   });
+
+  if (totalPages > 1) {
+    pager.style.display = "flex";
+    pager.innerHTML = "";
+    const mkBtn = (label, target, opts = {}) => {
+      const b = document.createElement("button");
+      b.type = "button";
+      b.textContent = label;
+      if (opts.active) b.classList.add("active");
+      if (opts.disabled) b.disabled = true;
+      b.addEventListener("click", () => {
+        if (b.disabled) return;
+        marketplacePage = target;
+        renderListings(query, target);
+        const gridTop = $("#listingsGrid");
+        if (gridTop) window.scrollTo({ top: gridTop.offsetTop - 90, behavior: "smooth" });
+      });
+      pager.appendChild(b);
+    };
+    mkBtn("&lsaquo;", pg - 1, { disabled: pg === 1 });
+    for (let i = 1; i <= totalPages; i++) mkBtn(i, i, { active: i === pg });
+    mkBtn("&rsaquo;", pg + 1, { disabled: pg === totalPages });
+  } else {
+    pager.style.display = "none";
+    pager.innerHTML = "";
+  }
 }
 
 async function buyListing(listingId, btn) {
@@ -776,9 +851,10 @@ async function initPaymentSuccess() {
   }
 
   try {
-    const { status } = await api(`/api/payments/verify/${encodeURIComponent(reference)}`);
+    const { status, order } = await api(`/api/payments/verify/${encodeURIComponent(reference)}`);
     if (status === "paid") {
-      setPaymentStatus("✅", "Payment successful!", "Your order is confirmed. The MITEX team will contact you with next steps.", true);
+      setPaymentStatus("✅", "Payment successful!", "Your order is confirmed. A receipt is ready below and a copy was emailed to you.", true);
+      renderReceipt(order);
     } else if (status === "failed") {
       setPaymentStatus("❌", "Payment failed", "You can retry checkout from the marketplace.", true);
     } else {
@@ -787,6 +863,23 @@ async function initPaymentSuccess() {
   } catch (err) {
     setPaymentStatus("⚠️", "Could not confirm payment", err.message, true);
   }
+}
+
+function renderReceipt(order) {
+  const wrap = $("#receiptWrap");
+  if (!wrap || !order) return;
+  $("#receiptRef").textContent = `Order ${order.reference} — paid ${new Date(order.created_at || Date.now()).toLocaleString("en-NG")}`;
+  $("#receiptRows").innerHTML = `
+    <tr><td>Item</td><td>${esc(order.title || "—")}</td></tr>
+    <tr><td>Amount</td><td>${typeof naira === "function" ? naira(order.amount) : "₦" + (order.amount || 0)}</td></tr>
+    <tr><td>Buyer</td><td>${esc(order.email || "—")}</td></tr>
+    <tr><td>Status</td><td>Paid</td></tr>`;
+  $("#receiptTotal").textContent = typeof naira === "function" ? naira(order.amount) : "₦" + (order.amount || 0);
+  wrap.classList.remove("hidden");
+  wrap.style.display = "block";
+  const printBtn = $("#printBtn");
+  printBtn.style.display = "";
+  printBtn.addEventListener("click", () => window.print());
 }
 
 function setPaymentStatus(icon, title, text, showActions) {

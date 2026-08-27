@@ -87,9 +87,19 @@ CREATE TABLE orders (
   currency   TEXT NOT NULL DEFAULT 'NGN',
   email      TEXT NOT NULL,
   name       TEXT,
-  status     TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','paid','failed')),
+  status     TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','paid','failed','refunded')),
   paid_at    TEXT,
   created_at TEXT NOT NULL
+);
+
+CREATE TABLE audit_logs (
+  id         BIGSERIAL PRIMARY KEY,
+  user_id    BIGINT,
+  email      TEXT,
+  action     TEXT NOT NULL,
+  detail     TEXT,
+  ip         TEXT,
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE TABLE webauthn_credentials (
@@ -188,3 +198,19 @@ CREATE TABLE salaries (
 -- (If that DROP errors, find the exact name first:
 --   SELECT conname FROM pg_constraint WHERE conrelid = 'users'::regclass AND contype = 'c';
 --  then drop/add using that name.)
+--
+-- Refunds: allow order status 'refunded' on existing databases.
+--   ALTER TABLE orders DROP CONSTRAINT orders_status_check;
+--   ALTER TABLE orders ADD CONSTRAINT orders_status_check
+--     CHECK (status IN ('pending','paid','failed','refunded'));
+--
+-- Audit trail for admin actions.
+--   CREATE TABLE audit_logs (
+--     id         BIGSERIAL PRIMARY KEY,
+--     user_id    BIGINT,
+--     email      TEXT,
+--     action     TEXT NOT NULL,
+--     detail     TEXT,
+--     ip         TEXT,
+--     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+--   );

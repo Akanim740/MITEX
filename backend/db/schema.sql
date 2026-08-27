@@ -88,7 +88,7 @@ CREATE TABLE orders (
   currency   VARCHAR(8) NOT NULL DEFAULT 'NGN',
   email      VARCHAR(190) NOT NULL,
   name       VARCHAR(120),
-  status     ENUM('pending','paid','failed') NOT NULL DEFAULT 'pending',
+  status     ENUM('pending','paid','failed','refunded') NOT NULL DEFAULT 'pending',
   paid_at    VARCHAR(32),
   created_at VARCHAR(32) NOT NULL,
   INDEX idx_orders_user (user_id),

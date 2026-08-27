@@ -155,6 +155,16 @@
           <p id="biometricMsg" class="muted hint hidden"></p>
           <ul id="passkeyList" class="subs-list"></ul>
         </section>
+
+        <section class="panel" id="danger-panel">
+          <h2>Danger Zone</h2>
+          <p class="muted">Deleting your account deactivates your profile. You can request reactivation later by contacting support.</p>
+          <div class="form-actions">
+            <input type="password" id="delPass" placeholder="Enter your password to confirm" style="flex:1;min-width:220px;" />
+            <button type="button" class="btn btn-sm" id="delAccountBtn" style="color:var(--red,#ef4444);border-color:var(--red,#ef4444);">Delete my account</button>
+          </div>
+          <p id="delMsg" class="muted hint hidden"></p>
+        </section>
       </div>
     </div>
   </main>

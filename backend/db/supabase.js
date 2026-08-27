@@ -344,6 +344,10 @@ const orders = {
     const { error } = await supabase.from("orders").update({ status: "failed" }).eq("reference", reference).eq("status", "pending");
     return !error;
   },
+  async updateStatus(reference, status) {
+    const { error } = await supabase.from("orders").update({ status }).eq("reference", reference);
+    return !error;
+  },
   async listForUser(userId) {
     const { data } = await supabase.from("orders").select("*").eq("user_id", userId).order("created_at", { ascending: false });
     return data || [];
@@ -554,6 +558,16 @@ const salaries = {
   },
 };
 
+const audit = {
+  async log({ userId, email, action, detail, ip }) {
+    await supabase.from("audit_logs").insert({ user_id: userId || null, email: email || null, action, detail: detail || null, ip: ip || null });
+  },
+  async list(limit = 100) {
+    const { data, error } = await supabase.from("audit_logs").select("*").order("created_at", { ascending: false }).limit(limit);
+    return error ? [] : data || [];
+  },
+};
+
 const api = {
   name: "supabase",
   users,
@@ -566,6 +580,7 @@ const api = {
   credentials,
   applications,
   salaries,
+  audit,
   _publicUser: toPublic,
 };
 

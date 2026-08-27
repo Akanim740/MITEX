@@ -202,4 +202,28 @@ router.get("/orders", requireAuth, requireRole("admin", "editor"), async (req, r
   }
 });
 
+// POST /api/payments/refund/:reference - admin refunds an order
+router.post("/refund/:reference", requireAuth, requireRole("admin"), async (req, res) => {
+  try {
+    const store = req.store;
+    const order = await store.orders.findByReference(req.params.reference);
+    if (!order) return res.status(404).json({ error: "Order not found" });
+    if (order.status === "refunded") return res.status(409).json({ error: "Already refunded" });
+
+    await store.orders.updateStatus(order.reference, "refunded");
+
+    const user = await store.users.findById(order.user_id);
+    if (user) {
+      const { sendMail, refundEmail } = require("../utils/mailer");
+      const mail = refundEmail(user, order);
+      setImmediate(() => sendMail({ to: user.email, subject: mail.subject, text: mail.text, html: mail.html }).catch(() => {}));
+    }
+
+    res.json({ message: "Refund processed", reference: order.reference });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
 module.exports = router;

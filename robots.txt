@@ -1,0 +1,10 @@
+User-agent: *
+Allow: /
+Disallow: /dashboard.html
+Disallow: /worker.html
+Disallow: /account.html
+Disallow: /api/
+Disallow: /checkout-demo.html
+Disallow: /onboard.html
+
+Sitemap: https://mitex.onrender.com/sitemap.xml

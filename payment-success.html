@@ -17,6 +17,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;600;700;800&family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="auth.css" />
+  <link rel="stylesheet" href="print.css" />
 </head>
 <body data-page="payment-success">
   <div class="auth-wrap">
@@ -25,9 +26,23 @@
       <div id="statusIcon" style="font-size:3rem;">⏳</div>
       <h1 id="statusTitle">Confirming your payment...</h1>
       <p class="sub" id="statusText">This will only take a moment.</p>
-      <div id="statusActions" class="hidden" style="display:flex;flex-direction:column;gap:10px;width:100%;">
+
+      <div id="receiptWrap" class="receipt-print hidden" style="display:none;text-align:left;width:100%;">
+        <div class="receipt-box">
+          <h2 style="margin:0 0 4px;">MITEX Receipt</h2>
+          <p class="muted" id="receiptRef" style="margin:0 0 14px;"></p>
+          <table>
+            <tbody id="receiptRows"></tbody>
+            <tr class="receipt-total"><td>Total Paid</td><td id="receiptTotal"></td></tr>
+          </table>
+          <p class="muted" style="margin-top:14px;">Questions? WhatsApp +234 701 163 3770</p>
+        </div>
+      </div>
+
+      <div id="statusActions" class="hidden no-print" style="display:flex;flex-direction:column;gap:10px;width:100%;">
         <a href="/account.html#orders-panel" class="btn btn-primary btn-full">View My Orders</a>
-        <a href="/marketplace.html" class="btn btn-ghost btn-full">Back to Marketplace</a>
+        <button type="button" class="btn btn-ghost btn-full no-print" id="printBtn" style="display:none;">Print Receipt</button>
+        <a href="/marketplace.html" class="btn btn-ghost btn-full no-print">Back to Marketplace</a>
       </div>
     </div>
   </div>

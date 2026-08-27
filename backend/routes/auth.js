@@ -96,8 +96,11 @@ router.post("/login", async (req, res) => {
     if (!user || !(await bcrypt.compare(password, user.password_hash))) {
       return res.status(401).json({ error: "Invalid credentials" });
     }
-    if (user.role === "staff" && !Number(user.active)) {
-      return res.status(403).json({ error: "This employee account has been deactivated. Contact the admin." });
+    const deactivated = user.active === 0 || user.active === false || String(user.active) === "0";
+    if (deactivated) {
+      return res.status(403).json({
+        error: user.role === "staff" ? "This employee account has been deactivated. Contact the admin." : "This account has been deactivated. Contact support to reactivate it.",
+      });
     }
 
     const { accessToken } = await issueSession(store, res, user);

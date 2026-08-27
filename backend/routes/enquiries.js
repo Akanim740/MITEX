@@ -33,6 +33,11 @@ router.post("/", async (req, res) => {
       return res.status(400).json({ error: errors.join("; ") });
     }
     const row = await req.store.enquiries.create(values);
+
+    const { sendMail, enquiryReply } = require("../utils/mailer");
+    const mail = enquiryReply(values);
+    setImmediate(() => sendMail({ to: values.email, subject: mail.subject, text: mail.text, html: mail.html }).catch(() => {}));
+
     res.status(201).json({
       message: "Enquiry received. The MITEX team will contact you shortly.",
       id: row.id,

@@ -1,0 +1,16 @@
+@media print {
+  @page { margin: 14mm; }
+  body { background: #fff !important; color: #111 !important; }
+  .auth-wrap, .auth-card { background: #fff !important; box-shadow: none !important; border: none !important; }
+  .logo, .topbar, .topbar-inner, .dropdown, .drop-menu, .drop-btn,
+  .btn, .no-print, .hero-glow, header, footer, .pager, .lang-switcher,
+  .cookie-consent { display: none !important; }
+  .receipt-print { display: block !important; }
+  a { color: #000 !important; text-decoration: none; }
+  h1, h2, h3 { color: #000 !important; }
+  .muted { color: #555 !important; }
+  .receipt-box { border: 2px solid #111; padding: 24px; margin-top: 18px; }
+  .receipt-box table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+  .receipt-box td, .receipt-box th { text-align: left; padding: 6px 4px; border-bottom: 1px solid #ddd; font-size: 12px; }
+  .receipt-total td { border-top: 2px solid #111; font-weight: 700; }
+}

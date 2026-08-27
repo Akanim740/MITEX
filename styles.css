@@ -1016,6 +1016,52 @@ ul {
   border-color: rgba(251, 191, 36, 0.5);
 }
 
+.testi-grid {
+  gap: 20px;
+}
+
+.testi-card {
+  padding: 28px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  transition: transform 0.25s ease, border-color 0.25s ease;
+}
+
+.testi-card:hover {
+  transform: translateY(-5px);
+  border-color: rgba(251, 191, 36, 0.45);
+}
+
+.testi-card .stars {
+  color: var(--gold);
+  letter-spacing: 3px;
+  font-size: 1.05rem;
+}
+
+.testi-card p {
+  color: var(--muted);
+  font-size: 0.95rem;
+  flex-grow: 1;
+}
+
+.testi-who {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding-top: 14px;
+  border-top: 1px dashed var(--card-border);
+}
+
+.testi-who strong {
+  color: var(--text);
+}
+
+.testi-who span {
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
 .contact {
   background: var(--bg-alt);
   overflow: hidden;

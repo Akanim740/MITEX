@@ -302,6 +302,12 @@ const orders = {
     await col("orders").doc(row.id).update({ status: "failed" });
     return true;
   },
+  async updateStatus(reference, status) {
+    const row = await this.findByReference(reference);
+    if (!row) return false;
+    await col("orders").doc(row.id).update({ status });
+    return true;
+  },
   async listForUser(userId) {
     const snap = await col("orders").where("user_id", "==", userId).get();
     return snap.docs
@@ -491,6 +497,16 @@ const salaries = {
   },
 };
 
+const audit = {
+  async log({ userId, email, action, detail, ip }) {
+    await col("audit_logs").add({ user_id: userId || null, email: email || null, action, detail: detail || null, ip: ip || null, created_at: new Date().toISOString() });
+  },
+  async list(limit = 100) {
+    const snap = await col("audit_logs").orderBy("created_at", "desc").limit(limit).get();
+    return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+  },
+};
+
 const api = {
   name: "firebase",
   users,
@@ -503,6 +519,7 @@ const api = {
   credentials,
   applications,
   salaries,
+  audit,
   _publicUser: toPublic,
 };
 

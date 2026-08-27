@@ -278,6 +278,9 @@ const orders = {
       (await db.collection("orders").updateOne({ reference, status: "pending" }, { $set: { status: "failed" } })).modifiedCount > 0
     );
   },
+  async updateStatus(reference, status) {
+    return (await db.collection("orders").updateOne({ reference }, { $set: { status } })).modifiedCount > 0;
+  },
   async listForUser(userId) {
     return db.collection("orders").find({ user_id: userId }).sort({ created_at: -1 }).toArray();
   },
@@ -453,6 +456,15 @@ const salaries = {
   },
 };
 
+const audit = {
+  async log({ userId, email, action, detail, ip }) {
+    await db.collection("audit_logs").insertOne({ user_id: userId || null, email: email || null, action, detail: detail || null, ip: ip || null, created_at: new Date().toISOString() });
+  },
+  async list(limit = 100) {
+    return db.collection("audit_logs").find({}).sort({ created_at: -1 }).limit(limit).toArray();
+  },
+};
+
 const api = {
   name: "mongo",
   users,
@@ -465,6 +477,7 @@ const api = {
   credentials,
   applications,
   salaries,
+  audit,
   _publicUser: toPublic,
   _close: () => client && client.close(),
 };

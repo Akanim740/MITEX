@@ -116,6 +116,28 @@ router.patch("/:id/role", requireAuth, requireRole("admin"), async (req, res) =>
   }
 });
 
+// DELETE /api/users/me - self-service account deletion (soft-delete)
+router.delete("/me", requireAuth, async (req, res) => {
+  try {
+    const store = req.store;
+    const currentPassword = String(req.body.password || "");
+    if (!currentPassword) {
+      return res.status(400).json({ error: "Password required to delete your account" });
+    }
+    const user = await store.users.findById(req.user.id);
+    if (!user) return res.status(404).json({ error: "Account not found" });
+    const ok = await bcrypt.compare(currentPassword, user.password_hash);
+    if (!ok) return res.status(403).json({ error: "Incorrect password" });
+
+    await store.users.update(req.user.id, { active: 0 });
+    res.clearCookie("token", { httpOnly: true, sameSite: "strict", secure: process.env.NODE_ENV === "production" });
+    res.json({ message: "Account deactivated" });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
 // DELETE /api/users/:id - admin removes a user
 router.delete("/:id", requireAuth, requireRole("admin"), async (req, res) => {
   try {

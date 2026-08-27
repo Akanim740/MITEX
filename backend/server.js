@@ -34,7 +34,18 @@ app.use((req, res, next) => {
 
 app.use(
   helmet({
-    contentSecurityPolicy: false,
+    contentSecurityPolicy: {
+      directives: {
+        defaultSrc: ["'self'"],
+        scriptSrc: ["'self'", "'unsafe-inline'", "https://www.googletagmanager.com", "https://www.google-analytics.com"],
+        styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
+        fontSrc: ["'self'", "https://fonts.gstatic.com"],
+        imgSrc: ["'self'", "data:", "https:"],
+        connectSrc: ["'self'", "https://www.google-analytics.com"],
+        frameSrc: ["'none'"],
+        objectSrc: ["'none'"],
+      },
+    },
     crossOriginEmbedderPolicy: false,
     hsts: { maxAge: 15552000, includeSubDomains: true },
     referrerPolicy: { policy: "strict-origin-when-cross-origin" },
@@ -85,6 +96,28 @@ app.use(
 );
 app.use(express.urlencoded({ extended: false }));
 
+// Audit trail: log API mutations (actions + response summary, never request bodies)
+app.use("/api", (req, res, next) => {
+  if (!["POST", "PUT", "PATCH", "DELETE"].includes(req.method)) return next();
+  const action = `${req.method} ${req.path}`.slice(0, 64);
+  const original = res.json.bind(res);
+  res.json = (body) => {
+    original(body);
+    setImmediate(async () => {
+      try {
+        await store.audit.log({
+          userId: req.user ? req.user.id : null,
+          email: req.user ? req.user.email : null,
+          action,
+          detail: typeof body === "string" ? body.slice(0, 200) : JSON.stringify(body).slice(0, 200),
+          ip: req.ip,
+        });
+      } catch {}
+    });
+  };
+  next();
+});
+
 app.use(express.static(path.join(__dirname, "..")));
 
 app.use("/api/auth", authLimiter, require("./routes/auth"));
@@ -109,11 +142,21 @@ app.get("/api/health", async (req, res) => {
   }
 });
 
+app.get("/api/audit", require("./middleware/auth").requireAuth, require("./middleware/auth").requireRole("admin"), async (req, res) => {
+  try {
+    res.json(await store.audit.list(Number(req.query.limit) || 100));
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
 app.get("*", (req, res) => {
   if (req.path.startsWith("/api/")) {
     return res.status(404).json({ error: "API endpoint not found" });
   }
-  res.sendFile(path.join(__dirname, "..", "index.html"));
+  const fourOhFour = path.join(__dirname, "..", "404.html");
+  res.status(404).sendFile(fourOhFour);
 });
 
 app.use((err, req, res, _next) => {
@@ -132,6 +175,20 @@ getStore()
       }
     }
     require("./routes/applications").startAutomation(store);
+
+    setInterval(async () => {
+      try {
+        const stale = await store.orders.listAll("pending");
+        const cutoff = Date.now() - 30 * 60 * 1000;
+        for (const order of stale) {
+          const created = new Date(order.created_at).getTime();
+          if (created < cutoff) {
+            await store.orders.markFailed(order.reference);
+          }
+        }
+      } catch {}
+    }, 15 * 60 * 1000);
+
     app.listen(PORT, () => {
       console.log(`\n  MITEX server running at http://localhost:${PORT}`);
       console.log(`  Database driver: ${store.name}`);

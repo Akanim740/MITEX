@@ -138,6 +138,16 @@ db.exec(`
     paid_at       TEXT NOT NULL,
     created_at    TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
   );
+
+  CREATE TABLE IF NOT EXISTS audit_logs (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id    INTEGER,
+    email      TEXT,
+    action     TEXT NOT NULL,
+    detail     TEXT,
+    ip         TEXT,
+    created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+  );
 `);
 
 for (const col of ["delivery_url", "employee_id"]) {
@@ -187,6 +197,36 @@ if (usersTableSql && !String(usersTableSql.sql).includes("'staff'")) {
 {
   const appCols = db.prepare("PRAGMA table_info(applications)").all().map((c) => c.name);
   if (!appCols.includes("payment_enc")) db.exec("ALTER TABLE applications ADD COLUMN payment_enc TEXT");
+}
+
+// Older databases were created with an orders status CHECK that lacks 'refunded'.
+// SQLite cannot alter a CHECK constraint, so rebuild the orders table once.
+const ordersTableSql = db.prepare("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'orders'").get();
+if (ordersTableSql && !String(ordersTableSql.sql).includes("'refunded'")) {
+  db.exec("PRAGMA foreign_keys = OFF");
+  db.exec("BEGIN");
+  db.exec(`
+    CREATE TABLE orders_new (
+      id         INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id    INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      listing_id INTEGER,
+      reference  TEXT NOT NULL UNIQUE,
+      title      TEXT NOT NULL,
+      amount     REAL NOT NULL CHECK (amount >= 0),
+      currency   TEXT NOT NULL DEFAULT 'NGN',
+      email      TEXT NOT NULL,
+      name       TEXT,
+      status     TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','paid','failed','refunded')),
+      paid_at    TEXT,
+      created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+    );
+    INSERT INTO orders_new (id, user_id, listing_id, reference, title, amount, currency, email, name, status, paid_at, created_at)
+      SELECT id, user_id, listing_id, reference, title, amount, currency, email, name, status, paid_at, created_at FROM orders;
+    DROP TABLE orders;
+    ALTER TABLE orders_new RENAME TO orders;
+  `);
+  db.exec("COMMIT");
+  db.exec("PRAGMA foreign_keys = ON");
 }
 
 const nowISO = () => new Date().toISOString();
@@ -412,6 +452,9 @@ const orders = {
   async markFailed(reference) {
     return db.prepare("UPDATE orders SET status = 'failed' WHERE reference = ? AND status = 'pending'").run(reference).changes > 0;
   },
+  async updateStatus(reference, status) {
+    return db.prepare("UPDATE orders SET status = ? WHERE reference = ?").run(status, reference).changes > 0;
+  },
   async listForUser(userId) {
     return db.prepare("SELECT * FROM orders WHERE user_id = ? ORDER BY created_at DESC").all(userId);
   },
@@ -552,6 +595,21 @@ const salaries = {
   },
 };
 
+const audit = {
+  async log({ userId, email, action, detail, ip }) {
+    db.prepare("INSERT INTO audit_logs (user_id, email, action, detail, ip) VALUES (?, ?, ?, ?, ?)").run(
+      userId || null,
+      email || null,
+      action,
+      detail || null,
+      ip || null
+    );
+  },
+  async list(limit = 100) {
+    return db.prepare("SELECT * FROM audit_logs ORDER BY created_at DESC LIMIT ?").all(limit);
+  },
+};
+
 module.exports = {
   name: "sqlite",
   file: DB_FILE,
@@ -565,5 +623,6 @@ module.exports = {
   credentials,
   applications,
   salaries,
+  audit,
   _publicUser: stripSecret,
 };

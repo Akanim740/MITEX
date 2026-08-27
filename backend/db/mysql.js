@@ -192,6 +192,17 @@ async function init() {
       INDEX idx_salaries_staff (staff_user_id),
       INDEX idx_salaries_period (period)
     );
+
+    CREATE TABLE IF NOT EXISTS audit_logs (
+      id         INT AUTO_INCREMENT PRIMARY KEY,
+      user_id    VARCHAR(40),
+      email      VARCHAR(255),
+      action     VARCHAR(64) NOT NULL,
+      detail     TEXT,
+      ip         VARCHAR(64),
+      created_at VARCHAR(32) NOT NULL,
+      INDEX idx_audit_created (created_at)
+    );
   `);
 
   // Older databases: add columns that arrived after first launch
@@ -459,6 +470,10 @@ const orders = {
     const [res] = await pool.query("UPDATE orders SET status = 'failed' WHERE reference = ? AND status = 'pending'", [reference]);
     return res.affectedRows > 0;
   },
+  async updateStatus(reference, status) {
+    const [res] = await pool.query("UPDATE orders SET status = ? WHERE reference = ?", [status, reference]);
+    return res.affectedRows > 0;
+  },
   async listForUser(userId) {
     const [rows] = await pool.query("SELECT * FROM orders WHERE user_id = ? ORDER BY created_at DESC", [userId]);
     return rows;
@@ -611,6 +626,22 @@ const salaries = {
   },
 };
 
+const audit = {
+  async log({ userId, email, action, detail, ip }) {
+    await pool.query("INSERT INTO audit_logs (user_id, email, action, detail, ip) VALUES (?, ?, ?, ?, ?)", [
+      userId || null,
+      email || null,
+      action,
+      detail || null,
+      ip || null,
+    ]);
+  },
+  async list(limit = 100) {
+    const [rows] = await pool.query("SELECT * FROM audit_logs ORDER BY created_at DESC LIMIT ?", [limit]);
+    return rows;
+  },
+};
+
 const api = {
   name: "mysql",
   users,
@@ -623,6 +654,7 @@ const api = {
   credentials,
   applications,
   salaries,
+  audit,
   _publicUser: stripSecret,
 };
 

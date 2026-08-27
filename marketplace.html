@@ -14,6 +14,8 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <meta name="apple-mobile-web-app-title" content="MITEX" />
   <script src="/pwa.js" defer></script>
+  <script src="/analytics.js" defer></script>
+  <script src="/cookie-consent.js" defer></script>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;600;700;800&family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
@@ -41,6 +43,12 @@
     .sold-overlay { position: relative; opacity: .55; pointer-events: none; }
     .sold-tag { position: absolute; top: 16px; right: 16px; }
     .empty-market { padding: 60px 20px; text-align: center; color: var(--muted); grid-column: 1 / -1; border: 1px dashed var(--card-border); border-radius: 18px; }
+    .skel { background: linear-gradient(90deg, var(--card) 25%, rgba(255,255,255,.05) 50%, var(--card) 75%); background-size: 200% 100%; animation: shimmer 1.4s infinite; border-radius: 10px; }
+    @keyframes shimmer { to { background-position: -200% 0; } }
+    .pager { display: flex; align-items: center; justify-content: center; gap: 10px; margin-top: 30px; }
+    .pager button { min-width: 38px; min-height: 38px; padding: 0 12px; border-radius: 10px; border: 1px solid var(--card-border); background: var(--card); color: var(--text); cursor: pointer; font-family: inherit; }
+    .pager button:disabled { opacity: .4; cursor: default; }
+    .pager button.active { background: rgba(251,191,36,.15); border-color: rgba(251,191,36,.5); color: #fbbf24; font-weight: 700; }
   </style>
 </head>
 <body data-page="marketplace">
@@ -72,9 +80,8 @@
       <p class="result-count muted" id="resultCount"></p>
     </div>
 
-    <div class="listing-grid" id="listingsGrid">
-      <p class="empty-market">Loading listings...</p>
-    </div>
+    <div class="listing-grid" id="listingsGrid"></div>
+    <div class="pager" id="pager" style="display:none;"></div>
   </main>
 
   <script src="/currencies.js"></script>

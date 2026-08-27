@@ -860,9 +860,27 @@ async function loadOrders() {
           <td>${naira(r.amount)}</td>
           <td><span class="badge ${esc(r.status)}">${esc(r.status)}</span></td>
           <td class="muted">${fmtDate(r.created_at)}</td>
+          <td>${r.status === "paid" ? `<button class="btn btn-ghost btn-sm" data-refund="${esc(r.reference)}" style="color:var(--red,#ef4444);border-color:var(--red,#ef4444);">Refund</button>` : ""}</td>
         </tr>`
       )
       .join("");
+
+    body.querySelectorAll("[data-refund]").forEach((btn) =>
+      btn.addEventListener("click", async () => {
+        const ref = btn.dataset.refund;
+        if (!confirm(`Refund order ${ref}? The buyer will be notified.`)) return;
+        btn.disabled = true;
+        btn.textContent = "Refunding...";
+        try {
+          await API.post(`/api/payments/refund/${ref}`);
+          loadOrders();
+        } catch (err) {
+          alert(err.message);
+          btn.disabled = false;
+          btn.textContent = "Refund";
+        }
+      })
+    );
   } catch (err) {
     body.innerHTML = `<tr><td colspan="6" class="empty-state">${esc(err.message)}</td></tr>`;
   }
