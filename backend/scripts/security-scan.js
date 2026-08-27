@@ -109,6 +109,8 @@ async function req(path, opts = {}) {
         name: `Spam Probe ${i}`,
         email: `spam-probe-${Date.now()}-${i}@example.com`,
         message: "Automated defence verification submission number " + i,
+        dob: "1994-05-20",
+        ninBvn: "12345678901",
       }),
     });
     if (r.status === 429) {
