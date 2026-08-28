@@ -66,23 +66,30 @@ router.post("/register", async (req, res) => {
     const passwordHash = await bcrypt.hash(password, 12);
     const user = await store.users.create({ name, email, passwordHash, role: "customer", emailVerified: 0, country, locale, dob });
 
-    // One-tap checkout: tokenize the card at signup (MITEX never stores card numbers).
+    // One-tap checkout: "save card" at signup (MITEX never stores card numbers).
+    // In live mode the web popup cannot tokenize without charging, so we record
+    // intent and capture the real authorization from the first purchase instead.
     let paymentSaved = false;
+    let paymentPending = false;
+    const cardbox = require("../utils/cardbox");
     if (req.body.saveCard) {
       try {
         if (paystack.isConfigured()) {
           const token = String(req.body.cardToken || "").trim();
-          if (!token) return res.status(400).json({ error: "Card tokenization failed - please try again" });
-          const tok = await paystack.tokenizeCard({ email: user.email, token });
-          const enc = require("../utils/crypto-box").encrypt(
-            JSON.stringify({ provider: "paystack", authorization_code: tok.authorization_code, customer_code: tok.customer_code })
-          );
-          await store.users.update(user.id, { payment_enc: enc });
-          paymentSaved = true;
+          if (token) {
+            const tok = await paystack.tokenizeCard({ email: user.email, token });
+            await cardbox.storeAuthorization(store, user.id, {
+              authorization_code: tok.authorization_code,
+              customer_code: tok.customer_code,
+            });
+            paymentSaved = true;
+          } else {
+            await cardbox.storePending(store, user.id);
+            paymentPending = true;
+          }
         } else {
           // Demo mode: no card is touched, we just record an opt-in for one-tap payments.
-          const enc = require("../utils/crypto-box").encrypt(JSON.stringify({ provider: "paystack", demo: true }));
-          await store.users.update(user.id, { payment_enc: enc });
+          await cardbox.storeDemo(store, user.id);
           paymentSaved = true;
         }
       } catch (err) {
@@ -107,6 +114,7 @@ router.post("/register", async (req, res) => {
       ...(result.dev ? { devToken: rawVerify, devVerifyUrl: mail.url } : {}),
       user: { id: user.id, name: user.name, email: user.email, role: user.role, email_verified: 0 },
       payment_saved: paymentSaved,
+      payment_pending: paymentPending,
     });
   } catch (err) {
     console.error(err);
@@ -200,17 +208,9 @@ router.get("/me", requireAuth, async (req, res) => {
   try {
     const user = await req.store.users.findById(req.user.id);
     if (!user) return res.status(404).json({ error: "User not found" });
-    const { password_hash, nin_bvn, nin_file, payment_enc, ...pub } = user;
-    let payment_saved = false;
-    if (payment_enc) {
-      try {
-        const parsed = JSON.parse(require("../utils/crypto-box").decrypt(payment_enc) || "null");
-        payment_saved = Boolean(parsed && (parsed.demo || parsed.authorization_code));
-      } catch {
-        payment_saved = false;
-      }
-    }
-    res.json({ ...pub, id: user.id, payment_saved, verified_id: Boolean(nin_bvn) });
+const { password_hash, nin_bvn, nin_file, payment_enc, ...pub } = user;
+    const readiness = require("../utils/cardbox").readiness(require("../utils/cardbox").parse(user));
+    res.json({ ...pub, id: user.id, payment_saved: readiness === "one-tap", payment_pending: readiness === "pending", verified_id: Boolean(nin_bvn) });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "Internal server error" });

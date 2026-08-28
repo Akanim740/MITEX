@@ -204,7 +204,13 @@ function initRegister() {
       });
       $("#registerForm").classList.add("hidden");
       $("#successBox").classList.remove("hidden");
-      $("#successMsg").textContent = data.message + (data.payment_saved ? " One-tap checkout is enabled." : "");
+      $("#successMsg").textContent =
+        data.message +
+        (data.payment_saved
+          ? " One-tap checkout is enabled."
+          : data.payment_pending
+            ? " One-tap checkout is enabled - it activates after your first purchase saves your card."
+            : "");
 
       if (data.devToken) {
         $("#devBox").classList.remove("hidden");
@@ -514,23 +520,28 @@ function wireCardPanel(user) {
   const msg = $("#cardMsg");
   if (!enableBtn && !disableBtn) return;
 
-  const renderCard = (paymentSaved) => {
-    if (enableBtn) enableBtn.classList.toggle("hidden", Boolean(paymentSaved));
-    if (disableBtn) disableBtn.classList.toggle("hidden", !paymentSaved);
-    if (msg) msg.textContent = paymentSaved ? "One-tap checkout is enabled. Your card is tokenized securely." : "No saved card yet.";
+  const renderCard = (paymentSaved, paymentPending) => {
+    const active = Boolean(paymentSaved) || Boolean(paymentPending);
+    if (enableBtn) enableBtn.classList.toggle("hidden", active);
+    if (disableBtn) disableBtn.classList.toggle("hidden", !active);
+    if (msg) {
+      if (paymentSaved) msg.textContent = "One-tap checkout is enabled — your card is securely saved for one-click purchases.";
+      else if (paymentPending) msg.textContent = "One-tap checkout is enabled. It activates after your next purchase saves your card.";
+      else msg.textContent = "No saved card yet.";
+    }
   };
 
-  renderCard(Boolean(user && user.payment_saved));
+  renderCard(user && user.payment_saved, user && user.payment_pending);
 
   if (enableBtn) {
     enableBtn.addEventListener("click", async () => {
-      if (!confirm("This will tokenize a card via Paystack so you can buy with one click. In demo mode this is simulated - continue?")) return;
+      if (!confirm("This enables one-click checkout using the card you pay with. In demo mode this is simulated immediately - continue?")) return;
       enableBtn.disabled = true;
       enableBtn.textContent = "Saving...";
       try {
         const data = await api("/api/users/me", { method: "PUT", body: { saveCard: true } });
         currentUser = data.user;
-        renderCard(Boolean(data.user && data.user.payment_saved));
+        renderCard(Boolean(data.user && data.user.payment_saved), Boolean(data.user && data.user.payment_pending));
         enableBtn.disabled = false;
         enableBtn.textContent = "Save card for one-tap checkout";
       } catch (err) {
@@ -542,13 +553,13 @@ function wireCardPanel(user) {
   }
   if (disableBtn) {
     disableBtn.addEventListener("click", async () => {
-      if (!confirm("Remove your saved card? You'll return to the normal checkout.")) return;
+      if (!confirm("Disable one-tap checkout and remove the saved card?")) return;
       disableBtn.disabled = true;
       try {
         const data = await api("/api/users/me", { method: "PUT", body: { saveCard: false } });
         const fresh = data.user || currentUser;
         currentUser = fresh;
-        renderCard(false);
+        renderCard(false, false);
         disableBtn.disabled = false;
       } catch (err) {
         alert(err.message);

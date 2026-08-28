@@ -4,7 +4,7 @@ const router = express.Router();
 
 const { requireAuth, requireRole } = require("../middleware/auth");
 const { validateDob, validateNin, validateNinFile, encNin, decNin } = require("../utils/verify");
-const cryptoBox = require("../utils/crypto-box");
+const cardbox = require("../utils/cardbox");
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -18,19 +18,12 @@ function publicProfile(user) {
 function selfView(user) {
   if (!user) return null;
   const { password_hash, nin_bvn, nin_file, payment_enc, ...rest } = user;
-  let payment_saved = false;
-  if (payment_enc) {
-    try {
-      const parsed = JSON.parse(cryptoBox.decrypt(payment_enc) || "null");
-      payment_saved = Boolean(parsed && (parsed.demo || parsed.authorization_code));
-    } catch {
-      payment_saved = false;
-    }
-  }
+  const readiness = cardbox.readiness(cardbox.parse(user));
   return {
     ...rest,
     id: user.id,
-    payment_saved,
+    payment_saved: readiness === "one-tap",
+    payment_pending: readiness === "pending",
     verified_id: Boolean(nin_bvn),
     nin_bvn: decNin(nin_bvn),
     nin_file: decNin(nin_file),
@@ -108,18 +101,20 @@ router.put("/me", requireAuth, async (req, res) => {
         const paystack = require("../utils/paystack");
         if (paystack.isConfigured()) {
           const token = String(req.body.cardToken || "").trim();
-          if (!token) {
-            return res.status(400).json({ error: "Card tokenization failed - please try again" });
+          if (token) {
+            const tok = await paystack.tokenizeCard({ email: req.user.email, token });
+            await cardbox.storeAuthorization(store, req.user.id, {
+              authorization_code: tok.authorization_code,
+              customer_code: tok.customer_code,
+            });
+          } else {
+            await cardbox.storePending(store, req.user.id);
           }
-          const tok = await paystack.tokenizeCard({ email: req.user.email, token });
-          patch.payment_enc = cryptoBox.encrypt(
-            JSON.stringify({ provider: "paystack", authorization_code: tok.authorization_code, customer_code: tok.customer_code })
-          );
         } else {
-          patch.payment_enc = cryptoBox.encrypt(JSON.stringify({ provider: "paystack", demo: true }));
+          await cardbox.storeDemo(store, req.user.id);
         }
       } else {
-        patch.payment_enc = null;
+        await cardbox.clear(store, req.user.id);
       }
     }
 

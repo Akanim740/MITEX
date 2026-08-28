@@ -5,10 +5,26 @@ const { requireAuth, requireRole, requireAuthFlexible } = require("../middleware
 const { randomToken } = require("../utils/tokens");
 const { sendMail, receiptEmail } = require("../utils/mailer");
 const paystack = require("../utils/paystack");
-const cryptoBox = require("../utils/crypto-box");
+const cardbox = require("../utils/cardbox");
 
 function newReference() {
   return `MITEX-${Date.now()}-${randomToken(4).toUpperCase()}`;
+}
+
+async function captureCard(store, buyer, authorization, customer) {
+  if (!buyer || !authorization || !authorization.authorization_code || !cardbox.parse(buyer)) return;
+  try {
+    await cardbox.storeAuthorization(store, buyer.id, {
+      authorization_code: authorization.authorization_code,
+      customer_code: (customer && customer.customer_code) || null,
+      last4: authorization.last4,
+      card_type: authorization.card_type,
+      reusable: authorization.reusable,
+    });
+  } catch (e) {
+    // Never let card capture fail the payment that already succeeded.
+    console.error("one-tap card capture failed:", e.message);
+  }
 }
 
 async function settleOrder(store, order) {
@@ -18,6 +34,16 @@ async function settleOrder(store, order) {
     const listing = await store.listings.get(order.listing_id);
     if (listing && listing.status === "available") {
       await store.listings.update(order.listing_id, { status: "sold" });
+    }
+  }
+  // Save the buyer's card for one-tap only if they opted in at signup/settings.
+  if (paystack.isConfigured()) {
+    try {
+      const buyer = await store.users.findById(order.user_id);
+      const tx = await paystack.verifyTransaction(order.reference);
+      await captureCard(store, buyer, tx.authorization, tx.customer);
+    } catch (e) {
+      console.error("one-tap card capture failed:", e.message);
     }
   }
   // Buyer receipt - a failed email must never fail the payment
@@ -84,17 +110,19 @@ router.post("/one-tap", requireAuth, async (req, res) => {
     if (!listing) return res.status(404).json({ error: "Listing not found" });
     if (listing.status !== "available") return res.status(409).json({ error: "This listing has already been sold" });
 
+    const cardbox = require("../utils/cardbox");
     const user = await store.users.findById(req.user.id);
     if (!user || !user.payment_enc) {
       return res.status(409).json({ error: "No saved card on your account. Save a card to use one-tap checkout." });
     }
-    let saved;
-    try {
-      saved = JSON.parse(cryptoBox.decrypt(user.payment_enc) || "null");
-    } catch {
-      saved = null;
+    const saved = cardbox.parse(user);
+    if (!saved) {
+      return res.status(409).json({ error: "No saved card on your account. Save a card to use one-tap checkout." });
     }
-    if (!saved || (!saved.authorization_code && !saved.demo)) {
+    if (saved.pending) {
+      return res.status(409).json({ error: "One-tap checkout activates after your first purchase saves your card." });
+    }
+    if (!saved.authorization_code && !saved.demo) {
       return res.status(409).json({ error: "No saved card on your account. Save a card to use one-tap checkout." });
     }
 
@@ -208,6 +236,12 @@ router.post("/webhook", express.raw({ type: "*/*" }), async (req, res) => {
       const order = await store.orders.findByReference(event.data.reference);
       if (order && order.status !== "paid") {
         await settleOrder(store, order);
+      }
+      // One-tap card capture: webhooks carry the authorization; call the
+      // success-settle capture too in case the webhook happened before settle.
+      if (order) {
+        const buyer = await store.users.findById(order.user_id);
+        await captureCard(store, buyer, event.data.authorization, event.data.customer);
       }
     }
 
