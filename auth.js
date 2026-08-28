@@ -32,7 +32,11 @@ async function api(path, { method = "GET", body, auth = true, retried = false } 
   }
 
   const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(data.error || `Request failed (${res.status})`);
+  if (!res.ok) {
+    const err = new Error(data.error || `Request failed (${res.status})`);
+    if (data.code) err.code = data.code;
+    throw err;
+  }
   return data;
 }
 
@@ -53,6 +57,8 @@ if (page === "account") initAccount();
 if (page === "marketplace") initMarketplace();
 if (page === "demo-checkout") initDemoCheckout();
 if (page === "payment-success") initPaymentSuccess();
+
+if (page === "marketplace" || page === "account") initNotifications();
 
 function naira(value) {
   if (typeof formatPriceWithOriginal === "function") {
@@ -840,8 +846,14 @@ function renderListings(query, page) {
               }</div>`
             : ""
         }
-        <button class="btn btn-primary btn-full" data-buy="${l.id}">${t("buy_now")}</button>
-        ${marketplaceCanOneTap ? `<button class="btn btn-full" data-buyonetap="${l.id}" style="margin-top:8px;">One-tap checkout</button>` : ""}
+        ${
+          l.status === "available" && l.deliveryReady === false
+            ? `<span class="chip gold">Almost ready</span>
+               <button class="btn btn-full" data-intent="${l.id}" style="margin-top:8px;">Notify me</button>`
+            : l.status === "available"
+            ? `<button class="btn btn-primary btn-full" data-buy="${l.id}">${t("buy_now")}</button>${marketplaceCanOneTap ? `<button class="btn btn-full" data-buyonetap="${l.id}" style="margin-top:8px;">One-tap checkout</button>` : ""}`
+            : ""
+        }
       </article>`
     )
     .join("");
@@ -851,6 +863,9 @@ function renderListings(query, page) {
   });
   grid.querySelectorAll("[data-buyonetap]").forEach((btn) => {
     btn.addEventListener("click", () => buyListingOneTap(btn.dataset.buyonetap, btn));
+  });
+  grid.querySelectorAll("[data-intent]").forEach((btn) => {
+    btn.addEventListener("click", () => confirmBuyIntent(btn.dataset.intent));
   });
 
   if (totalPages > 1) {
@@ -897,6 +912,11 @@ async function buyListing(listingId, btn) {
     const data = await api("/api/payments/initialize", { method: "POST", body: { listingId, notes: listingNotes } });
     location.href = data.authorization_url;
   } catch (err) {
+    if (err.code === "DELIVERY_NOT_READY") {
+      if (btn) setLoading(btn, false, t("buy_now"));
+      await confirmBuyIntent(listingId);
+      return;
+    }
     alert(err.message);
     if (btn) setLoading(btn, false, t("buy_now"));
   }
@@ -919,9 +939,100 @@ async function buyListingOneTap(listingId, btn) {
     const data = await api("/api/payments/one-tap", { method: "POST", body: { listingId, notes: listingNotes } });
     location.href = `/payment-success.html?reference=${encodeURIComponent(data.reference)}`;
   } catch (err) {
+    if (err.code === "DELIVERY_NOT_READY") {
+      if (btn) setLoading(btn, false, "Buy Now");
+      await confirmBuyIntent(listingId);
+      return;
+    }
     alert(err.message);
     if (btn) setLoading(btn, false, "Buy Now");
   }
+}
+
+// Buyer confirms intent on a listing that isn't ready yet (no delivery link).
+async function confirmBuyIntent(listingId) {
+  const ok = confirm(
+    "This website is still being completed, so you can't pay for it just yet.\n\nWe'll notify you (in-app and by email) the moment it's ready to buy. No payment is taken now."
+  );
+  if (!ok) return;
+  try {
+    const data = await api("/api/payments/buy-intent", { method: "POST", body: { listingId } });
+    if (data.deliveryReady) {
+      // Raced - it just became ready. Jump straight into checkout.
+      return buyListing(listingId);
+    }
+    alert("You're on the list! We'll let you know as soon as this website is ready to buy.");
+    subscribeToPush();
+  } catch (err) {
+    alert(err.message);
+  }
+}
+
+// Best-effort: register this device for web push so ready-notices arrive here too.
+async function subscribeToPush() {
+  if (!window.PushManager || !("serviceWorker" in navigator)) return;
+  try {
+    const reg = await navigator.serviceWorker.ready;
+    const { publicKey, configured } = await api("/api/push/public-key");
+    if (!configured || !publicKey) return;
+    let sub = await reg.pushManager.getSubscription();
+    if (!sub) {
+      sub = await reg.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: urlBase64ToUint8Array(publicKey),
+      });
+    }
+    const b64 = (buf) => btoa(String.fromCharCode.apply(null, new Uint8Array(buf)));
+    await api("/api/push/subscribe", {
+      method: "POST",
+      body: { endpoint: sub.endpoint, p256dh: b64(sub.getKey("p256dh")), auth: b64(sub.getKey("auth")) },
+    });
+  } catch (e) {
+    console.warn("Push subscribe failed:", e.message);
+  }
+}
+
+function urlBase64ToUint8Array(base64) {
+  const padding = "=".repeat((4 - (base64.length % 4)) % 4);
+  const b64 = (base64 + padding).replace(/-/g, "+").replace(/_/g, "/");
+  const raw = atob(b64);
+  return new Uint8Array([...raw].map((c) => c.charCodeAt(0)));
+}
+
+// ---- In-app notifications ----
+const __notifSeen = {};
+
+function initNotifications() {
+  if (!isLoggedIn()) return;
+  const poll = async () => {
+    try {
+      const { notifications } = await api("/api/notifications?limit=10");
+      notifications.forEach((n) => {
+        if (__notifSeen[n.id]) return;
+        __notifSeen[n.id] = true;
+        if (n.type === "listing_ready") {
+          showNotifToast(n);
+          api("/api/notifications/read", { method: "POST", body: { id: n.id } }).catch(() => {});
+        }
+      });
+    } catch (e) {}
+  };
+  poll();
+  setInterval(poll, 45000);
+}
+
+function showNotifToast(n) {
+  const el = document.createElement("div");
+  el.className = "notif-toast";
+  el.innerHTML = `<span class="notif-toast-title">${esc(n.title)}</span><span class="notif-toast-body">${esc(n.body || "")}</span>`;
+  el.addEventListener("click", () => {
+    window.location.href = n.link || "/marketplace.html";
+  });
+  document.body.appendChild(el);
+  setTimeout(() => {
+    el.classList.add("out");
+    setTimeout(() => el.remove(), 400);
+  }, 9000);
 }
 
 async function initDemoCheckout() {

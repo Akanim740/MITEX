@@ -1610,3 +1610,61 @@ ul {
     padding: 30px 22px;
   }
 }
+
+.notif-toast {
+  position: fixed;
+  right: 20px;
+  bottom: 20px;
+  z-index: 9000;
+  max-width: 340px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 14px 18px;
+  background: #0b1120;
+  border: 1px solid rgba(251, 191, 36, 0.35);
+  border-left: 4px solid var(--gold);
+  border-radius: 14px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.5);
+  cursor: pointer;
+  animation: notif-in 0.3s ease;
+}
+
+.notif-toast:hover {
+  border-color: var(--gold);
+}
+
+.notif-toast-title {
+  color: var(--text);
+  font-weight: 700;
+  font-family: var(--font-head);
+  font-size: 14px;
+}
+
+.notif-toast-body {
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.notif-toast.out {
+  animation: notif-out 0.4s ease forwards;
+}
+
+@keyframes notif-in {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes notif-out {
+  to {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+}

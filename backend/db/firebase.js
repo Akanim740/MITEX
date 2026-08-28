@@ -514,6 +514,78 @@ const audit = {
   },
 };
 
+const buyIntents = {
+  async get(userId, listingId) {
+    const snap = await col("buy_intents").where("user_id", "==", String(userId)).where("listing_id", "==", String(listingId)).limit(1).get();
+    return snap.empty ? null : { id: snap.docs[0].id, ...snap.docs[0].data() };
+  },
+  async create({ userId, listingId }) {
+    const existing = await this.get(userId, listingId);
+    if (existing) {
+      if (existing.status !== "waiting") await this.setStatus(existing.id, "waiting");
+      return this.get(userId, listingId);
+    }
+    const doc = { user_id: String(userId), listing_id: String(listingId), status: "waiting", created_at: nowISO(), updated_at: null };
+    const ref = await col("buy_intents").add(doc);
+    return { id: ref.id, ...doc };
+  },
+  async listWaitingByListing(listingId) {
+    const snap = await col("buy_intents").where("listing_id", "==", String(listingId)).where("status", "==", "waiting").orderBy("created_at", "asc").get();
+    return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+  },
+  async setStatus(id, status) {
+    await col("buy_intents").doc(String(id)).update({ status, updated_at: nowISO() });
+  },
+  async remove(id) {
+    await col("buy_intents").doc(String(id)).delete();
+    return true;
+  },
+};
+
+const pushSubs = {
+  async add({ userId, endpoint, p256dh, auth }) {
+    const pre = await col("push_subscriptions").where("endpoint", "==", endpoint).limit(1).get();
+    pre.docs.forEach((d) => d.ref.delete());
+    const doc = { user_id: String(userId), endpoint, p256dh, auth, created_at: nowISO() };
+    const ref = await col("push_subscriptions").add(doc);
+    return { id: ref.id, ...doc };
+  },
+  async listByUser(userId) {
+    const snap = await col("push_subscriptions").where("user_id", "==", String(userId)).get();
+    return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+  },
+  async removeByEndpoint(endpoint) {
+    const snap = await col("push_subscriptions").where("endpoint", "==", endpoint).get();
+    const ps = snap.docs.map((d) => d.ref.delete());
+    await Promise.all(ps);
+    return snap.size > 0;
+  },
+};
+
+const notifications = {
+  async create({ userId, type, title, body, link }) {
+    const doc = { user_id: String(userId), type, title, body: body || null, link: link || null, read: false, created_at: nowISO() };
+    const ref = await col("notifications").add(doc);
+    return { id: ref.id, ...doc };
+  },
+  async listForUser(userId, limit = 50) {
+    const snap = await col("notifications").where("user_id", "==", String(userId)).orderBy("created_at", "desc").limit(limit).get();
+    return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+  },
+  async unreadCount(userId) {
+    const snap = await col("notifications").where("user_id", "==", String(userId)).where("read", "==", false).get();
+    return snap.size;
+  },
+  async markRead(userId, id) {
+    if (id) await col("notifications").doc(String(id)).update({ read: true });
+    else {
+      const snap = await col("notifications").where("user_id", "==", String(userId)).where("read", "==", false).get();
+      const ps = snap.docs.map((d) => d.ref.update({ read: true }));
+      await Promise.all(ps);
+    }
+  },
+};
+
 const api = {
   name: "firebase",
   users,
@@ -527,6 +599,9 @@ const api = {
   applications,
   salaries,
   audit,
+  buyIntents,
+  pushSubs,
+  notifications,
   _publicUser: toPublic,
 };
 

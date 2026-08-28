@@ -438,3 +438,48 @@ input:focus, textarea:focus, select:focus {
   .project-actions { flex-direction: column; align-items: stretch; }
   .drop-menu { right: -10px; }
 }
+
+/* ─── Buyer-waiting toast ─── */
+.wnotif-toast {
+  position: fixed;
+  right: 20px;
+  bottom: 20px;
+  z-index: 9000;
+  max-width: 340px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 14px 18px;
+  background: var(--surface);
+  border: 1px solid rgba(251, 191, 36, 0.35);
+  border-left: 4px solid var(--primary);
+  border-radius: 12px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.5);
+  cursor: pointer;
+  animation: wnotif-in 0.3s ease;
+}
+
+.wnotif-toast strong {
+  color: var(--text);
+  font-family: var(--font-sans);
+  font-size: 14px;
+}
+
+.wnotif-toast div {
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.wnotif-toast.out {
+  animation: wnotif-out 0.4s ease forwards;
+}
+
+@keyframes wnotif-in {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes wnotif-out {
+  to { opacity: 0; transform: translateY(12px); }
+}

@@ -66,7 +66,8 @@ function stripDelivery(row, req) {
   if (!row) return row;
   if (canSeeDelivery(row, req)) return row;
   const { delivery_url, ...rest } = row;
-  return rest;
+  // Public consumers see whether the site is buyable, never the URL itself.
+  return { ...rest, deliveryReady: Boolean(delivery_url) };
 }
 
 async function attachEmployee(store, row, req) {
@@ -166,6 +167,7 @@ router.put("/:id", requireAuth, requireRole("admin", "editor", "staff"), async (
     const row = await store.listings.update(req.params.id, values);
 
     if (values.delivery_url && !existing.delivery_url) {
+      // Paid buyer gets the delivery link.
       const orders = await store.orders.listAll("paid");
       const matchingOrder = orders.find((o) => String(o.listing_id) === String(req.params.id));
       if (matchingOrder) {
@@ -175,6 +177,31 @@ router.put("/:id", requireAuth, requireRole("admin", "editor", "staff"), async (
           const mail = deliveryEmail(buyer, matchingOrder);
           setImmediate(() => sendMail({ to: buyer.email, subject: mail.subject, text: mail.text, html: mail.html }).catch(() => {}));
         }
+      }
+
+      // Waiting buyers (confirmed intent, not yet paid) get the go-ahead.
+      const waiting = await store.buyIntents.listWaitingByListing(String(req.params.id));
+      for (const intent of waiting) {
+        await store.buyIntents.setStatus(intent.id, "ready");
+        const buyer = await store.users.findById(intent.user_id);
+        if (!buyer) continue;
+        const { notifyUser } = require("../utils/notify");
+        const { sendMail, listingReadyEmail } = require("../utils/mailer");
+        const mail = listingReadyEmail(buyer, existing || row);
+        setImmediate(async () => {
+          try {
+            await notifyUser(store, {
+              userId: buyer.id,
+              type: "listing_ready",
+              title: `"${(existing || row).title}" is ready to buy`,
+              body: "The delivery link is now in place. You can complete your purchase.",
+              link: "/marketplace.html",
+            });
+            await sendMail({ to: buyer.email, subject: mail.subject, text: mail.text, html: mail.html });
+          } catch (e) {
+            console.error("listing-ready notification failed:", e.message);
+          }
+        });
       }
     }
 

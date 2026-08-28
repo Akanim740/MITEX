@@ -472,6 +472,66 @@ const audit = {
   },
 };
 
+const buyIntents = {
+  async get(userId, listingId) {
+    return db.collection("buy_intents").findOne({ user_id: String(userId), listing_id: String(listingId) });
+  },
+  async create({ userId, listingId }) {
+    const filter = { user_id: String(userId), listing_id: String(listingId) };
+    const existing = await this.get(userId, listingId);
+    if (existing) {
+      if (existing.status !== "waiting") await this.setStatus(existing._id, "waiting");
+      return this.get(userId, listingId);
+    }
+    const doc = { ...filter, status: "waiting", created_at: nowISO(), updated_at: null };
+    await db.collection("buy_intents").insertOne(doc);
+    return doc;
+  },
+  async listWaitingByListing(listingId) {
+    return db.collection("buy_intents").find({ listing_id: String(listingId), status: "waiting" }).sort({ created_at: 1 }).toArray();
+  },
+  async setStatus(id, status) {
+    await db.collection("buy_intents").updateOne({ _id: oid(id) }, { $set: { status, updated_at: nowISO() } });
+  },
+  async remove(id) {
+    return (await db.collection("buy_intents").deleteOne({ _id: oid(id) })).deletedCount > 0;
+  },
+};
+
+const pushSubs = {
+  async add({ userId, endpoint, p256dh, auth }) {
+    await db.collection("push_subscriptions").deleteOne({ endpoint });
+    const doc = { user_id: String(userId), endpoint, p256dh, auth, created_at: nowISO() };
+    const res = await db.collection("push_subscriptions").insertOne(doc);
+    return { ...doc, _id: res.insertedId };
+  },
+  async listByUser(userId) {
+    return db.collection("push_subscriptions").find({ user_id: String(userId) }).toArray();
+  },
+  async removeByEndpoint(endpoint) {
+    return (await db.collection("push_subscriptions").deleteOne({ endpoint })).deletedCount > 0;
+  },
+};
+
+const notifications = {
+  async create({ userId, type, title, body, link }) {
+    const doc = { user_id: String(userId), type, title, body: body || null, link: link || null, read: false, created_at: nowISO() };
+    const res = await db.collection("notifications").insertOne(doc);
+    return { ...doc, _id: res.insertedId };
+  },
+  async listForUser(userId, limit = 50) {
+    return db.collection("notifications").find({ user_id: String(userId) }).sort({ created_at: -1 }).limit(limit).toArray();
+  },
+  async unreadCount(userId) {
+    return db.collection("notifications").countDocuments({ user_id: String(userId), read: false });
+  },
+  async markRead(userId, id) {
+    const q = { user_id: String(userId) };
+    if (id) q._id = oid(id);
+    await db.collection("notifications").updateMany(q, { $set: { read: true } });
+  },
+};
+
 const api = {
   name: "mongo",
   users,
@@ -485,6 +545,9 @@ const api = {
   applications,
   salaries,
   audit,
+  buyIntents,
+  pushSubs,
+  notifications,
   _publicUser: toPublic,
   _close: () => client && client.close(),
 };

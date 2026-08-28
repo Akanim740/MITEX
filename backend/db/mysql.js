@@ -226,6 +226,38 @@ async function init() {
       created_at VARCHAR(32) NOT NULL,
       INDEX idx_audit_created (created_at)
     );
+
+    CREATE TABLE IF NOT EXISTS buy_intents (
+      id         INT AUTO_INCREMENT PRIMARY KEY,
+      user_id    VARCHAR(40) NOT NULL,
+      listing_id VARCHAR(40) NOT NULL,
+      status     VARCHAR(16) NOT NULL DEFAULT 'waiting',
+      created_at VARCHAR(32) NOT NULL,
+      updated_at VARCHAR(32),
+      UNIQUE KEY uq_buyintent_user_listing (user_id, listing_id)
+    );
+
+    CREATE TABLE IF NOT EXISTS push_subscriptions (
+      id         INT AUTO_INCREMENT PRIMARY KEY,
+      user_id    VARCHAR(40) NOT NULL,
+      endpoint   TEXT NOT NULL,
+      p256dh     TEXT NOT NULL,
+      auth       TEXT NOT NULL,
+      created_at VARCHAR(32) NOT NULL,
+      UNIQUE KEY uq_push_endpoint (endpoint(255))
+    );
+
+    CREATE TABLE IF NOT EXISTS notifications (
+      id         INT AUTO_INCREMENT PRIMARY KEY,
+      user_id    VARCHAR(40) NOT NULL,
+      type       VARCHAR(32) NOT NULL,
+      title      VARCHAR(200) NOT NULL,
+      body       TEXT,
+      link       VARCHAR(255),
+      read       TINYINT(1) NOT NULL DEFAULT 0,
+      created_at VARCHAR(32) NOT NULL,
+      INDEX idx_notifications_user (user_id)
+    );
   `);
 
   // Older databases: add columns that arrived after first launch
@@ -677,6 +709,73 @@ const audit = {
   },
 };
 
+const buyIntents = {
+  async get(userId, listingId) {
+    const [rows] = await pool.query("SELECT * FROM buy_intents WHERE user_id = ? AND listing_id = ?", [userId, listingId]);
+    return rows[0] || null;
+  },
+  async create({ userId, listingId }) {
+    let existing = await this.get(userId, listingId);
+    if (existing) {
+      if (existing.status !== "waiting") {
+        await pool.query("UPDATE buy_intents SET status = 'waiting', updated_at = ? WHERE id = ?", [nowISO(), existing.id]);
+        existing = await this.get(userId, listingId);
+      }
+      return existing;
+    }
+    await pool.query("INSERT INTO buy_intents (user_id, listing_id, status, created_at) VALUES (?, ?, 'waiting', ?)", [userId, listingId, nowISO()]);
+    return this.get(userId, listingId);
+  },
+  async listWaitingByListing(listingId) {
+    const [rows] = await pool.query("SELECT * FROM buy_intents WHERE listing_id = ? AND status = 'waiting' ORDER BY created_at ASC", [listingId]);
+    return rows;
+  },
+  async setStatus(id, status) {
+    await pool.query("UPDATE buy_intents SET status = ?, updated_at = ? WHERE id = ?", [status, nowISO(), id]);
+  },
+  async remove(id) {
+    const [res] = await pool.query("DELETE FROM buy_intents WHERE id = ?", [id]);
+    return res.affectedRows > 0;
+  },
+};
+
+const pushSubs = {
+  async add({ userId, endpoint, p256dh, auth }) {
+    await pool.query("DELETE FROM push_subscriptions WHERE endpoint = ?", [endpoint]);
+    await pool.query("INSERT INTO push_subscriptions (user_id, endpoint, p256dh, auth, created_at) VALUES (?, ?, ?, ?, ?)", [userId, endpoint, p256dh, auth, nowISO()]);
+    const [rows] = await pool.query("SELECT * FROM push_subscriptions WHERE endpoint = ?", [endpoint]);
+    return rows[0];
+  },
+  async listByUser(userId) {
+    const [rows] = await pool.query("SELECT * FROM push_subscriptions WHERE user_id = ?", [userId]);
+    return rows;
+  },
+  async removeByEndpoint(endpoint) {
+    const [res] = await pool.query("DELETE FROM push_subscriptions WHERE endpoint = ?", [endpoint]);
+    return res.affectedRows > 0;
+  },
+};
+
+const notifications = {
+  async create({ userId, type, title, body, link }) {
+    const [res] = await pool.query("INSERT INTO notifications (user_id, type, title, body, link, created_at) VALUES (?, ?, ?, ?, ?, ?)", [userId, type, title, body || null, link || null, nowISO()]);
+    const [rows] = await pool.query("SELECT * FROM notifications WHERE id = ?", [res.insertId]);
+    return rows[0];
+  },
+  async listForUser(userId, limit = 50) {
+    const [rows] = await pool.query("SELECT * FROM notifications WHERE user_id = ? ORDER BY created_at DESC, id DESC LIMIT ?", [userId, limit]);
+    return rows;
+  },
+  async unreadCount(userId) {
+    const [rows] = await pool.query("SELECT COUNT(*) AS n FROM notifications WHERE user_id = ? AND read = 0", [userId]);
+    return rows[0].n;
+  },
+  async markRead(userId, id) {
+    if (id) await pool.query("UPDATE notifications SET read = 1 WHERE user_id = ? AND id = ?", [userId, id]);
+    else await pool.query("UPDATE notifications SET read = 1 WHERE user_id = ?", [userId]);
+  },
+};
+
 const api = {
   name: "mysql",
   users,
@@ -690,6 +789,9 @@ const api = {
   applications,
   salaries,
   audit,
+  buyIntents,
+  pushSubs,
+  notifications,
   _publicUser: stripSecret,
 };
 

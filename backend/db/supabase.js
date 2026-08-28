@@ -575,6 +575,86 @@ const audit = {
   },
 };
 
+const buyIntents = {
+  async get(userId, listingId) {
+    const { data } = await supabase.from("buy_intents").select("*").eq("user_id", userId).eq("listing_id", String(listingId)).maybeSingle();
+    return data || null;
+  },
+  async create({ userId, listingId }) {
+    const existing = await this.get(userId, listingId);
+    if (existing) {
+      if (existing.status !== "waiting") {
+        const { data, error } = await supabase.from("buy_intents").update({ status: "waiting", updated_at: nowISO() }).eq("id", existing.id).select().single();
+        if (!error) return data;
+      }
+      return existing;
+    }
+    const { data, error } = await supabase
+      .from("buy_intents")
+      .insert({ user_id: userId, listing_id: String(listingId), status: "waiting", created_at: nowISO() })
+      .select()
+      .single();
+    if (error) throw error;
+    return data;
+  },
+  async listWaitingByListing(listingId) {
+    const { data } = await supabase.from("buy_intents").select("*").eq("listing_id", String(listingId)).eq("status", "waiting").order("created_at", { ascending: true });
+    return data || [];
+  },
+  async setStatus(id, status) {
+    await supabase.from("buy_intents").update({ status, updated_at: nowISO() }).eq("id", id);
+  },
+  async remove(id) {
+    const { error } = await supabase.from("buy_intents").delete().eq("id", id);
+    return !error;
+  },
+};
+
+const pushSubs = {
+  async add({ userId, endpoint, p256dh, auth }) {
+    await supabase.from("push_subscriptions").delete().eq("endpoint", endpoint);
+    const { data, error } = await supabase
+      .from("push_subscriptions")
+      .insert({ user_id: userId, endpoint, p256dh, auth, created_at: nowISO() })
+      .select()
+      .single();
+    if (error) throw error;
+    return data;
+  },
+  async listByUser(userId) {
+    const { data } = await supabase.from("push_subscriptions").select("*").eq("user_id", userId);
+    return data || [];
+  },
+  async removeByEndpoint(endpoint) {
+    const { error } = await supabase.from("push_subscriptions").delete().eq("endpoint", endpoint);
+    return !error;
+  },
+};
+
+const notifications = {
+  async create({ userId, type, title, body, link }) {
+    const { data, error } = await supabase
+      .from("notifications")
+      .insert({ user_id: userId, type, title, body: body || null, link: link || null, read: false, created_at: nowISO() })
+      .select()
+      .single();
+    if (error) throw error;
+    return data;
+  },
+  async listForUser(userId, limit = 50) {
+    const { data } = await supabase.from("notifications").select("*").eq("user_id", userId).order("created_at", { ascending: false }).limit(limit);
+    return data || [];
+  },
+  async unreadCount(userId) {
+    const { count } = await supabase.from("notifications").select("id", { count: "exact", head: true }).eq("user_id", userId).eq("read", false);
+    return count || 0;
+  },
+  async markRead(userId, id) {
+    if (id) await supabase.from("notifications").update({ read: true }).eq("user_id", userId).eq("id", id);
+    else await supabase.from("notifications").update({ read: true }).eq("user_id", userId);
+  },
+};
+
 const api = {
   name: "supabase",
   users,
@@ -588,6 +668,9 @@ const api = {
   applications,
   salaries,
   audit,
+  buyIntents,
+  pushSubs,
+  notifications,
   _publicUser: toPublic,
 };
 

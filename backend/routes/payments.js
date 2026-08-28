@@ -35,6 +35,15 @@ async function settleOrder(store, order) {
     if (listing && listing.status === "available") {
       await store.listings.update(order.listing_id, { status: "sold" });
     }
+    // Clear any waiting buyers now that the listing is purchased.
+    try {
+      const waiting = await store.buyIntents.listWaitingByListing(order.listing_id);
+      for (const intent of waiting) {
+        await store.buyIntents.setStatus(intent.id, "purchased");
+      }
+    } catch (e) {
+      console.error("buy-intent settle cleanup failed:", e.message);
+    }
   }
   // Save the buyer's card for one-tap only if they opted in at signup/settings.
   if (paystack.isConfigured()) {
@@ -66,6 +75,14 @@ router.post("/initialize", requireAuth, async (req, res) => {
     const listing = await store.listings.get(listingId);
     if (!listing) return res.status(404).json({ error: "Listing not found" });
     if (listing.status !== "available") return res.status(409).json({ error: "This listing has already been sold" });
+    if (!listing.delivery_url) {
+      return res.status(409).json({
+        code: "DELIVERY_NOT_READY",
+        error: "This website is still being completed. You'll be notified the moment it's ready to buy.",
+        listingId: String(listing.id),
+        deliveryReady: false,
+      });
+    }
 
     const reference = newReference();
     const order = await store.orders.create({
@@ -109,6 +126,14 @@ router.post("/one-tap", requireAuth, async (req, res) => {
     const listing = await store.listings.get(listingId);
     if (!listing) return res.status(404).json({ error: "Listing not found" });
     if (listing.status !== "available") return res.status(409).json({ error: "This listing has already been sold" });
+    if (!listing.delivery_url) {
+      return res.status(409).json({
+        code: "DELIVERY_NOT_READY",
+        error: "This website is still being completed. You'll be notified the moment it's ready to buy.",
+        listingId: String(listing.id),
+        deliveryReady: false,
+      });
+    }
 
     const cardbox = require("../utils/cardbox");
     const user = await store.users.findById(req.user.id);
@@ -159,6 +184,59 @@ router.post("/one-tap", requireAuth, async (req, res) => {
 
     await store.orders.markFailed(order.reference);
     return res.status(402).json({ error: "Your saved card could not be charged. Please retry with the full checkout." });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: err.message || "Internal server error" });
+  }
+});
+
+// POST /api/payments/buy-intent - buyer confirms intent on a not-ready listing
+// HARD-BLOCKS payment until worker sets delivery_url; dedupes per buyer+listing
+// and notifies the assigned worker once per confirmation.
+router.post("/buy-intent", requireAuth, async (req, res) => {
+  try {
+    const store = req.store;
+    const { listingId } = req.body;
+    if (!listingId) return res.status(400).json({ error: "listingId is required" });
+
+    const listing = await store.listings.get(listingId);
+    if (!listing) return res.status(404).json({ error: "Listing not found" });
+    if (listing.status !== "available") return res.status(409).json({ error: "This listing has already been sold" });
+
+    if (listing.delivery_url) {
+      return res.json({ deliveryReady: true, message: "This website is ready to buy." });
+    }
+
+    const intent = await store.buyIntents.create({ userId: req.user.id, listingId: listing.id });
+
+    if (listing.employee_id) {
+      setImmediate(async () => {
+        try {
+          const worker = await store.users.findById(listing.employee_id);
+          if (!worker) return;
+          const { notifyUser } = require("../utils/notify");
+          await notifyUser(store, {
+            userId: worker.id,
+            type: "buyer_waiting",
+            title: `Buyer waiting on "${listing.title}"`,
+            body: `A buyer is ready to purchase "${listing.title}" as soon as you add the delivery link for it.`,
+            link: "/worker.html",
+          });
+          const { sendMail, buyerWaitingEmail } = require("../utils/mailer");
+          const mail = buyerWaitingEmail(worker, listing);
+          await sendMail({ to: worker.email, subject: mail.subject, text: mail.text });
+        } catch (e) {
+          console.error("buyer-waiting notification failed:", e.message);
+        }
+      });
+    }
+
+    return res.status(201).json({
+      deliveryReady: false,
+      message: "You'll be notified the moment this website is ready to buy.",
+      intentId: String(intent.id || ""),
+      listingId: String(listing.id),
+    });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: err.message || "Internal server error" });

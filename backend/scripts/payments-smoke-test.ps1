@@ -64,6 +64,14 @@ try {
   $lid = $newListing.listing.id
   Check "test listing created" ($lid -ne $null)
 
+  # ---- Delivery link is required before any payment can start ----
+  $noGuid = $false
+  try {
+    Invoke-RestMethod -Method Post -Uri "$base/api/payments/initialize" -ContentType application/json -Headers $custHdr -Body (@{ listingId = $lid } | ConvertTo-Json) | Out-Null
+  } catch { $noGuid = (StatusOf $_) -eq 409 }
+  Check "payment blocked until delivery link set (409)" $noGuid
+  Invoke-RestMethod -Method Put -Uri "$base/api/listings/$lid" -ContentType application/json -Headers $adminHdr -Body (@{ deliveryUrl = "https://example.com/paytest-site.zip" } | ConvertTo-Json) | Out-Null
+
   # ---- Checkout requires auth ----
   $unauth = $false
   try {

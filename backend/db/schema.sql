@@ -115,6 +115,37 @@ CREATE TABLE webauthn_credentials (
   INDEX idx_wc_user (user_id)
 );
 
+CREATE TABLE buy_intents (
+  id         INT AUTO_INCREMENT PRIMARY KEY,
+  user_id    INT NOT NULL,
+  listing_id INT NOT NULL,
+  status     VARCHAR(16) NOT NULL DEFAULT 'waiting',
+  created_at VARCHAR(32) NOT NULL,
+  updated_at VARCHAR(32),
+  UNIQUE KEY uq_buyintent_user_listing (user_id, listing_id)
+);
+
+CREATE TABLE push_subscriptions (
+  id         INT AUTO_INCREMENT PRIMARY KEY,
+  user_id    INT NOT NULL,
+  endpoint   TEXT NOT NULL,
+  p256dh     TEXT NOT NULL,
+  auth       TEXT NOT NULL,
+  created_at VARCHAR(32) NOT NULL
+);
+
+CREATE TABLE notifications (
+  id         INT AUTO_INCREMENT PRIMARY KEY,
+  user_id    INT NOT NULL,
+  type       VARCHAR(32) NOT NULL,
+  title      VARCHAR(200) NOT NULL,
+  body       TEXT,
+  link       VARCHAR(255),
+  read       TINYINT(1) NOT NULL DEFAULT 0,
+  created_at VARCHAR(32) NOT NULL,
+  INDEX idx_notifications_user (user_id)
+);
+
 -- ---------- Supabase / Postgres ----------
 -- Run this in the Supabase SQL editor instead of the MySQL section.
 
@@ -215,4 +246,34 @@ CREATE TABLE webauthn_credentials (
 --   device_type   TEXT,
 --   backed_up     BOOLEAN NOT NULL DEFAULT FALSE,
 --   created_at    TEXT NOT NULL
+-- );
+
+-- CREATE TABLE buy_intents (
+--   id         BIGSERIAL PRIMARY KEY,
+--   user_id    BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+--   listing_id BIGINT NOT NULL,
+--   status     TEXT NOT NULL DEFAULT 'waiting' CHECK (status IN ('waiting','ready','purchased','cancelled')),
+--   created_at TEXT NOT NULL,
+--   updated_at TEXT,
+--   UNIQUE (user_id, listing_id)
+-- );
+
+-- CREATE TABLE push_subscriptions (
+--   id         BIGSERIAL PRIMARY KEY,
+--   user_id    BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+--   endpoint   TEXT NOT NULL UNIQUE,
+--   p256dh     TEXT NOT NULL,
+--   auth       TEXT NOT NULL,
+--   created_at TEXT NOT NULL
+-- );
+
+-- CREATE TABLE notifications (
+--   id         BIGSERIAL PRIMARY KEY,
+--   user_id    BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+--   type       TEXT NOT NULL,
+--   title      TEXT NOT NULL,
+--   body       TEXT,
+--   link       TEXT,
+--   read       BOOLEAN NOT NULL DEFAULT FALSE,
+--   created_at TEXT NOT NULL
 -- );

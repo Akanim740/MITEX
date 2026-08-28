@@ -120,6 +120,24 @@ function deliveryEmail(buyer, order) {
   };
 }
 
+// Worker notification: a buyer confirmed intent on a listing with no delivery link yet.
+function buyerWaitingEmail(worker, listing) {
+  return {
+    subject: `Buyer waiting on "${listing.title}"`,
+    text: `Hi ${worker.name},\n\nA buyer is ready to purchase "${listing.title}" and is waiting for you to add the website's delivery link.\n\nAction: Add the delivery link in your staff dashboard as soon as you're done. The buyer will be notified automatically.\n\n- MITEX team`,
+    html: emailWrap(`<p style="color:#e5e7eb;font-size:15px;line-height:1.6;">Hi ${worker.name},</p><p style="color:#e5e7eb;font-size:15px;line-height:1.6;">A buyer is ready to purchase <strong style="color:#fff;">"${listing.title}"</strong> and is waiting for the delivery link.</p><p style="color:#e5e7eb;font-size:15px;line-height:1.6;">Add the delivery link in your <a href="${APP_URL}/worker.html" style="color:#fbbf24;">staff dashboard</a> as soon as you're done - the buyer will be notified automatically.</p>`),
+  };
+}
+
+// Buyer notification: their not-ready listing now has a delivery link.
+function listingReadyEmail(buyer, listing) {
+  return {
+    subject: `"${listing.title}" is ready to buy`,
+    text: `Hi ${buyer.name},\n\nGreat news! The website you were waiting for is now ready to buy.\n\nWebsite: ${listing.title}\n\nComplete your purchase here:\n${APP_URL}/marketplace.html\n\n- MITEX team`,
+    html: emailWrap(`<p style="color:#e5e7eb;font-size:15px;line-height:1.6;">Hi ${buyer.name},</p><p style="color:#10b981;font-size:16px;font-weight:700;">Good news!</p><p style="color:#e5e7eb;font-size:15px;line-height:1.6;">The website you were waiting for (<strong style="color:#fff;">"${listing.title}"</strong>) is now ready to buy.</p>${emailBtn(APP_URL + "/marketplace.html", "Buy Now")}`),
+  };
+}
+
 function enquiryReply(enquiry) {
   return {
     subject: `MITEX - we received your enquiry`,
@@ -136,4 +154,4 @@ function refundEmail(user, order) {
   };
 }
 
-module.exports = { sendMail, verificationEmail, resetEmail, testEmail, hireEmail, receiptEmail, salaryEmail, deliveryEmail, enquiryReply, refundEmail, smtpConfigured, libraryLoaded, APP_URL };
+module.exports = { sendMail, verificationEmail, resetEmail, testEmail, hireEmail, receiptEmail, salaryEmail, deliveryEmail, enquiryReply, refundEmail, buyerWaitingEmail, listingReadyEmail, smtpConfigured, libraryLoaded, APP_URL };

@@ -155,6 +155,36 @@ CREATE TABLE IF NOT EXISTS orders (
     ip         TEXT,
     created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
   );
+
+  CREATE TABLE IF NOT EXISTS buy_intents (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    listing_id INTEGER NOT NULL,
+    status     TEXT NOT NULL DEFAULT 'waiting' CHECK (status IN ('waiting','ready','purchased','cancelled')),
+    created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+    updated_at TEXT,
+    UNIQUE (user_id, listing_id)
+  );
+
+  CREATE TABLE IF NOT EXISTS push_subscriptions (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    endpoint   TEXT NOT NULL UNIQUE,
+    p256dh     TEXT NOT NULL,
+    auth       TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+  );
+
+  CREATE TABLE IF NOT EXISTS notifications (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    type       TEXT NOT NULL,
+    title      TEXT NOT NULL,
+    body       TEXT,
+    link       TEXT,
+    read       INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+  );
 `);
 
 for (const col of ["delivery_url", "employee_id"]) {
@@ -633,6 +663,68 @@ const audit = {
   },
 };
 
+const buyIntents = {
+  async get(userId, listingId) {
+    return db.prepare("SELECT * FROM buy_intents WHERE user_id = ? AND listing_id = ?").get(userId, listingId) || null;
+  },
+  async create({ userId, listingId }) {
+    const existing = await this.get(userId, listingId);
+    if (existing) {
+      if (existing.status !== "waiting") await this.setStatus(existing.id, "waiting");
+      return this.get(userId, listingId);
+    }
+    const res = db.prepare("INSERT INTO buy_intents (user_id, listing_id, status) VALUES (?, ?, 'waiting')").run(userId, listingId);
+    return db.prepare("SELECT * FROM buy_intents WHERE id = ?").get(res.lastInsertRowid);
+  },
+  async listWaitingByListing(listingId) {
+    return db.prepare("SELECT * FROM buy_intents WHERE listing_id = ? AND status = 'waiting' ORDER BY created_at ASC").all(listingId);
+  },
+  async setStatus(id, status) {
+    db.prepare("UPDATE buy_intents SET status = ?, updated_at = ? WHERE id = ?").run(status, nowISO(), id);
+  },
+  async remove(id) {
+    return db.prepare("DELETE FROM buy_intents WHERE id = ?").run(id).changes > 0;
+  },
+};
+
+const pushSubs = {
+  async add({ userId, endpoint, p256dh, auth }) {
+    db.prepare("DELETE FROM push_subscriptions WHERE endpoint = ?").run(endpoint);
+    const res = db
+      .prepare("INSERT INTO push_subscriptions (user_id, endpoint, p256dh, auth) VALUES (?, ?, ?, ?)")
+      .run(userId, endpoint, p256dh, auth);
+    return db.prepare("SELECT * FROM push_subscriptions WHERE id = ?").get(res.lastInsertRowid);
+  },
+  async listByUser(userId) {
+    return db.prepare("SELECT * FROM push_subscriptions WHERE user_id = ?").all(userId);
+  },
+  async removeByEndpoint(endpoint) {
+    return db.prepare("DELETE FROM push_subscriptions WHERE endpoint = ?").run(endpoint).changes > 0;
+  },
+};
+
+const notifications = {
+  async create({ userId, type, title, body, link }) {
+    const res = db
+      .prepare("INSERT INTO notifications (user_id, type, title, body, link) VALUES (?, ?, ?, ?, ?)")
+      .run(userId, type, title, body || null, link || null);
+    return db.prepare("SELECT * FROM notifications WHERE id = ?").get(res.lastInsertRowid);
+  },
+  async listForUser(userId, limit = 50) {
+    return db.prepare("SELECT * FROM notifications WHERE user_id = ? ORDER BY created_at DESC, id DESC LIMIT ?").all(userId, limit);
+  },
+  async unreadCount(userId) {
+    return db.prepare("SELECT COUNT(*) AS n FROM notifications WHERE user_id = ? AND read = 0").get(userId).n;
+  },
+  async markRead(userId, id) {
+    if (id) {
+      db.prepare("UPDATE notifications SET read = 1 WHERE user_id = ? AND id = ?").run(userId, id);
+    } else {
+      db.prepare("UPDATE notifications SET read = 1 WHERE user_id = ?").run(userId);
+    }
+  },
+};
+
 module.exports = {
   name: "sqlite",
   file: DB_FILE,
@@ -647,5 +739,8 @@ module.exports = {
   applications,
   salaries,
   audit,
+  buyIntents,
+  pushSubs,
+  notifications,
   _publicUser: stripSecret,
 };

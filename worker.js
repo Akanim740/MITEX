@@ -287,4 +287,50 @@ $("#logoutBtn").addEventListener("click", () => {
   logout(true);
 });
 
+/* ─── New-API notification polling (buyer_waiting toasts) ─── */
+const __wnotifSeen = {};
+function initWorkerNotifPoll() {
+  if (!localStorage.getItem("mitex_token")) return;
+  const poll = async () => {
+    try {
+      const data = await API.get("/api/notifications?limit=10");
+      const notifications = data.notifications || [];
+      const badge = $("#notifBadge");
+      if (data.unread > 0) {
+        badge.textContent = String(data.unread);
+        badge.classList.remove("hidden");
+      }
+      let revealed = false;
+      notifications.forEach((n) => {
+        if (__wnotifSeen[n.id]) return;
+        __wnotifSeen[n.id] = true;
+        if (n.type === "buyer_waiting") {
+          revealed = true;
+          workerNotifToast(n);
+          API.post("/api/notifications/read", { id: n.id }).catch(() => {});
+        }
+      });
+      if (revealed) loadNotifications().catch(() => {});
+    } catch (e) {}
+  };
+  poll();
+  setInterval(poll, 30000);
+}
+
+function workerNotifToast(n) {
+  const el = document.createElement("div");
+  el.className = "wnotif-toast";
+  el.innerHTML = `<strong>${esc(n.title)}</strong><div>${esc(n.body || "")}</div>`;
+  el.addEventListener("click", () => {
+    window.location.href = n.link || "/worker.html";
+  });
+  document.body.appendChild(el);
+  setTimeout(() => {
+    el.classList.add("out");
+    setTimeout(() => el.remove(), 400);
+  }, 9000);
+}
+
+initWorkerNotifPoll();
+
 initAuth();

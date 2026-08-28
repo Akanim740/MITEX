@@ -1,4 +1,4 @@
-const VERSION = "mitex-v4";
+const VERSION = "mitex-v5";
 const CACHE = VERSION + "-cache";
 
 const CORE_ASSETS = [
@@ -105,6 +105,37 @@ self.addEventListener("fetch", (event) => {
         })
         .catch(() => hit);
       return hit || network;
+    })
+  );
+});
+
+self.addEventListener("push", (event) => {
+  let data = {};
+  try {
+    data = event.data ? event.data.json() : {};
+  } catch {}
+  const title = data.title || "MITEX";
+  const options = {
+    body: data.body || "",
+    icon: "/icons/icon-192.png",
+    badge: "/icons/icon-512.png",
+    data: { url: data.link || "/marketplace.html" },
+  };
+  event.waitUntil(self.registration.showNotification(title, options));
+});
+
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+  const target = (event.notification.data && event.notification.data.url) || "/marketplace.html";
+  event.waitUntil(
+    self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((clients) => {
+      for (const client of clients) {
+        if ("focus" in client) {
+          client.navigate(target);
+          return client.focus();
+        }
+      }
+      return self.clients.openWindow(target);
     })
   );
 });
