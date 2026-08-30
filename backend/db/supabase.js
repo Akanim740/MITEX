@@ -598,7 +598,8 @@ const buyIntents = {
     return data;
   },
   async listWaitingByListing(listingId) {
-    const { data } = await supabase.from("buy_intents").select("*").eq("listing_id", String(listingId)).eq("status", "waiting").order("created_at", { ascending: true });
+    const { data, error } = await supabase.from("buy_intents").select("*").eq("listing_id", String(listingId)).eq("status", "waiting").order("created_at", { ascending: true });
+    if (error) throw error;
     return data || [];
   },
   async setStatus(id, status) {
@@ -622,7 +623,8 @@ const pushSubs = {
     return data;
   },
   async listByUser(userId) {
-    const { data } = await supabase.from("push_subscriptions").select("*").eq("user_id", userId);
+    const { data, error } = await supabase.from("push_subscriptions").select("*").eq("user_id", userId);
+    if (error) throw error;
     return data || [];
   },
   async removeByEndpoint(endpoint) {
@@ -642,11 +644,13 @@ const notifications = {
     return data;
   },
   async listForUser(userId, limit = 50) {
-    const { data } = await supabase.from("notifications").select("*").eq("user_id", userId).order("created_at", { ascending: false }).limit(limit);
+    const { data, error } = await supabase.from("notifications").select("*").eq("user_id", userId).order("created_at", { ascending: false }).limit(limit);
+    if (error) throw error;
     return data || [];
   },
   async unreadCount(userId) {
-    const { count } = await supabase.from("notifications").select("id", { count: "exact", head: true }).eq("user_id", userId).eq("read", false);
+    const { count, error } = await supabase.from("notifications").select("id", { count: "exact", head: true }).eq("user_id", userId).eq("read", false);
+    if (error) throw error;
     return count || 0;
   },
   async markRead(userId, id) {
