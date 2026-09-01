@@ -164,6 +164,11 @@ router.put("/:id", requireAuth, requireRole("admin", "editor", "staff"), async (
       }
     }
 
+    // Worker saving delivery link for the first time → make it buyable
+    if (isStaff(req) && values.delivery_url && !existing.delivery_url && existing.status === "sold") {
+      values.status = "available";
+    }
+
     const row = await store.listings.update(req.params.id, values);
 
     if (values.delivery_url && !existing.delivery_url) {

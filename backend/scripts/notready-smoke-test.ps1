@@ -154,6 +154,23 @@ db.exec("UPDATE users SET role='staff', active=1 WHERE email='" + email + "'");
   $init = Invoke-RestMethod -Method Post -Uri "$base/api/payments/initialize" -ContentType application/json -Headers $buyerHdr -Body (@{ listingId = $lid } | ConvertTo-Json)
   Check "checkout re-opened after delivery link (demo)" ($init.demo -eq $true -and $init.reference -like "MITEX-*")
 
+  # ================================================================
+  # SOLD → AVAILABLE transition: worker saves delivery link
+  # ================================================================
+  $soldL = Invoke-RestMethod -Method Post -Uri "$base/api/listings" -ContentType application/json -Headers $adminHdr -Body (@{ title = "SoldThenReady $stamp"; description = "A listing that starts sold, then becomes available when worker delivers."; price = 200000; level = 2; tech_stack = "HTML, CSS" } | ConvertTo-Json)
+  $soldLid = $soldL.listing.id
+  Invoke-RestMethod -Method Put -Uri "$base/api/listings/$soldLid" -ContentType application/json -Headers $adminHdr -Body (@{ employeeId = $workerId; status = "sold" } | ConvertTo-Json) | Out-Null
+  $beforePub = (Invoke-RestMethod -Uri "$base/api/listings") | Where-Object { "$($_.id)" -eq "$soldLid" }
+  Check "sold listing hidden from public marketplace" ($beforePub -eq $null)
+
+  # Worker saves delivery link → should flip sold → available
+  $afterWorker = Invoke-RestMethod -Method Put -Uri "$base/api/listings/$soldLid" -ContentType application/json -Headers $workerHdr -Body (@{ deliveryUrl = "https://example.com/sold-then-ready.zip" } | ConvertTo-Json)
+  Check "worker delivery link flips status to available" ($afterWorker.listing.status -eq "available")
+
+  $afterPub = (Invoke-RestMethod -Uri "$base/api/listings") | Where-Object { "$($_.id)" -eq "$soldLid" }
+  Check "listing now visible on public marketplace" ($afterPub -ne $null)
+  Check "public listing shows deliveryReady=true" ($afterPub.deliveryReady -eq $true)
+
   Write-Output "`n== Results: $($script:pass) passed, $($script:fail) failed =="
   if ($script:fail -gt 0) { exit 1 }
 } finally {
