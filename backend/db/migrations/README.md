@@ -25,8 +25,8 @@ from the backend build settings or any VAPID generator). The public key is
 safe to share; the private key must never leak.
 
 ```
-VAPID_PUBLIC_KEY=BNfxKmUkdUmAjE-CC_FDESZBnwbrbadUgUu3N6LzwJ3DHiVKz5HalbuKgdAkmrXRriyc4Z6ecMveupD9HeqvXPg
-VAPID_PRIVATE_KEY=bOzvjXzJ9BjMq_lGDVBzmNgmrxlC_E1uE35Y0o7POrs
+VAPID_PUBLIC_KEY=<your-vapid-public-key>
+VAPID_PRIVATE_KEY=<your-vapid-private-key>     <-- never commit this
 VAPID_SUBJECT=mailto:no-reply@mitex.store
 ```
 

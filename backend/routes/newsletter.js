@@ -32,10 +32,16 @@ router.post("/", async (req, res) => {
   }
 });
 
-// DELETE /api/newsletter/:email - unsubscribe
-router.delete("/:email", async (req, res) => {
+// DELETE /api/newsletter/:email - unsubscribe (must be logged in; owners or admins)
+router.delete("/:email", requireAuth, async (req, res) => {
   try {
-    const ok = await req.store.subscribers.deactivate(req.params.email);
+    const target = String(req.params.email || "").trim().toLowerCase();
+    const isOwner = String(req.user.email || "").trim().toLowerCase() === target;
+    const isAdmin = ["admin", "editor"].includes(req.user.role);
+    if (!isOwner && !isAdmin) {
+      return res.status(403).json({ error: "You can only unsubscribe your own email" });
+    }
+    const ok = await req.store.subscribers.deactivate(target);
     if (!ok) return res.status(404).json({ error: "Not found" });
     res.json({ message: "Unsubscribed" });
   } catch (err) {

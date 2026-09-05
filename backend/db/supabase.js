@@ -22,11 +22,16 @@ async function init() {
 
   supabase = createClient(url, key, { auth: { persistSession: false } });
 
-  const { error } = await supabase.from("users").select("id").limit(1);
-  if (error && error.code === "42P01") {
-    throw new Error(
-      "Supabase tables not found. Run the SQL in backend/db/schema.sql (Postgres section) in your Supabase SQL editor."
-    );
+  // Fail fast at boot if core tables are missing, so outages surface at startup
+  // instead of as request-time 500s.
+  const expectedTables = ["users", "listings", "orders", "applications", "buy_intents", "notifications", "push_subscriptions"];
+  for (const table of expectedTables) {
+    const { error } = await supabase.from(table).select("id").limit(1);
+    if (error && error.code === "42P01") {
+      throw new Error(
+        `Supabase table "${table}" not found. Run the SQL in backend/db/migrations/2026-08-28-not-ready-delivery.sql and backend/db/schema.sql (Postgres section) in your Supabase SQL editor.`
+      );
+    }
   }
 
   return api;

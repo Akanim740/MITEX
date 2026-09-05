@@ -49,6 +49,19 @@
     .pager button { min-width: 38px; min-height: 38px; padding: 0 12px; border-radius: 10px; border: 1px solid var(--card-border); background: var(--card); color: var(--text); cursor: pointer; font-family: inherit; }
     .pager button:disabled { opacity: .4; cursor: default; }
     .pager button.active { background: rgba(251,191,36,.15); border-color: rgba(251,191,36,.5); color: #fbbf24; font-weight: 700; }
+    .market-stats { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 18px; }
+    .stat-chip { display: inline-flex; align-items: center; gap: 6px; background: var(--card); border: 1px solid var(--card-border); border-radius: 999px; padding: 8px 16px; font-size: .85rem; color: var(--muted); }
+    .stat-chip strong { color: var(--gold); font-family: "Sora", sans-serif; font-size: .95rem; }
+    .sold-ticker-wrap { display: flex; align-items: center; gap: 12px; margin-top: 16px; overflow: hidden; }
+    .ticker-label { font-size: .8rem; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; color: var(--gold); white-space: nowrap; }
+    .sold-ticker { display: flex; gap: 26px; list-style: none; margin: 0; padding: 0; animation: ticker-scroll 38s linear infinite; white-space: nowrap; }
+    .sold-ticker li { font-size: .85rem; color: var(--muted); display: inline-flex; align-items: center; gap: 7px; }
+    .ticker-dot { width: 7px; height: 7px; border-radius: 50%; background: #25d366; flex: none; }
+    @keyframes ticker-scroll { from { transform: translateX(0); } to { transform: translateX(-50%); } }
+    .sold-ticker-wrap:hover .sold-ticker { animation-play-state: paused; }
+    .btn-share { margin-top: 6px; align-self: flex-start; background: transparent; border: 1px solid var(--card-border); color: var(--muted); border-radius: 999px; padding: 6px 16px; font-size: .82rem; font-family: inherit; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; transition: border-color .2s ease, color .2s ease; }
+    .btn-share:hover { border-color: rgba(251,191,36,.5); color: #fbbf24; }
+    @media (max-width: 640px) { .sold-ticker-wrap { flex-direction: column; align-items: flex-start; gap: 6px; } }
   </style>
 </head>
 <body data-page="marketplace">
@@ -73,6 +86,11 @@
     <div class="market-head">
       <h1 data-i18n="market_title">Premium Website <span style="color:#fbbf24;">Marketplace</span></h1>
       <p data-i18n="market_sub">Ready-to-launch websites, hand-built by MITEX. Pay securely with Paystack and take ownership fast.</p>
+      <div id="marketStats"></div>
+      <div class="sold-ticker-wrap" style="display:none;">
+        <span class="ticker-label">Recently sold</span>
+        <ul class="sold-ticker" id="soldTicker"></ul>
+      </div>
       <div class="search-wrap">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.5" y2="16.5"/></svg>
         <input type="search" id="marketSearch" data-i18n-placeholder="market_search" placeholder="Search websites - e.g. e-commerce, portfolio, school, blog..." autocomplete="off" />

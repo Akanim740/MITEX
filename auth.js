@@ -743,7 +743,13 @@ async function initMarketplace() {
       marketplacePage = 1;
       renderListings(searchInput.value);
     });
+    const q = new URLSearchParams(location.search).get("q");
+    if (q) {
+      searchInput.value = q;
+      marketplacePage = 1;
+    }
   }
+  initMarketStats();
   grid.innerHTML = skeletonCards();
   try {
     marketplaceListings = await api("/api/listings", { auth: false });
@@ -758,6 +764,38 @@ async function initMarketplace() {
     renderListings(searchInput ? searchInput.value : "");
   } catch (err) {
     grid.innerHTML = `<p class="empty-market">${esc(err.message)}</p>`;
+  }
+}
+
+async function initMarketStats() {
+  const holder = $("#marketStats");
+  if (!holder) return;
+  try {
+    const s = await api("/api/listings/stats", { auth: false });
+    const chips = [];
+    if (s.available >= 0) chips.push(`<span class="stat-chip"><strong>${s.available}</strong> ${t("market_count_many")}</span>`);
+    if (s.sold > 0) chips.push(`<span class="stat-chip"><strong>${s.sold}</strong> sold on MITEX</span>`);
+    if (s.delivered > 0) chips.push(`<span class="stat-chip"><strong>${s.delivered}</strong> ready to buy now</span>`);
+    holder.innerHTML = `<div class="market-stats">${chips.join("")}</div>`;
+    const ticker = $("#soldTicker");
+    if (ticker && Array.isArray(s.recentSold) && s.recentSold.length) {
+      ticker.innerHTML = s.recentSold
+        .map((o) => `<li><span class="ticker-dot"></span>${esc(o.title)} &middot; ${naira(Number(o.price))}</li>`)
+        .join("");
+      ticker.parentElement.style.display = "block";
+    }
+  } catch {
+    holder.innerHTML = "";
+  }
+}
+
+function shareListing(l) {
+  const url = `${location.origin}/marketplace.html?q=${encodeURIComponent(l.title)}`;
+  const text = `${l.title} — ${l.status === "available" ? (l.deliveryReady ? "Buy it now" : "Almost ready — save your spot") : "Sold on MITEX"}: ${naira(Number(l.price))}`;
+  if (navigator.share) {
+    navigator.share({ title: l.title, text, url }).catch(() => {});
+  } else {
+    window.open(`https://wa.me/?text=${encodeURIComponent(`${text}\n${url}`)}`, "_blank", "noopener");
   }
 }
 
@@ -854,6 +892,7 @@ function renderListings(query, page) {
             ? `<button class="btn btn-primary btn-full" data-buy="${l.id}">${t("buy_now")}</button>${marketplaceCanOneTap ? `<button class="btn btn-full" data-buyonetap="${l.id}" style="margin-top:8px;">One-tap checkout</button>` : ""}`
             : ""
         }
+        <button type="button" class="btn-share" data-share="${l.id}" aria-label="${t("share")}">${t("share")}</button>
       </article>`
     )
     .join("");
@@ -866,6 +905,12 @@ function renderListings(query, page) {
   });
   grid.querySelectorAll("[data-intent]").forEach((btn) => {
     btn.addEventListener("click", () => confirmBuyIntent(btn.dataset.intent));
+  });
+  grid.querySelectorAll("[data-share]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const l = marketplaceListings.find((x) => String(x.id) === String(btn.dataset.share));
+      if (l) shareListing(l);
+    });
   });
 
   if (totalPages > 1) {

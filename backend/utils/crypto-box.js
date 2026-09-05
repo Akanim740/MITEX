@@ -1,5 +1,9 @@
 const crypto = require("crypto");
 
+if (process.env.NODE_ENV === "production" && (!process.env.JWT_ACCESS_SECRET || process.env.JWT_ACCESS_SECRET.length < 32)) {
+  console.error("FATAL: JWT_ACCESS_SECRET required for PII encryption at rest in production");
+  process.exit(1);
+}
 // AES-256-GCM box for sensitive data at rest (applicant payment details).
 // Key is derived from JWT_ACCESS_SECRET so no extra secret to manage.
 const KEY = crypto.scryptSync(process.env.JWT_ACCESS_SECRET || "mitex-dev-secret", "mitex-pay-vault-v1", 32);

@@ -7,12 +7,18 @@ async function runSeed() {
   const store = await getStore();
 
   const adminEmail = (process.env.ADMIN_EMAIL || "admin@mitex.store").toLowerCase();
-  const adminPassword = process.env.ADMIN_PASSWORD || "ChangeMe123!";
+  const adminPassword = process.env.ADMIN_PASSWORD;
+  if (!adminPassword) {
+    if (process.env.NODE_ENV === "production") {
+      console.error("FATAL: ADMIN_PASSWORD must be set in production for the seed admin");
+      process.exit(1);
+    }
+  }
   const adminName = process.env.ADMIN_NAME || "MITEX Admin";
 
   const existing = await store.users.findByEmail(adminEmail);
   if (!existing) {
-    const hash = await bcrypt.hash(adminPassword, 12);
+    const hash = await bcrypt.hash(adminPassword || "ChangeMe123!", 12);
     await store.users.create({
       name: adminName,
       email: adminEmail,
@@ -22,7 +28,7 @@ async function runSeed() {
     });
     console.log(`  Admin created: ${adminEmail} (role: admin, verified)`);
     if (!process.env.ADMIN_PASSWORD) {
-      console.log(`  Default password used: ${adminPassword} (set ADMIN_PASSWORD in .env to change)`);
+      console.log(`  Default password used: ChangeMe123! (set ADMIN_PASSWORD in .env to change)`);
     }
   } else {
     console.log(`  Admin already exists: ${adminEmail}`);

@@ -112,6 +112,26 @@ router.get("/", optionalAuth, async (req, res) => {
   }
 });
 
+// GET /api/listings/stats - public social-proof numbers (no sensitive data).
+// Declared before /:id so "stats" is not interpreted as a listing id.
+router.get("/stats", async (req, res) => {
+  try {
+    const store = req.store;
+    const all = await store.listings.list({ includeSold: true });
+    const available = all.filter((r) => r.status === "available").length;
+    const sold = all.filter((r) => r.status === "sold").length;
+    const delivered = all.filter((r) => Boolean(r.delivery_url)).length;
+    const paidOrders = await store.orders.listAll("paid");
+    const recentSold = paidOrders
+      .slice(0, 6)
+      .map((o) => ({ title: o.title, price: o.amount, currency: o.currency, soldAt: o.created_at }));
+    res.json({ available, sold, delivered, recentSold });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
 // GET /api/listings/:id - public single listing
 router.get("/:id", optionalAuth, async (req, res) => {
   try {

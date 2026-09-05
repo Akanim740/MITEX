@@ -198,6 +198,8 @@ router.delete("/me", requireAuth, async (req, res) => {
     if (!ok) return res.status(403).json({ error: "Incorrect password" });
 
     await store.users.update(req.user.id, { active: 0 });
+    await store.sessions.revokeAllForUser(req.user.id);
+    res.clearCookie("mitex_refresh", { httpOnly: true, sameSite: "strict", secure: process.env.NODE_ENV === "production", path: "/api/auth" });
     res.clearCookie("token", { httpOnly: true, sameSite: "strict", secure: process.env.NODE_ENV === "production" });
     res.json({ message: "Account deactivated" });
   } catch (err) {

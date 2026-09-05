@@ -111,7 +111,7 @@ router.post("/register", async (req, res) => {
 
     res.status(201).json({
       message: "Account created. Check your email to verify your address.",
-      ...(result.dev ? { devToken: rawVerify, devVerifyUrl: mail.url } : {}),
+      ...(result.dev && process.env.NODE_ENV !== "production" ? { devToken: rawVerify, devVerifyUrl: mail.url } : {}),
       user: { id: user.id, name: user.name, email: user.email, role: user.role, email_verified: 0 },
       payment_saved: paymentSaved,
       payment_pending: paymentPending,
@@ -260,7 +260,7 @@ router.post("/resend-verification", requireAuth, async (req, res) => {
 
     res.json({
       message: "Verification email sent",
-      ...(result.dev ? { devToken: rawVerify, devVerifyUrl: mail.url } : {}),
+      ...(result.dev && process.env.NODE_ENV !== "production" ? { devToken: rawVerify, devVerifyUrl: mail.url } : {}),
     });
   } catch (err) {
     console.error(err);
@@ -294,7 +294,7 @@ router.post("/forgot-password", async (req, res) => {
 
       return res.json({
         message: "If that email exists, a reset link has been sent.",
-        ...(result.dev ? { devToken: rawReset, devResetUrl: mail.url } : {}),
+        ...(result.dev && process.env.NODE_ENV !== "production" ? { devToken: rawReset, devResetUrl: mail.url } : {}),
       });
     }
 
@@ -611,11 +611,23 @@ const challenges = new Map();
 
 function rpID() {
   if (process.env.WEBAUTHN_RP_ID) return process.env.WEBAUTHN_RP_ID;
-  return new URL(process.env.APP_URL || "http://localhost:3000").hostname;
+  if (!process.env.APP_URL) {
+    if (process.env.NODE_ENV === "production") {
+      throw new Error("FATAL: WEBAUTHN_RP_ID (or APP_URL) must be set in production");
+    }
+    return "localhost";
+  }
+  return new URL(process.env.APP_URL).hostname;
 }
 
 function expectedOrigin() {
-  return (process.env.APP_URL || "http://localhost:3000").replace(/\/+$/, "");
+  if (!process.env.APP_URL) {
+    if (process.env.NODE_ENV === "production") {
+      throw new Error("FATAL: APP_URL must be set in production");
+    }
+    return "http://localhost:3000";
+  }
+  return process.env.APP_URL.replace(/\/+$/, "");
 }
 
 function saveChallenge(key, challenge) {

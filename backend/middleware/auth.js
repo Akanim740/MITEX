@@ -1,6 +1,10 @@
 const jwt = require("jsonwebtoken");
 const { sha256 } = require("../utils/tokens");
 
+if (process.env.NODE_ENV === "production" && (!process.env.JWT_ACCESS_SECRET || process.env.JWT_ACCESS_SECRET.length < 32)) {
+  console.error("FATAL: set a strong JWT_ACCESS_SECRET (32+ random chars) in production — refusing to use insecure defaults");
+  process.exit(1);
+}
 const JWT_ACCESS_SECRET = process.env.JWT_ACCESS_SECRET || process.env.JWT_SECRET || "mitex-dev-secret-change-me";
 const ACCESS_TTL = process.env.ACCESS_TTL || "15m";
 
@@ -32,6 +36,9 @@ async function requireAuth(req, res, next) {
   if (!user) {
     return res.status(401).json({ error: "Account no longer exists" });
   }
+  if (!Number(user.active)) {
+    return res.status(403).json({ error: "Account has been deactivated" });
+  }
 
   const { password_hash, ...safeUser } = user;
   req.user = safeUser;
@@ -47,7 +54,7 @@ async function optionalAuth(req, _res, next) {
     const store = req.store;
     if (store) {
       const user = await store.users.findById(payload.sub);
-      if (user) {
+      if (user && Number(user.active)) {
         const { password_hash, ...safeUser } = user;
         req.user = safeUser;
       }
@@ -94,7 +101,7 @@ async function resolveRefreshSession(req) {
   const session = await store.sessions.findValid(sha256(raw));
   if (!session) return null;
   const user = await store.users.findById(session.user_id);
-  if (!user) return null;
+  if (!user || !Number(user.active)) return null;
   return { session, user };
 }
 

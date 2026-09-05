@@ -18,6 +18,7 @@ const I18N = {
     market_no_match: "No websites match your search. Try a different keyword - or request a custom build on our homepage.",
     buy_now: "Buy Now",
     pay: "Pay",
+    share: "Share",
     loading: "Loading...",
     save: "Save Changes",
     cancel: "Cancel",

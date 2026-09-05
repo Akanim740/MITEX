@@ -74,8 +74,10 @@ CREATE TABLE listings (
   status       ENUM('available','sold') NOT NULL DEFAULT 'available',
   thumbnail    VARCHAR(500),
   delivery_url VARCHAR(800),
+  employee_id  INT,
   created_at   VARCHAR(32) NOT NULL,
-  INDEX idx_listings_status (status)
+  INDEX idx_listings_status (status),
+  INDEX idx_listings_employee (employee_id)
 );
 
 CREATE TABLE subscribers (
@@ -211,6 +213,7 @@ CREATE TABLE notifications (
 --   status       TEXT NOT NULL DEFAULT 'available' CHECK (status IN ('available','sold')),
 --   thumbnail    TEXT,
 --   delivery_url TEXT,
+--   employee_id  BIGINT REFERENCES users(id) ON DELETE SET NULL,
 --   created_at   TEXT NOT NULL
 -- );
 --
@@ -245,6 +248,50 @@ CREATE TABLE notifications (
 --   counter       INTEGER NOT NULL DEFAULT 0,
 --   device_type   TEXT,
 --   backed_up     BOOLEAN NOT NULL DEFAULT FALSE,
+--   created_at    TEXT NOT NULL
+-- );
+--
+-- CREATE TABLE audit_logs (
+--   id         BIGSERIAL PRIMARY KEY,
+--   user_id    BIGINT,
+--   email      TEXT,
+--   action     TEXT NOT NULL,
+--   detail     TEXT,
+--   ip         TEXT,
+--   created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+-- );
+--
+-- CREATE TABLE applications (
+--   id                BIGSERIAL PRIMARY KEY,
+--   name              TEXT NOT NULL,
+--   email             TEXT NOT NULL,
+--   phone             TEXT,
+--   portfolio         TEXT,
+--   message           TEXT NOT NULL,
+--   status            TEXT NOT NULL DEFAULT 'new' CHECK (status IN ('new','test_sent','submitted','passed','rejected')),
+--   test_token        TEXT UNIQUE,
+--   test_instructions TEXT,
+--   test_sent_at      TEXT,
+--   submit_url        TEXT,
+--   submit_notes      TEXT,
+--   submitted_at      TEXT,
+--   staff_user_id     BIGINT REFERENCES users(id) ON DELETE SET NULL,
+--   hire_token        TEXT UNIQUE,
+--   hire_completed    BOOLEAN NOT NULL DEFAULT FALSE,
+--   payment_enc       TEXT,
+--   dob               TEXT,
+--   nin_bvn           TEXT,
+--   created_at        TEXT NOT NULL
+-- );
+--
+-- CREATE TABLE salaries (
+--   id            BIGSERIAL PRIMARY KEY,
+--   staff_user_id BIGINT REFERENCES users(id) ON DELETE CASCADE,
+--   amount        BIGINT NOT NULL CHECK (amount > 0),
+--   bonus         BIGINT NOT NULL DEFAULT 0 CHECK (bonus >= 0),
+--   period        TEXT NOT NULL,
+--   note          TEXT,
+--   paid_at       TEXT NOT NULL,
 --   created_at    TEXT NOT NULL
 -- );
 
