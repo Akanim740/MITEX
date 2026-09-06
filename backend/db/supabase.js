@@ -1,5 +1,13 @@
 let supabase;
 
+function isMissingRelation(error) {
+  if (!error) return false;
+  const codes = [error.code, String(error.status || ""), String(error.statusCode || "")];
+  if (codes.includes("42P01") || codes.includes("PGRST205")) return true;
+  const msg = String(error.message || "").toLowerCase();
+  return msg.includes("does not exist") || msg.includes("could not find the table") || (msg.includes("relation") && msg.includes("exist"));
+}
+
 function toPublic(row) {
   if (!row) return null;
   const { password_hash, ...rest } = row;
@@ -42,13 +50,14 @@ async function init() {
   const features = { buyIntents: true, notifications: true, pushSubscriptions: true };
   for (const table of Object.keys(featureTableKeys)) {
     const { error } = await supabase.from(table).select("id").limit(1);
-    if (error && error.code === "42P01") {
+    if (error && isMissingRelation(error)) {
       features[featureTableKeys[table]] = false;
       console.warn(`[supabase] Feature table "${table}" missing — run the not-ready-delivery migration SQL. Its routes now degrade gracefully.`);
     }
   }
 
   api.features = features;
+  api._missingRelation = isMissingRelation;
   return api;
 }
 

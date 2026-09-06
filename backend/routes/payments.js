@@ -215,7 +215,19 @@ router.post("/buy-intent", requireAuth, async (req, res) => {
       });
     }
 
-    const intent = await store.buyIntents.create({ userId: req.user.id, listingId: listing.id });
+    let intent;
+    try {
+      intent = await store.buyIntents.create({ userId: req.user.id, listingId: listing.id });
+    } catch (err) {
+      if (req.store._missingRelation && req.store._missingRelation(err)) {
+        return res.status(503).json({
+          code: "NOTIFY_OFF",
+          deliveryReady: false,
+          error: "Saving your spot isn't switched on for this server yet. Please check back soon — or message us on WhatsApp +234 701 163 3770.",
+        });
+      }
+      throw err;
+    }
 
     if (listing.employee_id) {
       setImmediate(async () => {
