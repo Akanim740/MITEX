@@ -333,6 +333,9 @@ listingForm.addEventListener("submit", async (e) => {
     tech_stack: $("#fTech").value.trim(),
     status: $("#fStatus").value,
     deliveryUrl: $("#fDelivery") ? $("#fDelivery").value.trim() : "",
+    demoUrl: $("#fDemo") ? $("#fDemo").value.trim() : "",
+    assetType: $("#fAssetType") ? $("#fAssetType").value : "website",
+    protected: $("#fProtected") && $("#fProtected").value === "0" ? false : true,
   };
   if (currentUser && currentUser.role !== "staff") {
     payload.employeeId = $("#fEmployee") && $("#fEmployee").value ? $("#fEmployee").value : null;
@@ -423,6 +426,9 @@ async function loadListings() {
         $("#fTech").value = row.tech_stack || "";
         $("#fStatus").value = row.status;
         $("#fDelivery").value = row.delivery_url || "";
+        if ($("#fDemo")) $("#fDemo").value = row.demo_url || "";
+        if ($("#fAssetType")) $("#fAssetType").value = row.asset_type === "business" ? "business" : "website";
+        if ($("#fProtected")) $("#fProtected").value = row.protected === false || Number(row.protected) === 0 ? "0" : "1";
         if ($("#fEmployee")) refreshEmployeeSelect(row.employee_id);
         $("#listingSubmit").classList.remove("hidden");
         $("#listingSubmit").textContent = "Save Changes";

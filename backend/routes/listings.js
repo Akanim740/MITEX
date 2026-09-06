@@ -2,6 +2,7 @@ const express = require("express");
 const router = express.Router();
 
 const { requireAuth, requireRole, optionalAuth } = require("../middleware/auth");
+const { websiteScore, sellerTrust, valuate, assetTypeOf, protectedOf } = require("../utils/listing-metrics");
 
 function validateListing(body, partial = false) {
   const errors = [];
@@ -39,6 +40,17 @@ function validateListing(body, partial = false) {
   }
   if (body.deliveryUrl !== undefined) {
     out.delivery_url = String(body.deliveryUrl || "").trim().slice(0, 800) || null;
+  }
+  if (body.demoUrl !== undefined) {
+    out.demo_url = String(body.demoUrl || "").trim().slice(0, 800) || null;
+  }
+  if (body.assetType !== undefined) {
+    const t = String(body.assetType || "website").trim().toLowerCase();
+    if (!["website", "business"].includes(t)) errors.push("assetType must be 'website' or 'business'");
+    out.asset_type = t;
+  }
+  if (body.protected !== undefined) {
+    out.protected = body.protected !== "false" && body.protected !== false && body.protected !== 0 && body.protected !== "0";
   }
   if (body.employeeId !== undefined) {
     out.employee_id = body.employeeId === null || body.employeeId === "" ? null : String(body.employeeId);
@@ -85,11 +97,54 @@ async function attachEmployee(store, row, req) {
   return row;
 }
 
+// One paid-orders pass → per-listing purchase counts for the Trust Score.
+async function trustCounts(store) {
+  const counts = new Map();
+  try {
+    const paid = await store.orders.listAll("paid");
+    for (const o of paid) {
+      const k = String(o.listing_id ?? o.listingId ?? "");
+      if (!k) continue;
+      const c = counts.get(k) || { paid: 0, delivered: 0 };
+      c.paid += 1;
+      counts.set(k, c);
+    }
+  } catch {}
+  return counts;
+}
+
+// Attach Website Score, Trust Score, asset type, protection and demo link.
+// All fields derive from existing columns, so pre-migration prod data still
+// gets usable (default) values instead of errors.
+function decorate(row, counts, withValuation = false) {
+  if (!row) return row;
+  const score = websiteScore(row);
+  const stat = counts.get(String(row.id)) || { paid: 0, delivered: 0 };
+  const done = Boolean(row.delivery_url) || String(row.status) === "sold";
+  const trust = sellerTrust({ paid: stat.paid || 0, delivered: done ? Math.max(1, stat.paid || 1) : 0 });
+  const out = {
+    ...row,
+    score: score.score,
+    scoreLabel: score.label,
+    scoreMax: score.max,
+    trustScore: trust.score,
+    trustLabel: trust.label,
+    trustMax: trust.max,
+    assetType: assetTypeOf(row),
+    protected: protectedOf(row),
+    demoUrl: row.demo_url || null,
+    canDemo: Boolean(row.demo_url),
+  };
+  if (withValuation) out.valuation = valuate(row);
+  return out;
+}
+
 // GET /api/listings/mine - staff: listings assigned to me
 router.get("/mine", requireAuth, requireRole("staff"), async (req, res) => {
   try {
     const rows = await req.store.listings.listForEmployee(String(req.user.id));
-    res.json(rows.map((row) => stripDelivery(row, req)));
+    const counts = await trustCounts(req.store);
+    res.json(rows.map((row) => stripDelivery(decorate(row, counts), req)));
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "Internal server error" });
@@ -104,8 +159,28 @@ router.get("/", optionalAuth, async (req, res) => {
       includeSold: includeSold === "true",
       level,
     });
+    const counts = await trustCounts(req.store);
     const withStaff = await Promise.all(rows.map((row) => attachEmployee(req.store, row, req)));
-    res.json(withStaff.map((row) => stripDelivery(row, req)));
+    res.json(withStaff.map((row) => stripDelivery(decorate(row, counts, false), req)));
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// POST /api/listings/valuator - public: AI fair-price estimate.
+// Declared before /:id so "valuator" is never parsed as a listing id.
+router.post("/valuator", async (req, res) => {
+  try {
+    const { title, level, tech_stack, description, assetType } = req.body || {};
+    const result = valuate({ title, level, tech_stack, description });
+    result['assetType'] = String(assetType || "website").toLowerCase() === "business" ? "business" : "website";
+    if (result.assetType === "business") {
+      result.estimate = Math.round(result.estimate * 1.25 / 5000) * 5000;
+      result.min = Math.round(result.min * 1.25 / 5000) * 5000;
+      result.max = Math.round(result.max * 1.25 / 5000) * 5000;
+    }
+    res.json(result);
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "Internal server error" });
@@ -137,8 +212,9 @@ router.get("/:id", optionalAuth, async (req, res) => {
   try {
     const row = await req.store.listings.get(req.params.id);
     if (!row) return res.status(404).json({ error: "Not found" });
+    const counts = await trustCounts(req.store);
     const withEmployee = await attachEmployee(req.store, row, req);
-    res.json(stripDelivery(withEmployee, req));
+    res.json(stripDelivery(decorate(withEmployee, counts, true), req));
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "Internal server error" });

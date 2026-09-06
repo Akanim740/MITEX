@@ -57,6 +57,26 @@ async function init() {
   }
 
   api.features = features;
+
+  // Marketplace upgrade columns (listings.demo_url/protected/asset_type). Core
+  // select("*") already succeeds once the table exists, but writes to columns
+  // the DB lacks would 500, so we detect them at boot and strip them from
+  // create/update payloads until the migration adds them.
+  const listingColumns = { demoUrl: true, protected: true, assetType: true };
+  const columnProbes = { demoUrl: "demo_url", protected: "protected", assetType: "asset_type" };
+  for (const key of Object.keys(columnProbes)) {
+    try {
+      const { error } = await supabase.from("listings").select(columnProbes[key]).limit(1);
+      if (error && isMissingRelation(error)) {
+        listingColumns[key] = false;
+        console.warn(`[supabase] listings column "${columnProbes[key]}" missing — its writes are gated until the not-ready-delivery migration applies.`);
+      }
+    } catch {
+      // keep default; probe already survived the core table check
+    }
+  }
+  api.listingColumns = listingColumns;
+
   api._missingRelation = isMissingRelation;
   return api;
 }
@@ -242,29 +262,36 @@ const listings = {
     return data || null;
   },
   async create(v) {
-    const { data, error } = await supabase
-      .from("listings")
-      .insert({
-        title: v.title,
-        description: v.description,
-        price: v.price,
-        level: v.level ?? null,
-        tech_stack: v.tech_stack ?? null,
-        status: v.status ?? "available",
-        thumbnail: v.thumbnail ?? null,
-        delivery_url: v.delivery_url ?? v.deliveryUrl ?? null,
-        employee_id: v.employee_id ?? null,
-        created_at: nowISO(),
-      })
-      .select()
-      .single();
+    const set = {
+      title: v.title,
+      description: v.description,
+      price: v.price,
+      level: v.level ?? null,
+      tech_stack: v.tech_stack ?? null,
+      status: v.status ?? "available",
+      thumbnail: v.thumbnail ?? null,
+      delivery_url: v.delivery_url ?? v.deliveryUrl ?? null,
+      employee_id: v.employee_id ?? null,
+      created_at: nowISO(),
+    };
+    const fc = api.listingColumns;
+    if (!fc || fc.demoUrl) set.demo_url = v.demo_url ?? null;
+    if (!fc || fc.protected) set.protected = v.protected === undefined ? true : Boolean(v.protected);
+    if (!fc || fc.assetType) set.asset_type = v.asset_type ?? "website";
+    const { data, error } = await supabase.from("listings").insert(set).select().single();
     if (error) throw error;
     return data;
   },
   async update(id, patch) {
-    const allowed = ["title", "description", "price", "level", "tech_stack", "status", "thumbnail", "delivery_url", "employee_id"];
+    const allowed = ["title", "description", "price", "level", "tech_stack", "status", "thumbnail", "delivery_url", "demo_url", "protected", "asset_type", "employee_id"];
     const set = {};
     for (const k of allowed) if (k in patch) set[k] = patch[k] === undefined ? null : patch[k];
+    const fc = api.listingColumns;
+    if (fc) {
+      if (!fc.demoUrl) delete set.demo_url;
+      if (!fc.protected) delete set.protected;
+      if (!fc.assetType) delete set.asset_type;
+    }
     const { data, error } = await supabase.from("listings").update(set).eq("id", id).select().single();
     if (error) throw error;
     return data;

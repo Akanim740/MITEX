@@ -142,6 +142,13 @@
             </select>
           </label>
           <label class="span-2">Delivery link (private - buyers get this after paying)<input type="url" id="fDelivery" placeholder="https://drive.google.com/... or any download URL" /></label>
+          <label class="span-2">Live demo URL (optional)<input type="url" id="fDemo" placeholder="https://demo.example.com" /></label>
+          <label>Asset type
+            <select id="fAssetType"><option value="website">Website</option><option value="business">Digital Business</option></select>
+          </label>
+          <label>Buyer protection
+            <select id="fProtected"><option value="1">Protected (MITEX holds funds)</option><option value="0">Direct (no protection)</option></select>
+          </label>
           <label class="span-2">Description<textarea id="fDesc" rows="3" required></textarea></label>
           <div class="form-actions span-2">
             <button type="submit" class="btn btn-primary btn-sm" id="listingSubmit">Add Listing</button>

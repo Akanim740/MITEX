@@ -171,6 +171,31 @@ db.exec("UPDATE users SET role='staff', active=1 WHERE email='" + email + "'");
   Check "listing now visible on public marketplace" ($afterPub -ne $null)
   Check "public listing shows deliveryReady=true" ($afterPub.deliveryReady -eq $true)
 
+  # ================================================================
+  # Marketplace upgrades: Website Score, Trust, Live Demo, Protected,
+  # Asset Type, AI Valuator
+  # ================================================================
+  $upgradeCreate = Invoke-RestMethod -Method Post -Uri "$base/api/listings" -ContentType application/json -Headers $adminHdr -Body (@{ title = "Upgrade Biz $stamp"; description = "A digital business asset with a live demo and protected purchase for the val-check."; price = 350000; level = 5; tech_stack = "Node.js, Postgres, Payments, Admin, SEO, API"; demoUrl = "https://demo2.example.com"; assetType = "business" } | ConvertTo-Json)
+  $upId = $upgradeCreate.listing.id
+  Check "listing created with demo/business fields" ($upgradeCreate.listing.demo_url -eq "https://demo2.example.com" -and $upgradeCreate.listing.asset_type -eq "business")
+
+  $pubBiz = (Invoke-RestMethod -Uri "$base/api/listings") | Where-Object { "$($_.id)" -eq "$upId" }
+  Check "public listing decorated with score + trust + demo + protected" (
+    $pubBiz -ne $null -and
+    ($pubBiz.score -ge 0 -and $pubBiz.score -le 100) -and
+    ($pubBiz.trustScore -ge 0 -and $pubBiz.trustScore -le 100) -and
+    ($pubBiz.canDemo -eq $true) -and
+    ($pubBiz.assetType -eq "business") -and
+    ($pubBiz.protected -eq $true)
+  )
+
+  $valu = Invoke-RestMethod -Method Post -Uri "$base/api/listings/valuator" -ContentType application/json -Body (@{ level = 5; tech_stack = "Payments, JWT Auth, SEO"; description = "A complete digital business: e-commerce store with admin, inventory, and marketing funnel."; assetType = "business" } | ConvertTo-Json)
+  Check "AI valuator returns fair price range" ($valu.estimate -gt 0 -and $valu.min -lt $valu.estimate -and $valu.max -gt $valu.estimate -and @($valu.drivers).Count -ge 1)
+
+  Invoke-RestMethod -Method Put -Uri "$base/api/listings/$upId" -ContentType application/json -Headers $adminHdr -Body (@{ protected = $false } | ConvertTo-Json) | Out-Null
+  $pubUnprotected = (Invoke-RestMethod -Uri "$base/api/listings") | Where-Object { "$($_.id)" -eq "$upId" }
+  Check "protected flag can be toggled off" ($pubUnprotected -ne $null -and $pubUnprotected.protected -eq $false)
+
   # ---- Admin Mailbox (in-memory outbox while SMTP is off) ----
   $mailbox = Invoke-RestMethod -Uri "$base/api/admin/mailbox" -Headers $adminHdr
   Check "admin mailbox reachable" ($mailbox -ne $null -and $mailbox.configured -eq $false -and $mailbox.mails -ne $null)

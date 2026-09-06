@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Transfer Center | MITEX</title>
+  <meta name="description" content="MITEX Transfer Center - a guided handover for every website and digital business you buy, while your money sits safe with MITEX Protected Purchase." />
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23070b14'/%3E%3Ctext x='32' y='44' font-family='Arial' font-size='34' font-weight='bold' fill='%23fbbf24' text-anchor='middle'%3EM%3C/text%3E%3C/svg%3E" />
+  <link rel="manifest" href="/manifest.webmanifest" />
+  <meta name="theme-color" content="#070b14" />
+  <script src="/pwa.js" defer></script>
+  <script src="/analytics.js" defer></script>
+  <script src="/cookie-consent.js" defer></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;600;700;800&family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="auth.css" />
+  <style>
+    .transfer-main { width: min(860px, 94%); margin-inline: auto; padding: 46px 0 90px; }
+    .transfer-main h1 { font-family: "Sora", sans-serif; font-size: clamp(1.7rem, 4vw, 2.4rem); }
+    .transfer-main .sub { color: var(--muted); margin-top: 8px; }
+    .step-card { background: var(--card); border: 1px solid var(--card-border); border-radius: 16px; padding: 20px 22px; margin-top: 14px; }
+    .step-card h3 { font-family: "Sora", sans-serif; font-size: 1.05rem; display: flex; align-items: center; gap: 10px; }
+    .step-num { display: inline-flex; align-items: center; justify-content: center; width: 26px; height: 26px; border-radius: 50%; background: rgba(251,191,36,.15); color: #fbbf24; font-size: .85rem; font-weight: 700; flex: none; }
+    .step-card ul { margin: 12px 0 0; padding-left: 20px; color: var(--muted); font-size: .92rem; display: grid; gap: 6px; }
+    .step-card .tag { display: inline-block; font-size: .72rem; text-transform: uppercase; letter-spacing: .06em; padding: 4px 10px; border-radius: 999px; margin-left: 8px; }
+    .tag-safe { background: rgba(37,211,102,.15); color: #25d366; }
+    .tag-shield { background: rgba(251,191,36,.15); color: #fbbf24; }
+    .cta-row { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 8px; }
+    .badge-line { display: inline-flex; gap: 8px; flex-wrap: wrap; margin-top: 16px; }
+  </style>
+</head>
+<body data-page="transfer">
+  <header class="topbar">
+    <div class="topbar-inner">
+      <a class="logo" href="/index.html">MIT<span>EX</span></a>
+      <div style="display:flex;align-items:center;gap:12px;">
+        <a class="btn btn-ghost btn-sm" href="/marketplace.html" style="text-decoration:none;">Marketplace</a>
+        <div id="navAuthArea"></div>
+      </div>
+    </div>
+  </header>
+
+  <main class="transfer-main">
+    <h1>MITEX Transfer Center</h1>
+    <p class="sub">Every website and digital business bought on MITEX goes through a guided handover. Here is exactly what happens, and what you own when the checklist is done.</p>
+
+    <div class="badge-line">
+      <span class="chip shield">Protected Purchase</span>
+      <span class="chip">Seller Trust Score</span>
+      <span class="chip">Guided Handover</span>
+    </div>
+
+    <section class="step-card">
+      <h3><span class="step-num">1</span>Buyers</h3>
+      <ul>
+        <li>Pay MITEX - the money sits safely in escrow, after our "code first, cash signed off" rule (details on the receipt).</li>
+        <li>Your purchase is covered by MITEX Protected Purchase: nothing is released until your delivery link works.</li>
+      </ul>
+    </section>
+
+    <section class="step-card">
+      <h3><span class="step-num">2</span>Before delivery</h3>
+      <ul>
+        <li>We confirm what's included: source files, database, credentials, licensing and free support window.</li>
+        <li>An assets list is agreed - the same list that unlocks the delivery link to you.</li>
+      </ul>
+    </section>
+
+    <section class="step-card">
+      <h3><span class="step-num">3</span>The checklist</h3>
+      <ul>
+        <li>1. Delivery link works and opens your files.</li>
+        <li>2. You can log in / take ownership (passwords and accounts transferred).</li>
+        <li>3. The asset runs as described - test it with our staging checklist.</li>
+        <li>4. You confirm, MITEX releases the money to the seller.</li>
+      </ul>
+    </section>
+
+    <section class="step-card">
+      <h3><span class="step-num">4</span>Sellers</h3>
+      <ul>
+        <li>Set a delivery link on your listing - MITEX marks it "ready to buy" and your Trust Score goes up.</li>
+        <li>Hand over within 24 hours of the buyer confirming, using the same checklist so your escrow clears fast.</li>
+      </ul>
+    </section>
+
+    <section class="step-card">
+      <h3><span class="step-num">?</span>Need a hand right now?</h3>
+      <div class="cta-row">
+        <a class="btn btn-primary btn-sm" href="/marketplace.html" style="text-decoration:none;">Browse the Marketplace</a>
+        <a class="btn btn-ghost btn-sm" href="https://wa.me/2348000000000" target="_blank" rel="noopener" style="text-decoration:none;">WhatsApp support</a>
+      </div>
+    </section>
+  </main>
+
+  <script src="/currencies.js"></script>
+  <script src="/i18n.js"></script>
+  <script src="auth.js"></script>
+</body>
+</html>

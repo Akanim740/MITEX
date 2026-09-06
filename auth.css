@@ -503,6 +503,27 @@ textarea {
   background: rgba(248, 113, 113, 0.08);
 }
 
+.chip.shield {
+  color: #38bdf8;
+  border-color: rgba(56, 189, 248, 0.45);
+  background: rgba(56, 189, 248, 0.08);
+}
+
+.chip.score {
+  color: #fbbf24;
+  border-color: rgba(251, 191, 36, 0.45);
+  background: rgba(251, 191, 36, 0.12);
+  font-weight: 800;
+}
+
+.trust-row {
+  font-size: 0.82rem;
+  color: var(--muted);
+}
+.trust-row span {
+  color: #25d366;
+}
+
 .meta-list {
   width: 100%;
   margin-top: 10px;

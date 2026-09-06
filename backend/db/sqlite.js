@@ -75,6 +75,9 @@ db.exec(`
     status       TEXT NOT NULL DEFAULT 'available' CHECK (status IN ('available','sold')),
     thumbnail    TEXT,
     delivery_url TEXT,
+    demo_url     TEXT,
+    protected    INTEGER NOT NULL DEFAULT 1,
+    asset_type   TEXT NOT NULL DEFAULT 'website' CHECK (asset_type IN ('website','business')),
     created_at   TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
   );
 
@@ -187,9 +190,12 @@ CREATE TABLE IF NOT EXISTS orders (
   );
 `);
 
-for (const col of ["delivery_url", "employee_id"]) {
+for (const col of ["delivery_url", "employee_id", "demo_url", "protected", "asset_type"]) {
   const cols = db.prepare("PRAGMA table_info(listings)").all().map((c) => c.name);
-  if (!cols.includes(col)) db.exec(`ALTER TABLE listings ADD COLUMN ${col} ${col === "employee_id" ? "INTEGER" : "TEXT"}`);
+  if (!cols.includes(col)) {
+    const type = col === "employee_id" ? "INTEGER" : col === "protected" ? "INTEGER NOT NULL DEFAULT 1" : col === "asset_type" ? "TEXT NOT NULL DEFAULT 'website'" : "TEXT";
+    db.exec(`ALTER TABLE listings ADD COLUMN ${col} ${type}`);
+  }
 }
 
 // Older databases were created with a role CHECK that lacks 'staff'.
@@ -429,17 +435,21 @@ const listings = {
   async create(v) {
     const res = db
       .prepare(
-        "INSERT INTO listings (title, description, price, level, tech_stack, status, thumbnail, delivery_url, employee_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
+        "INSERT INTO listings (title, description, price, level, tech_stack, status, thumbnail, delivery_url, demo_url, protected, asset_type, employee_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
       )
-      .run(v.title, v.description, v.price, v.level ?? null, v.tech_stack ?? null, v.status ?? "available", v.thumbnail ?? null, v.delivery_url ?? v.deliveryUrl ?? null, v.employee_id ?? null);
+      .run(v.title, v.description, v.price, v.level ?? null, v.tech_stack ?? null, v.status ?? "available", v.thumbnail ?? null, v.delivery_url ?? v.deliveryUrl ?? null, v.demo_url ?? null, v.protected === undefined ? 1 : v.protected ? 1 : 0, v.asset_type ?? "website", v.employee_id ?? null);
     return this.get(res.lastInsertRowid);
   },
   async update(id, patch) {
-    const allowed = ["title", "description", "price", "level", "tech_stack", "status", "thumbnail", "delivery_url", "employee_id"];
-    const keys = Object.keys(patch).filter((k) => allowed.includes(k));
+    const allowed = ["title", "description", "price", "level", "tech_stack", "status", "thumbnail", "delivery_url", "demo_url", "protected", "asset_type", "employee_id"];
+    const keys = Object.keys(patch).filter((k) => allowed.includes(k) && patch[k] !== undefined && patch[k] !== "");
     if (!keys.length) return this.get(id);
     const sets = keys.map((k) => `${k} = ?`).join(", ");
-    const vals = keys.map((k) => (patch[k] === undefined ? null : patch[k]));
+    const vals = keys.map((k) => {
+      const v = patch[k];
+      if (typeof v === "boolean") return v ? 1 : 0;
+      return v === undefined ? null : v;
+    });
     db.prepare(`UPDATE listings SET ${sets} WHERE id = ?`).run(...vals, id);
     return this.get(id);
   },

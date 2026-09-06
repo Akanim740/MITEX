@@ -52,6 +52,16 @@ async function init() {
     if (!empCol[0].n) {
       await pool.query("ALTER TABLE listings ADD COLUMN employee_id INT NULL, ADD INDEX idx_listings_employee (employee_id)");
     }
+    const addListingCol = async (col, ddl) => {
+      const [r] = await pool.query(
+        "SELECT COUNT(*) AS n FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'listings' AND COLUMN_NAME = ?",
+        [col]
+      );
+      if (!r[0].n) await pool.query(`ALTER TABLE listings ADD COLUMN ${ddl}`);
+    };
+    await addListingCol("demo_url", "demo_url VARCHAR(800)");
+    await addListingCol("protected", "protected TINYINT(1) NOT NULL DEFAULT 1");
+    await addListingCol("asset_type", "asset_type ENUM('website','business') NOT NULL DEFAULT 'website'");
     const addUsersCol = async (col, ddl) => {
       const [r] = await pool.query(
         "SELECT COUNT(*) AS n FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'users' AND COLUMN_NAME = ?",
@@ -136,6 +146,9 @@ async function init() {
       status       ENUM('available','sold') NOT NULL DEFAULT 'available',
       thumbnail    VARCHAR(500),
       delivery_url VARCHAR(800),
+      demo_url     VARCHAR(800),
+      protected    TINYINT(1) NOT NULL DEFAULT 1,
+      asset_type   ENUM('website','business') NOT NULL DEFAULT 'website',
       employee_id  INT NULL,
       created_at   VARCHAR(32) NOT NULL,
       INDEX idx_listings_status (status),
@@ -448,16 +461,20 @@ const listings = {
   },
   async create(v) {
     const [res] = await pool.query(
-      "INSERT INTO listings (title, description, price, level, tech_stack, status, thumbnail, delivery_url, employee_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-      [v.title, v.description, v.price, v.level ?? null, v.tech_stack ?? null, v.status ?? "available", v.thumbnail ?? null, v.delivery_url ?? v.deliveryUrl ?? null, v.employee_id ?? null, nowISO()]
+      "INSERT INTO listings (title, description, price, level, tech_stack, status, thumbnail, delivery_url, demo_url, protected, asset_type, employee_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+      [v.title, v.description, v.price, v.level ?? null, v.tech_stack ?? null, v.status ?? "available", v.thumbnail ?? null, v.delivery_url ?? v.deliveryUrl ?? null, v.demo_url ?? null, v.protected === undefined ? 1 : v.protected ? 1 : 0, v.asset_type ?? "website", v.employee_id ?? null, nowISO()]
     );
     return this.get(res.insertId);
   },
   async update(id, patch) {
-    const allowed = ["title", "description", "price", "level", "tech_stack", "status", "thumbnail", "delivery_url", "employee_id"];
-    const keys = Object.keys(patch).filter((k) => allowed.includes(k));
+    const allowed = ["title", "description", "price", "level", "tech_stack", "status", "thumbnail", "delivery_url", "demo_url", "protected", "asset_type", "employee_id"];
+    const keys = Object.keys(patch).filter((k) => allowed.includes(k) && patch[k] !== undefined && patch[k] !== "");
     if (!keys.length) return this.get(id);
-    const vals = keys.map((k) => (patch[k] === undefined ? null : patch[k]));
+    const vals = keys.map((k) => {
+      const v = patch[k];
+      if (typeof v === "boolean") return v ? 1 : 0;
+      return v === undefined ? null : v;
+    });
     await pool.query(`UPDATE listings SET ${keys.map((k) => `${k} = ?`).join(", ")} WHERE id = ?`, [...vals, id]);
     return this.get(id);
   },

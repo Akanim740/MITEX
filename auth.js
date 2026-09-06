@@ -716,6 +716,7 @@ let marketplaceListings = [];
 let marketplacePage = 1;
 const MARKET_PAGE_SIZE = 8;
 let marketplaceCanOneTap = false;
+let marketplaceAsset = "";
 
 function skeletonCards(n = 6) {
   let out = "";
@@ -749,6 +750,18 @@ async function initMarketplace() {
       marketplacePage = 1;
     }
   }
+  const assetBtns = document.querySelectorAll("#assetFilter [data-asset]");
+  if (assetBtns.length) {
+    assetBtns.forEach((b) => {
+      b.addEventListener("click", () => {
+        marketplaceAsset = b.dataset.asset || "";
+        assetBtns.forEach((x) => x.classList.toggle("active", x === b));
+        marketplacePage = 1;
+        renderListings(searchInput ? searchInput.value : "");
+      });
+    });
+  }
+  initValuator();
   initMarketStats();
   grid.innerHTML = skeletonCards();
   try {
@@ -799,6 +812,40 @@ function shareListing(l) {
   }
 }
 
+function initValuator() {
+  const btn = $("#valBtn");
+  const result = $("#valResult");
+  if (!btn || !result) return;
+  btn.addEventListener("click", async () => {
+    const payload = {
+      assetType: $("#valAsset") && $("#valAsset").value,
+      level: $("#valLevel") && $("#valLevel").value ? Number($("#valLevel").value) : null,
+      tech_stack: $("#valTech") ? $("#valTech").value.trim() : "",
+      description: $("#valDesc") ? $("#valDesc").value.trim() : "",
+    };
+    if (!payload.description) {
+      result.textContent = "Tell us a little about what the asset does first.";
+      result.style.color = "var(--danger, #f87171)";
+      return;
+    }
+    setLoading(btn, true, "Valuing...");
+    try {
+      const v = await api("/api/listings/valuator", { method: "POST", body: payload, auth: false });
+      result.style.color = "";
+      result.innerHTML = `
+        <strong>Fair selling price:</strong> ${naira(v.estimate)}
+        <div style="margin-top:6px;">Reasonable range: ${naira(v.min)} – ${naira(v.max)} &middot; Confidence ${v.confidence}%</div>
+        <div style="margin-top:6px;font-size:0.8rem;opacity:.85;">${(v.drivers || [])
+          .map((d) => `${esc(d.label)}: ${naira(d.amount)}`).join(" &middot; ")}</div>`;
+    } catch (err) {
+      result.textContent = err.message || "Valuator unavailable right now.";
+      result.style.color = "var(--danger, #f87171)";
+    } finally {
+      setLoading(btn, false, "Estimate fair price");
+    }
+  });
+}
+
 function initLangSwitcher() {
   const btn = $("#langBtn");
   const dropdown = $("#langDropdown");
@@ -839,13 +886,16 @@ function renderListings(query, page) {
   const q = (query || "").trim().toLowerCase();
   const pg = Math.max(1, page || marketplacePage);
 
-  const matches = !q
+  const matches = (!q && !marketplaceAsset
     ? marketplaceListings
     : marketplaceListings.filter((l) =>
-        [l.title, l.description, l.tech_stack, l.level != null ? `level ${l.level}` : ""]
-          .filter(Boolean)
-          .some((field) => String(field).toLowerCase().includes(q))
-      );
+        (!q
+          ? true
+          : [l.title, l.description, l.tech_stack, l.level != null ? `level ${l.level}` : ""]
+              .filter(Boolean)
+              .some((field) => String(field).toLowerCase().includes(q))
+        ) && (!marketplaceAsset || (l.assetType || "website") === marketplaceAsset)
+      ));
 
   if (count) {
     count.textContent = q
@@ -869,12 +919,20 @@ function renderListings(query, page) {
       <article class="listing-card">
         <div class="chips" style="justify-content:flex-start;">
           ${l.level ? `<span class="chip gold">Level ${l.level}</span>` : ""}
-          <span class="chip">${esc(l.status)}</span>
+          <span class="chip">${l.assetType === "business" ? "Digital Business" : "Website"}</span>
+          <span class="chip">${esc(l.status === "available" ? "Available" : "Sold")}</span>
+          ${l.protected !== false ? `<span class="chip shield">Protected</span>` : ""}
+          ${typeof l.score === "number" ? `<span class="chip score">${l.score}/100</span>` : ""}
         </div>
         <h3>${esc(l.title)}</h3>
         <p>${esc(l.description)}</p>
         ${l.tech_stack ? `<div class="tech-row">${l.tech_stack.split(",").map((t) => `<span class="chip">${esc(t.trim())}</span>`).join("")}</div>` : ""}
         <div class="price">${naira(l.price)}</div>
+        ${
+          typeof l.trustScore === "number"
+            ? `<div class="trust-row">Seller ${l.trustScore}/100 &middot; <span>${esc(l.trustLabel)}</span></div>`
+            : ""
+        }
         ${
           l.employee
             ? `<div class="handled-by">Handled by <strong>${esc(l.employee.name)}</strong>${
@@ -892,6 +950,7 @@ function renderListings(query, page) {
             ? `<button class="btn btn-primary btn-full" data-buy="${l.id}">${t("buy_now")}</button>${marketplaceCanOneTap ? `<button class="btn btn-full" data-buyonetap="${l.id}" style="margin-top:8px;">One-tap checkout</button>` : ""}`
             : ""
         }
+        ${l.canDemo ? `<a class="btn btn-ghost btn-full" href="${esc(l.demoUrl)}" target="_blank" rel="noopener" style="margin-top:8px;">Try Live Demo</a>` : ""}
         <button type="button" class="btn-share" data-share="${l.id}" aria-label="${t("share")}">${t("share")}</button>
       </article>`
     )

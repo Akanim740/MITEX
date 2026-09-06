@@ -74,6 +74,9 @@ CREATE TABLE listings (
   status       ENUM('available','sold') NOT NULL DEFAULT 'available',
   thumbnail    VARCHAR(500),
   delivery_url VARCHAR(800),
+  demo_url     VARCHAR(800),
+  protected    TINYINT(1) NOT NULL DEFAULT 1,
+  asset_type   ENUM('website','business') NOT NULL DEFAULT 'website',
   employee_id  INT,
   created_at   VARCHAR(32) NOT NULL,
   INDEX idx_listings_status (status),
@@ -213,6 +216,9 @@ CREATE TABLE notifications (
 --   status       TEXT NOT NULL DEFAULT 'available' CHECK (status IN ('available','sold')),
 --   thumbnail    TEXT,
 --   delivery_url TEXT,
+--   demo_url     TEXT,
+--   protected    BOOLEAN NOT NULL DEFAULT TRUE,
+--   asset_type   TEXT NOT NULL DEFAULT 'website' CHECK (asset_type IN ('website','business')),
 --   employee_id  BIGINT REFERENCES users(id) ON DELETE SET NULL,
 --   created_at   TEXT NOT NULL
 -- );

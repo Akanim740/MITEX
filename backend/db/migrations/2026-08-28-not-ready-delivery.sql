@@ -8,6 +8,10 @@
 --               applications.dob/nin_bvn, orders.notes
 --   2) Adds the "not-ready delivery" feature tables:
 --      buy_intents, push_subscriptions, notifications
+--   3) Adds the Marketplace upgrade columns: listings.demo_url,
+--      listings.protected, listings.asset_type (Live Demo / Protected
+--      Purchase / Buy-a-Digital-Business depend on these being present;
+--      the site degrades gracefully without them).
 -- How to run: Supabase Dashboard -> SQL Editor -> New query -> paste ->
 --             Run. Then re-run the two commands under "After running"
 --             if the PostgREST schema cache did not reload automatically.
@@ -28,6 +32,12 @@ ALTER TABLE applications
 -- ---- 3. Fix the missing order column (checkout notes) ----
 ALTER TABLE orders
   ADD COLUMN IF NOT EXISTS notes TEXT;
+
+-- ---- 3b. Opportunity columns: live demo, protected purchase, asset type ----
+ALTER TABLE listings
+  ADD COLUMN IF NOT EXISTS demo_url TEXT,
+  ADD COLUMN IF NOT EXISTS protected BOOLEAN NOT NULL DEFAULT TRUE,
+  ADD COLUMN IF NOT EXISTS asset_type TEXT NOT NULL DEFAULT 'website' CHECK (asset_type IN ('website','business'));
 
 -- ---- 4. New table: buy_intents (buyer confirmed intent, not yet paid) ----
 CREATE TABLE IF NOT EXISTS buy_intents (
