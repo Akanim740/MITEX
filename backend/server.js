@@ -131,6 +131,7 @@ app.use("/api/applications", require("./routes/applications"));
 app.use("/api/salaries", require("./routes/salaries"));
 app.use("/api/notifications", require("./routes/notifications"));
 app.use("/api/push", require("./routes/push"));
+app.use("/api/admin", require("./routes/admin"));
 
 app.get("/api/health", async (req, res) => {
   try {

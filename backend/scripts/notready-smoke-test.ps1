@@ -171,6 +171,15 @@ db.exec("UPDATE users SET role='staff', active=1 WHERE email='" + email + "'");
   Check "listing now visible on public marketplace" ($afterPub -ne $null)
   Check "public listing shows deliveryReady=true" ($afterPub.deliveryReady -eq $true)
 
+  # ---- Admin Mailbox (in-memory outbox while SMTP is off) ----
+  $mailbox = Invoke-RestMethod -Uri "$base/api/admin/mailbox" -Headers $adminHdr
+  Check "admin mailbox reachable" ($mailbox -ne $null -and $mailbox.configured -eq $false -and $mailbox.mails -ne $null)
+  $mbForbidden = $false
+  try {
+    Invoke-RestMethod -Uri "$base/api/admin/mailbox" -Headers $buyerHdr | Out-Null
+  } catch { $mbForbidden = (StatusOf $_) -eq 403 }
+  Check "admin mailbox rejected for non-admin" $mbForbidden
+
   Write-Output "`n== Results: $($script:pass) passed, $($script:fail) failed =="
   if ($script:fail -gt 0) { exit 1 }
 } finally {

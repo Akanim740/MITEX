@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>MITEX — Mailbox</title>
+<style>
+  :root { --bg:#0a0e1a; --card:#111827; --border:#1f2937; --text:#e5e7eb; --muted:#9ca3af; --accent:#fbbf24; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--text); font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif; }
+  header { padding:20px 24px; border-bottom:1px solid var(--border); display:flex; align-items:center; gap:12px; }
+  .logo { font-family:'Sora',sans-serif; font-weight:800; font-size:20px; color:var(--accent); }
+  .logo span { color:#fff; }
+  .tagline { color:var(--muted); font-size:13px; }
+  #status { margin-left:auto; font-size:12px; color:var(--muted); }
+  main { max-width:860px; margin:0 auto; padding:20px 16px 80px; }
+  .info { background:#13203a; border:1px solid var(--border); border-radius:10px; padding:14px 18px; font-size:13px; color:var(--muted); margin-bottom:18px; line-height:1.6; }
+  .mail { background:var(--card); border:1px solid var(--border); border-radius:10px; padding:14px 18px; margin-bottom:12px; }
+  .mail .row1 { display:flex; align-items:center; gap:10px; }
+  .badge { font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.4px; padding:3px 8px; border-radius:99px; }
+  .badge.sent { background:rgba(16,185,129,.15); color:#10b981; }
+  .badge.dev { background:rgba(251,191,36,.15); color:var(--accent); }
+  .badge.fail { background:rgba(239,68,68,.15); color:#ef4444; }
+  .mail .subj { font-weight:700; font-size:14px; }
+  .mail .meta { color:var(--muted); font-size:12px; margin-top:4px; }
+  .mail pre { background:#0b1120; border:1px solid var(--border); border-radius:8px; padding:12px; font-size:12px; white-space:pre-wrap; word-break:break-word; color:#d1d5db; margin:10px 0 0; font-family:ui-monospace,Consolas,monospace; }
+  .copy { background:transparent; border:1px solid var(--border); color:var(--accent); border-radius:8px; padding:6px 12px; font-size:12px; cursor:pointer; }
+  .copy:hover { border-color:var(--accent); }
+  .empty { text-align:center; color:var(--muted); padding:60px 0; }
+</style>
+</head>
+<body>
+<header>
+  <div class="logo">MIT<span>EX</span></div>
+  <div class="tagline">Mailbox — emails you can't send yet, in one place</div>
+  <div id="status"></div>
+</header>
+<main>
+  <div class="info">While SMTP isn't configured, MITEX records every email it would have sent (verification, reset, receipts, hire/test links) in this in-memory Mailbox — readable only by the admin. Copy a link and forward it to the user to unblock them. This list clears when the server restarts, and disappears once SMTP is set up.</div>
+  <div id="list"></div>
+</main>
+<script>
+(async function () {
+  const status = document.getElementById("status");
+  const list = document.getElementById("list");
+  try {
+    const token = localStorage.getItem("mitex_token");
+    if (!token) { status.textContent = "Not logged in"; renderEmpty("Log in to the admin dashboard first."); return; }
+    const res = await fetch("/api/admin/mailbox", { headers: { Authorization: "Bearer " + token } });
+    if (res.status === 401 || res.status === 403) {
+      status.textContent = res.status === 403 ? "Admins only" : "Session expired";
+      renderEmpty("This page is for the admin. Log in as admin@" + "mitex.store");
+      return;
+    }
+    if (!res.ok) { status.textContent = "HTTP " + res.status; renderEmpty("Could not load the mailbox."); return; }
+    const data = await res.json();
+    status.textContent = data.configured ? "SMTP configured — emails now go out for real" : "SMTP off — " + data.count + " recorded";
+    if (!data.mails || !data.mails.length) { renderEmpty("Nothing here yet. Emails appear here when the site generates them (signups, purchases, hires)."); return; }
+    list.innerHTML = data.mails.map(m => {
+      const badge = m.sent ? '<span class="badge sent">Sent</span>' : m.dev ? '<span class="badge dev">Waiting for SMTP</span>' : '<span class="badge fail">Send failed</span>';
+      const links = (m.text.match(/https?:\/\/[^\s]+/g) || []);
+      return `<div class="mail">
+        <div class="row1">${badge}<span class="subj">${esc(m.subject)}</span></div>
+        <div class="meta">${esc(m.ts || "")} · To: ${esc(m.to || "")}</div>
+        <pre>${esc(m.text || "")}</pre>
+        ${links.length ? `<div style="margin-top:8px;">${links.map(l => `<button class="copy" data-link="${esc(l)}">Copy link</button>`).join(" ")}</div>` : ""}
+      </div>`;
+    }).join("");
+    list.querySelectorAll(".copy").forEach(btn => btn.addEventListener("click", () => {
+      navigator.clipboard.writeText(btn.dataset.link).then(() => { btn.textContent = "Copied!"; setTimeout(() => { btn.textContent = "Copy link"; }, 1500); });
+    }));
+  } catch (e) { status.textContent = "Error"; renderEmpty("Request failed: " + e.message); }
+  function renderEmpty(msg) { list.innerHTML = `<div class="empty">${esc(msg)}</div>`; }
+  function esc(s) { return String(s == null ? "" : s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c])); }
+})();
+</script>
+</body>
+</html>

@@ -2,6 +2,28 @@ const APP_URL = process.env.APP_URL || "http://localhost:3000";
 
 const smtpConfigured = () => Boolean(process.env.SMTP_HOST && process.env.SMTP_USER);
 
+// In-memory mailbox: lets an admin review/forward emails while SMTP is not
+// configured (verification links, receipts, hire links). Not persisted.
+const mailbox = [];
+const MAILBOX_MAX = 500;
+let mailboxSequence = 0;
+function pushMailbox({ to, subject, text, html, dev, sent }) {
+  if (mailbox.length >= MAILBOX_MAX) mailbox.shift();
+  mailbox.push({
+    id: ++mailboxSequence,
+    ts: new Date().toISOString(),
+    to,
+    subject,
+    text: String(text || "").slice(0, 6000),
+    html: String(html || "").slice(0, 20000),
+    dev: Boolean(dev),
+    sent: Boolean(sent),
+  });
+}
+function listMailbox() {
+  return mailbox.slice().reverse();
+}
+
 function libraryLoaded() {
   try {
     require("nodemailer");
@@ -25,6 +47,7 @@ async function sendMail({ to, subject, text, html }) {
     console.warn(`[mailer:dev] To: ${to}`);
     console.warn(`[mailer:dev] Subject: ${subject}`);
     console.warn(`${text}\n`);
+    pushMailbox({ to, subject, text, html, dev: true, sent: false });
     return { dev: true };
   }
 
@@ -34,6 +57,7 @@ async function sendMail({ to, subject, text, html }) {
   } catch {
     console.warn("[mailer:dev] SMTP configured but nodemailer is not installed (npm install nodemailer). Logging instead.");
     console.warn(`${text}`);
+    pushMailbox({ to, subject, text, html, dev: true, sent: false });
     return { dev: true };
   }
 
@@ -48,7 +72,13 @@ async function sendMail({ to, subject, text, html }) {
   const msg = { from: process.env.SMTP_FROM || "MITEX <no-reply@mitex.store>", to, subject, text };
   if (html) msg.html = html;
 
-  await transporter.sendMail(msg);
+  let sent = false;
+  try {
+    await transporter.sendMail(msg);
+    sent = true;
+  } finally {
+    pushMailbox({ to, subject, text, html, dev: false, sent });
+  }
   return { dev: false };
 }
 
@@ -154,4 +184,4 @@ function refundEmail(user, order) {
   };
 }
 
-module.exports = { sendMail, verificationEmail, resetEmail, testEmail, hireEmail, receiptEmail, salaryEmail, deliveryEmail, enquiryReply, refundEmail, buyerWaitingEmail, listingReadyEmail, smtpConfigured, libraryLoaded, APP_URL };
+module.exports = { sendMail, verificationEmail, resetEmail, testEmail, hireEmail, receiptEmail, salaryEmail, deliveryEmail, enquiryReply, refundEmail, buyerWaitingEmail, listingReadyEmail, smtpConfigured, libraryLoaded, APP_URL, listMailbox };
