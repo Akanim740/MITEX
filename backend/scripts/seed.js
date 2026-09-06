@@ -8,16 +8,14 @@ async function runSeed() {
 
   const adminEmail = (process.env.ADMIN_EMAIL || "admin@mitex.store").toLowerCase();
   const adminPassword = process.env.ADMIN_PASSWORD;
-  if (!adminPassword) {
-    if (process.env.NODE_ENV === "production") {
-      console.error("FATAL: ADMIN_PASSWORD must be set in production for the seed admin");
-      process.exit(1);
-    }
-  }
   const adminName = process.env.ADMIN_NAME || "MITEX Admin";
 
   const existing = await store.users.findByEmail(adminEmail);
   if (!existing) {
+    if (process.env.NODE_ENV === "production" && !adminPassword) {
+      console.error("FATAL: ADMIN_PASSWORD must be set in production to create the seed admin");
+      process.exit(1);
+    }
     const hash = await bcrypt.hash(adminPassword || "ChangeMe123!", 12);
     await store.users.create({
       name: adminName,
