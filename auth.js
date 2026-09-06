@@ -762,6 +762,17 @@ async function initMarketplace() {
     });
   }
   initValuator();
+  const valuatorQ = new URLSearchParams(location.search).get("valuator");
+  if (valuatorQ === "1") {
+    const box = $("#valuatorBox");
+    if (box) {
+      box.open = true;
+      setTimeout(() => {
+        const top = box.getBoundingClientRect().top + window.scrollY - 90;
+        window.scrollTo({ top: Math.max(0, top), behavior: "smooth" });
+      }, 120);
+    }
+  }
   initMarketStats();
   grid.innerHTML = skeletonCards();
   try {

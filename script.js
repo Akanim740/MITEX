@@ -31,6 +31,7 @@ function escHtml(str) {
         <a href="/account.html">My Account</a>
         <a href="/account.html#orders-panel">My Orders</a>
         <a href="/marketplace.html">Marketplace</a>
+        <a href="/transfer.html">Transfer Center</a>
         ${isStaff ? '<a href="/dashboard.html">Admin dashboard</a>' : ""}
         <button type="button" class="danger" id="navLogout">Log out</button>
       </div>
