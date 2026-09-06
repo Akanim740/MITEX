@@ -36,15 +36,19 @@ async function init() {
 
   // Optional feature tables: warn at boot but do NOT brick the service, so the
   // site stays up until the not-ready-delivery migration is applied. Their
-  // store methods still fail fast (throw) at request time.
-  const featureTables = ["buy_intents", "notifications", "push_subscriptions"];
-  for (const table of featureTables) {
+  // availability is exposed as api.features so routes can degrade gracefully
+  // (no 500s) instead of throwing on the missing relation.
+  const featureTableKeys = { buy_intents: "buyIntents", notifications: "notifications", push_subscriptions: "pushSubscriptions" };
+  const features = { buyIntents: true, notifications: true, pushSubscriptions: true };
+  for (const table of Object.keys(featureTableKeys)) {
     const { error } = await supabase.from(table).select("id").limit(1);
     if (error && error.code === "42P01") {
-      console.warn(`[supabase] Feature table "${table}" missing — run the not-ready-delivery migration SQL.`);
+      features[featureTableKeys[table]] = false;
+      console.warn(`[supabase] Feature table "${table}" missing — run the not-ready-delivery migration SQL. Its routes now degrade gracefully.`);
     }
   }
 
+  api.features = features;
   return api;
 }
 

@@ -205,28 +205,33 @@ router.put("/:id", requireAuth, requireRole("admin", "editor", "staff"), async (
       }
 
       // Waiting buyers (confirmed intent, not yet paid) get the go-ahead.
-      const waiting = await store.buyIntents.listWaitingByListing(String(req.params.id));
-      for (const intent of waiting) {
-        await store.buyIntents.setStatus(intent.id, "ready");
-        const buyer = await store.users.findById(intent.user_id);
-        if (!buyer) continue;
-        const { notifyUser } = require("../utils/notify");
-        const { sendMail, listingReadyEmail } = require("../utils/mailer");
-        const mail = listingReadyEmail(buyer, existing || row);
-        setImmediate(async () => {
-          try {
-            await notifyUser(store, {
-              userId: buyer.id,
-              type: "listing_ready",
-              title: `"${(existing || row).title}" is ready to buy`,
-              body: "The delivery link is now in place. You can complete your purchase.",
-              link: "/marketplace.html",
-            });
-            await sendMail({ to: buyer.email, subject: mail.subject, text: mail.text, html: mail.html });
-          } catch (e) {
-            console.error("listing-ready notification failed:", e.message);
-          }
-        });
+      // Guarded: never let the missing buy_intents table fail the delivery save.
+      try {
+        const waiting = await store.buyIntents.listWaitingByListing(String(req.params.id));
+        for (const intent of waiting) {
+          await store.buyIntents.setStatus(intent.id, "ready");
+          const buyer = await store.users.findById(intent.user_id);
+          if (!buyer) continue;
+          const { notifyUser } = require("../utils/notify");
+          const { sendMail, listingReadyEmail } = require("../utils/mailer");
+          const mail = listingReadyEmail(buyer, existing || row);
+          setImmediate(async () => {
+            try {
+              await notifyUser(store, {
+                userId: buyer.id,
+                type: "listing_ready",
+                title: `"${(existing || row).title}" is ready to buy`,
+                body: "The delivery link is now in place. You can complete your purchase.",
+                link: "/marketplace.html",
+              });
+              await sendMail({ to: buyer.email, subject: mail.subject, text: mail.text, html: mail.html });
+            } catch (e) {
+              console.error("listing-ready notification failed:", e.message);
+            }
+          });
+        }
+      } catch (e) {
+        console.error("waiting-buyer fanout skipped (buy_intents unavailable):", e.message);
       }
     }
 

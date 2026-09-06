@@ -5,6 +5,9 @@ const { requireAuth } = require("../middleware/auth");
 // GET /api/notifications - current user's notifications + unread count
 router.get("/", requireAuth, async (req, res) => {
   try {
+    if (req.store.features && !req.store.features.notifications) {
+      return res.json({ notifications: [], unread: 0, unavailable: true });
+    }
     const limit = Math.min(Number(req.query.limit) || 50, 200);
     const items = await req.store.notifications.listForUser(req.user.id, limit);
     const unread = await req.store.notifications.unreadCount(req.user.id);
@@ -18,6 +21,9 @@ router.get("/", requireAuth, async (req, res) => {
 // POST /api/notifications/read - mark one (with id) or all (no id) as read
 router.post("/read", requireAuth, async (req, res) => {
   try {
+    if (req.store.features && !req.store.features.notifications) {
+      return res.json({ ok: true });
+    }
     const id = req.body && req.body.id;
     await req.store.notifications.markRead(req.user.id, id ? String(id) : undefined);
     res.json({ ok: true });

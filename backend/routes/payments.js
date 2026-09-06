@@ -207,6 +207,14 @@ router.post("/buy-intent", requireAuth, async (req, res) => {
       return res.json({ deliveryReady: true, message: "This website is ready to buy." });
     }
 
+    if (req.store.features && !req.store.features.buyIntents) {
+      return res.status(503).json({
+        code: "NOTIFY_OFF",
+        deliveryReady: false,
+        error: "Saving your spot isn't switched on for this server yet. Please check back soon — or message us on WhatsApp +234 701 163 3770.",
+      });
+    }
+
     const intent = await store.buyIntents.create({ userId: req.user.id, listingId: listing.id });
 
     if (listing.employee_id) {
