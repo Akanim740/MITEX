@@ -291,7 +291,7 @@ async function loadEnquiries() {
         try {
           await API.patch(`/api/enquiries/${sel.dataset.id}/status`, { status: sel.value });
         } catch (err) {
-          alert(err.message);
+          toastError(err.message, "Update failed");
           loadEnquiries();
         }
       });
@@ -304,7 +304,7 @@ async function loadEnquiries() {
           await API.del(`/api/enquiries/${btn.dataset.del}`);
           loadEnquiries();
         } catch (err) {
-          alert(err.message);
+          toastError(err.message, "Delete failed");
         }
       });
     });
@@ -497,7 +497,7 @@ employeeForm.addEventListener("submit", async (e) => {
     loadEmployees();
     refreshEmployeeSelect();
   } catch (err) {
-    alert(err.message);
+    toastError(err.message, "Save failed");
   }
 });
 
@@ -589,7 +589,7 @@ async function loadEmployees() {
           await API.patch(`/api/auth/staff/${btn.dataset.etoggle}`, { active: !active });
           loadEmployees();
         } catch (err) {
-          alert(err.message);
+          toastError(err.message, "Update failed");
         }
       })
     );
@@ -602,7 +602,7 @@ async function loadEmployees() {
           loadEmployees();
           refreshEmployeeSelect();
         } catch (err) {
-          alert(err.message);
+          toastError(err.message, "Remove failed");
         }
       })
     );
@@ -745,7 +745,7 @@ async function loadApplications(status) {
               `Account name: ${d.accountName}\nBank: ${d.bankName}\nAccount number: ${d.accountNumber}`
           );
         } catch (err) {
-          alert(err.message);
+          toastError(err.message, "Fetch failed");
         }
       })
     );
@@ -757,7 +757,7 @@ async function loadApplications(status) {
           await API.post(`/api/applications/${btn.dataset.areject}/reject`, {});
           loadApplications(currentFilter());
         } catch (err) {
-          alert(err.message);
+          toastError(err.message, "Reject failed");
         }
       })
     );
@@ -834,7 +834,7 @@ async function loadSalaries() {
             await API.del(`/api/salaries/${btn.dataset.sdel}`);
             loadSalaries();
           } catch (err) {
-            alert(err.message);
+            toastError(err.message, "Delete failed");
           }
         })
       );
@@ -858,7 +858,7 @@ $("#salaryForm").addEventListener("submit", async (e) => {
   const period = $("#sPeriod").value;
   const note = $("#sNote").value;
 
-  if (!staffId) return alert("Choose an employee first");
+  if (!staffId) return toastError("Choose an employee first.");
   const staff = salaryStaffCache.find((s) => String(s.id) === String(staffId));
 
   if (!confirm(`Record ${naira(amount + bonus)} salary for ${staff ? staff.name : "this employee"} for ${period}?`)) return;
@@ -869,7 +869,7 @@ $("#salaryForm").addEventListener("submit", async (e) => {
     $("#sNote").value = "";
     loadSalaries();
   } catch (err) {
-    alert(err.message);
+    toastError(err.message, "Save failed");
   }
 });
 
@@ -907,7 +907,7 @@ async function loadOrders() {
           await API.post(`/api/payments/refund/${ref}`);
           loadOrders();
         } catch (err) {
-          alert(err.message);
+          toastError(err.message, "Refund failed");
           btn.disabled = false;
           btn.textContent = "Refund";
         }

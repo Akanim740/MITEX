@@ -235,10 +235,10 @@ function initRegister() {
             $("#devVerifyBtn").textContent = "Verified";
             $("#devVerifyBtn").disabled = true;
             $("#successMsg").textContent = v.message;
-          } catch (err) {
-            $("#successMsg").textContent = err.message;
-          }
-        });
+      } catch (err) {
+        toastError(err.message, "Couldn't save preference");
+      }
+    });
       }
     } catch (err) {
       showFormError(errEl, err.message);
@@ -493,7 +493,7 @@ async function loadProfile() {
           msg.classList.remove("hidden");
           setTimeout(() => msg.classList.add("hidden"), 2500);
         } catch (err) {
-          alert(err.message);
+          toastError(err.message, "Couldn't save preferences");
         }
       });
     }
@@ -559,7 +559,7 @@ function wireCardPanel(user) {
         enableBtn.disabled = false;
         enableBtn.textContent = "Save card for one-tap checkout";
       } catch (err) {
-        alert(err.message);
+        toastError(err.message, "Couldn't save card");
         enableBtn.disabled = false;
         enableBtn.textContent = "Save card for one-tap checkout";
       }
@@ -576,7 +576,7 @@ function wireCardPanel(user) {
         renderCard(false, false);
         disableBtn.disabled = false;
       } catch (err) {
-        alert(err.message);
+        toastError(err.message, "Couldn't remove card");
         disableBtn.disabled = false;
       }
     });
@@ -634,7 +634,7 @@ async function loadPasskeys() {
           await api(`/api/auth/webauthn/credentials/${c.id}`, { method: "DELETE" });
           loadPasskeys();
         } catch (err) {
-          alert(err.message);
+          toastError(err.message, "Remove failed");
         }
       });
       list.appendChild(li);
@@ -1271,7 +1271,7 @@ async function devVerify() {
     $("#verifyBanner").classList.add("hidden");
     verifiedChipUpdate(v);
   } catch (err) {
-    alert(err.message);
+    toastError(err.message, "Verification failed");
   }
 }
 
