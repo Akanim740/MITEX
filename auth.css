@@ -10,6 +10,25 @@
   --red: #f87171;
 }
 
+html[data-theme="light"] {
+  --bg: #f5f7fb;
+  --card: rgba(23, 32, 54, 0.05);
+  --card-border: rgba(23, 32, 54, 0.13);
+  --text: #131a2e;
+  --muted: #5b6477;
+  --gold: #b45309;
+  --gold-2: #d97706;
+  --green: #12834a;
+  --red: #dc2626;
+}
+
+html[data-theme="light"] body {
+  background:
+    radial-gradient(600px 420px at 85% 8%, rgba(139, 92, 246, 0.1), transparent),
+    radial-gradient(520px 400px at 8% 92%, rgba(217, 119, 6, 0.08), transparent),
+    var(--bg);
+}
+
 * {
   margin: 0;
   padding: 0;

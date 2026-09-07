@@ -1,6 +1,14 @@
 const $ = (sel) => document.querySelector(sel);
 const page = document.body.dataset.page;
 
+function toastError(message, title) {
+  if (typeof showToast === "function") showToast(message, "error", title ? { title } : {});
+  else if (message) alert(message);
+}
+function toastSuccess(message, title) {
+  if (typeof showToast === "function") showToast(message, "success", title ? { title } : {});
+}
+
 function esc(str) {
   const div = document.createElement("div");
   div.textContent = String(str ?? "");
@@ -646,6 +654,7 @@ async function loadMyOrders() {
   const panel = document.querySelector("#orders-panel");
   if (!panel) return;
   const body = $("#ordersBody");
+  if (window.MITEXUi) body.innerHTML = window.MITEXUi.skelRows(3, 4);
   try {
     const orders = await api("/api/payments/orders/mine");
     if (!orders.length) {
@@ -1032,11 +1041,10 @@ async function buyListing(listingId, btn) {
       await confirmBuyIntent(listingId);
       return;
     }
-    alert(err.message);
+    toastError(err.message);
     if (btn) setLoading(btn, false, t("buy_now"));
   }
 }
-
 async function buyListingOneTap(listingId, btn) {
   if (!isLoggedIn()) {
     location.href = "/login.html?next=/marketplace.html";
@@ -1059,11 +1067,10 @@ async function buyListingOneTap(listingId, btn) {
       await confirmBuyIntent(listingId);
       return;
     }
-    alert(err.message);
+    toastError(err.message);
     if (btn) setLoading(btn, false, "Buy Now");
   }
 }
-
 // Buyer confirms intent on a listing that isn't ready yet (no delivery link).
 async function confirmBuyIntent(listingId) {
   const ok = confirm(
@@ -1076,10 +1083,11 @@ async function confirmBuyIntent(listingId) {
       // Raced - it just became ready. Jump straight into checkout.
       return buyListing(listingId);
     }
-    alert("You're on the list! We'll let you know as soon as this website is ready to buy.");
+    if (typeof showToast === "function") showToast("You're on the list! We'll notify you when this website is ready to buy.", "success", { title: "Spot saved" });
     subscribeToPush();
   } catch (err) {
-    alert(err.message);
+    if (typeof showToast === "function") showToast(err.message, "error");
+    else alert(err.message);
   }
 }
 
@@ -1334,7 +1342,7 @@ async function changePassword(e) {
     });
     localStorage.removeItem("mitex_token");
     localStorage.removeItem("mitex_user");
-    alert("Password changed. Please sign in again.");
+    if (typeof showToast === "function") showToast("Please sign in again.", "success", { title: "Password changed" });
     location.href = "/login.html";
   } catch (err) {
     showFormError(errEl, err.message);

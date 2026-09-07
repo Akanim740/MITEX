@@ -12,6 +12,23 @@
   --radius: 16px;
 }
 
+html[data-theme="light"] {
+  --bg: #f5f7fb;
+  --bg-alt: #eef1f7;
+  --card: rgba(23, 32, 54, 0.05);
+  --card-border: rgba(23, 32, 54, 0.13);
+  --text: #131a2e;
+  --muted: #5b6477;
+  --gold: #b45309;
+  --gold-2: #d97706;
+  --green: #12834a;
+  --red: #dc2626;
+}
+
+html[data-theme="light"] body {
+  background: var(--bg);
+}
+
 * {
   margin: 0;
   padding: 0;
@@ -664,11 +681,14 @@ tbody tr:hover {
     gap: 6px;
   }
 
-  .view-head h2 {
-    font-size: 1.25rem;
+  .view-head {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
   }
 
   table {
+    min-width: 560px;
     font-size: 0.82rem;
   }
 

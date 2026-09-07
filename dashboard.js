@@ -49,6 +49,14 @@ const API = {
 
 const $ = (sel) => document.querySelector(sel);
 
+function toastError(message, title) {
+  if (typeof showToast === "function") showToast(message, "error", title ? { title } : {});
+  else if (message) alert(message);
+}
+function toastSuccess(message, title) {
+  if (typeof showToast === "function") showToast(message, "success", title ? { title } : {});
+}
+
 function esc(str) {
   const div = document.createElement("div");
   div.textContent = String(str ?? "");
@@ -228,7 +236,7 @@ document.querySelectorAll("[data-app-filter]").forEach((chip) =>
 
 async function loadOverview() {
   const grid = $("#statsGrid");
-  grid.innerHTML = '<p class="empty-state">Loading stats...</p>';
+  grid.innerHTML = window.MITEXUi ? window.MITEXUi.skeleton(3) : '<p class="empty-state">Loading stats...</p>';
   try {
     const s = await API.get("/api/auth/dashboard");
     const cards = [
@@ -251,7 +259,7 @@ async function loadOverview() {
 
 async function loadEnquiries() {
   const body = $("#enquiriesBody");
-  body.innerHTML = '<tr><td colspan="8" class="empty-state">Loading...</td></tr>';
+  body.innerHTML = window.MITEXUi ? window.MITEXUi.skelRows(4, 8) : '<tr><td colspan="8" class="empty-state">Loading...</td></tr>';
   try {
     const rows = await API.get("/api/enquiries");
     if (!rows.length) {
@@ -342,7 +350,7 @@ listingForm.addEventListener("submit", async (e) => {
   }
   const id = $("#listingId").value;
   if (!id && currentUser && currentUser.role === "staff") {
-    alert("Employees edit existing listings. Ask an admin to assign one to you.");
+    toastError("Ask an admin to assign a listing to you first.", "Can't add");
     return;
   }
   try {
@@ -351,10 +359,11 @@ listingForm.addEventListener("submit", async (e) => {
     } else {
       await API.post("/api/listings", payload);
     }
+    toastSuccess(id ? "Listing updated." : "Listing added.", id ? "Saved" : "Added");
     resetListingForm();
     loadListings();
   } catch (err) {
-    alert(err.message);
+    toastError(err.message);
   }
 });
 
@@ -376,7 +385,7 @@ function resetListingForm() {
 async function loadListings() {
   const body = $("#listingsBody");
   const staffUser = currentUser && currentUser.role === "staff";
-  body.innerHTML = '<tr><td colspan="7" class="empty-state">Loading...</td></tr>';
+  body.innerHTML = window.MITEXUi ? window.MITEXUi.skelRows(4, 7) : '<tr><td colspan="7" class="empty-state">Loading...</td></tr>';
   try {
     if (!staffUser) refreshEmployeeSelect();
     else {
@@ -442,9 +451,10 @@ async function loadListings() {
         if (!confirm("Delete this listing?")) return;
         try {
           await API.del(`/api/listings/${btn.dataset.del}`);
+          toastSuccess("Listing deleted.", "Done");
           loadListings();
         } catch (err) {
-          alert(err.message);
+          toastError(err.message);
         }
       });
     });
@@ -504,7 +514,7 @@ function resetEmployeeForm() {
 
 async function loadEmployees() {
   const body = $("#employeesBody");
-  body.innerHTML = '<tr><td colspan="5" class="empty-state">Loading...</td></tr>';
+  body.innerHTML = window.MITEXUi ? window.MITEXUi.skelRows(4, 5) : '<tr><td colspan="5" class="empty-state">Loading...</td></tr>';
   try {
     const rows = await API.get("/api/auth/staff");
     $("#employeeCount").textContent = `${rows.length} / 21 employees`;
@@ -564,10 +574,10 @@ async function loadEmployees() {
         if (period === null) return;
         try {
           await API.post("/api/salaries", { staffId: row.id, amount, bonus: 0, period, note: null });
-          alert(`Salary recorded for ${row.name}. They will be notified by email.`);
+          toastSuccess(`Salary recorded for ${row.name}.`, "Salary saved");
           setView("salaries");
         } catch (err) {
-          alert(err.message);
+          toastError(err.message);
         }
       })
     );
@@ -622,7 +632,7 @@ async function loadApplications(status) {
     }
   }
   const body = $("#applicationsBody");
-  body.innerHTML = '<tr><td colspan="5" class="empty-state">Loading...</td></tr>';
+  body.innerHTML = window.MITEXUi ? window.MITEXUi.skelRows(4, 5) : '<tr><td colspan="5" class="empty-state">Loading...</td></tr>';
   try {
     const rows = await API.get(`/api/applications${status ? `?status=${encodeURIComponent(status)}` : ""}`);
     if (!rows.length) {
@@ -686,10 +696,14 @@ async function loadApplications(status) {
         if (instructions === null) return;
         try {
           const res = await API.post(`/api/applications/${btn.dataset.asend}/send-test`, { instructions });
-          alert(res.devLink ? `Email system not configured yet.\n\nShare this link manually:\n${res.devLink}` : res.message);
+          if (res.devLink) {
+            toastSuccess(`Email not configured. Share this link manually:\n${res.devLink}`, "Test ready");
+          } else {
+            toastSuccess(res.message, "Test sent");
+          }
           loadApplications(currentFilter());
         } catch (err) {
-          alert(err.message);
+          toastError(err.message);
         }
       })
     );
@@ -699,10 +713,10 @@ async function loadApplications(status) {
         if (!confirm("Approve this applicant and hire them? A staff account will be created, the first available listing is assigned to them, and they get an email link to set their password.")) return;
         try {
           const res = await API.post(`/api/applications/${btn.dataset.apass}/pass`, {});
-          alert(res.devLink ? `${res.message}\n\nShare this link manually:\n${res.devLink}` : res.message);
+          toastSuccess(res.devLink ? `${res.message} Share this link manually: ${res.devLink}` : res.message, "Hired");
           loadApplications(currentFilter());
         } catch (err) {
-          alert(err.message + (err.detail ? `\n\nTechnical detail: ${err.detail}` : ""));
+          toastError(err.message + (err.detail ? ` — ${err.detail}` : ""));
         }
       })
     );
@@ -711,9 +725,9 @@ async function loadApplications(status) {
       btn.addEventListener("click", async () => {
         try {
           const res = await API.post(`/api/applications/${btn.dataset.aresend}/resend-hire`, {});
-          alert(res.devLink ? `${res.message}\n\nShare this link manually:\n${res.devLink}` : res.message);
+          toastSuccess(res.devLink ? `${res.message} Share this link manually: ${res.devLink}` : res.message, "Resent");
         } catch (err) {
-          alert(err.message + (err.detail ? `\n\nTechnical detail: ${err.detail}` : ""));
+          toastError(err.message + (err.detail ? ` — ${err.detail}` : ""));
         }
       })
     );
@@ -763,7 +777,7 @@ async function loadSalaries() {
   const isAdmin = currentUser && currentUser.role !== "staff";
   $("#salariesTitle").textContent = isAdmin ? "Salary Payments" : "My Salary History";
   const body = $("#salariesBody");
-  body.innerHTML = '<tr><td colspan="7" class="empty-state">Loading...</td></tr>';
+  body.innerHTML = window.MITEXUi ? window.MITEXUi.skelRows(4, 7) : '<tr><td colspan="7" class="empty-state">Loading...</td></tr>';
 
   if (isAdmin) {
     try {
@@ -861,7 +875,7 @@ $("#salaryForm").addEventListener("submit", async (e) => {
 
 async function loadOrders() {
   const body = $("#ordersBody");
-  body.innerHTML = '<tr><td colspan="6" class="empty-state">Loading...</td></tr>';
+  body.innerHTML = window.MITEXUi ? window.MITEXUi.skelRows(4, 6) : '<tr><td colspan="6" class="empty-state">Loading...</td></tr>';
   try {
     const rows = await API.get("/api/payments/orders");
     if (!rows.length) {
@@ -906,7 +920,7 @@ async function loadOrders() {
 
 async function loadSubscribers() {
   const list = $("#subsList");
-  list.innerHTML = '<li class="empty-state">Loading...</li>';
+  list.innerHTML = window.MITEXUi ? window.MITEXUi.skeleton(3) : '<li class="empty-state">Loading...</li>';
   try {
     const rows = await API.get("/api/newsletter");
     if (!rows.length) {

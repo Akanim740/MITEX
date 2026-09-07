@@ -17,6 +17,20 @@
   --radius: 12px;
 }
 
+html[data-theme="light"] {
+  --bg: #f4f6fb;
+  --surface: #ffffff;
+  --card-bg: rgba(23, 32, 54, 0.04);
+  --card-border: rgba(23, 32, 54, 0.12);
+  --text: #10162a;
+  --muted: #5c6578;
+  --primary: #b45309;
+  --primary-hover: #d97706;
+  --green: #0f9d58;
+  --red: #dc2626;
+  --blue: #2563eb;
+}
+
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
 html, body {

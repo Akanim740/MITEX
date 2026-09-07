@@ -14,6 +14,19 @@
   --font-body: "Inter", sans-serif;
 }
 
+html[data-theme="light"] {
+  --bg: #f5f7fb;
+  --bg-alt: #eef1f7;
+  --card: rgba(23, 32, 54, 0.05);
+  --card-border: rgba(23, 32, 54, 0.13);
+  --text: #131a2e;
+  --muted: #5b6477;
+  --gold: #b45309;
+  --gold-2: #d97706;
+  --violet: #7c3aed;
+  --green: #12834a;
+}
+
 * {
   margin: 0;
   padding: 0;
@@ -68,6 +81,17 @@ ul {
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
+  background-size: 220% auto;
+  animation: gradientShift 7s ease-in-out infinite alternate;
+}
+
+@keyframes gradientShift {
+  from {
+    background-position: 0% center;
+  }
+  to {
+    background-position: 100% center;
+  }
 }
 
 .kicker {
@@ -479,6 +503,57 @@ ul {
 
 .hero-note strong {
   color: var(--gold);
+}
+
+.badge {
+  animation: badgePulse 3.4s ease-in-out infinite;
+}
+
+@keyframes badgePulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(251, 191, 36, 0.22);
+  }
+  50% {
+    box-shadow: 0 0 0 10px rgba(251, 191, 36, 0);
+  }
+}
+
+.hero-actions .btn-primary {
+  position: relative;
+  overflow: hidden;
+}
+
+.hero-actions .btn-primary::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: -80%;
+  width: 45%;
+  height: 100%;
+  background: linear-gradient(100deg, transparent, rgba(255, 255, 255, 0.5), transparent);
+  transform: skewX(-20deg);
+  animation: ctaSheen 4.2s ease-in-out infinite;
+  pointer-events: none;
+}
+
+@keyframes ctaSheen {
+  0%,
+  60% {
+    left: -80%;
+  }
+  100% {
+    left: 140%;
+  }
+}
+
+.browser {
+  transition: transform 0.5s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.5s ease;
+}
+
+.browser:hover {
+  transform: translateY(-16px) scale(1.02);
+  box-shadow: 0 40px 90px rgba(0, 0, 0, 0.6);
 }
 
 .browser {

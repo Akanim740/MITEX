@@ -135,7 +135,7 @@ async function initAuth() {
 
 async function loadProjects() {
   const body = $("#projectsBody");
-  body.innerHTML = '<p class="empty-state">Loading your assignments...</p>';
+  body.innerHTML = window.MITEXUi ? window.MITEXUi.skeleton(3) : '<p class="empty-state">Loading your assignments...</p>';
   try {
     const rows = await API.get("/api/listings/mine");
     if (!rows.length) {
