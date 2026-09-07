@@ -128,6 +128,7 @@ app.use("/api/listings", require("./routes/listings"));
 app.use("/api/newsletter", require("./routes/newsletter"));
 app.use("/api/payments", require("./routes/payments"));
 app.use("/api/applications", require("./routes/applications"));
+app.use("/api/analyze", require("./routes/analyze"));
 app.use("/api/salaries", require("./routes/salaries"));
 app.use("/api/notifications", require("./routes/notifications"));
 app.use("/api/push", require("./routes/push"));

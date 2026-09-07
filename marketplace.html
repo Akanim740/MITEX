@@ -125,6 +125,41 @@
       </div>
     </details>
 
+    <details class="site-lab" id="siteLab" style="max-width:900px;margin:0 auto 18px;">
+      <summary style="cursor:pointer;text-align:center;font-weight:600;">AI Website Analyzer &amp; Site Tools - free snapshot of any website</summary>
+      <div style="display:grid;gap:12px;padding:16px;margin-top:10px;">
+        <label>Website URL <input type="url" id="labUrl" placeholder="https://your-site.com" style="width:100%;" /></label>
+        <div style="display:flex;flex-wrap:wrap;gap:8px;">
+          <button type="button" class="btn btn-primary" id="labAnalyzeBtn" style="flex:1;min-width:150px;">Analyze with AI</button>
+          <button type="button" class="btn btn-ghost btn-sm" id="labHealthBtn">Health Score</button>
+          <button type="button" class="btn btn-ghost btn-sm" id="labSeoBtn">SEO Check</button>
+          <button type="button" class="btn btn-ghost btn-sm" id="labPerfBtn">Performance</button>
+        </div>
+        <div id="labResult" class="muted" style="line-height:1.6;"></div>
+      </div>
+    </details>
+
+    <details class="site-lab" id="descLab" style="max-width:900px;margin:0 auto 18px;">
+      <summary style="cursor:pointer;text-align:center;font-weight:600;">AI Listing-Description Generator</summary>
+      <div style="display:grid;gap:10px;padding:16px;margin-top:10px;">
+        <label>Listing title <input type="text" id="genTitle" placeholder="e.g. Boutique E-Commerce Store" style="width:100%;" /></label>
+        <label>Tech features (comma separated)
+          <textarea id="genTech" rows="2" placeholder="e.g. Payments, JWT Auth, Admin Dashboard, SEO"></textarea>
+        </label>
+        <div style="display:flex;gap:10px;flex-wrap:wrap;">
+          <label style="flex:1;min-width:160px;">Quality level
+            <select id="genLevel" style="width:100%;"><option value="">Not sure</option><option value="1">1 - basic</option><option value="2">2</option><option value="3">3</option><option value="4">4 - solid</option><option value="5">5</option><option value="6">6 - pro</option><option value="7">7 - flagship</option></select>
+          </label>
+          <label style="flex:1;min-width:150px;">Asset type
+            <select id="genAsset" style="width:100%;"><option value="website">Website</option><option value="business">Digital Business</option></select>
+          </label>
+        </div>
+        <button type="button" class="btn btn-primary" id="genBtn">Generate listing description</button>
+        <textarea id="genResult" rows="9" readonly placeholder="Your listing description will appear here - copy, paste and publish." style="width:100%;"></textarea>
+        <div id="genTags" class="muted" style="font-size:.85rem;"></div>
+      </div>
+    </details>
+
     <div class="listing-grid" id="listingsGrid"></div>
     <div class="pager" id="pager" style="display:none;"></div>
   </main>

@@ -7,7 +7,8 @@
     "start": "node server.js",
     "dev": "node --watch server.js",
     "seed": "node scripts/seed.js",
-    "smoke": "powershell -ExecutionPolicy Bypass -File scripts/smoke-test.ps1"
+    "smoke": "powershell -ExecutionPolicy Bypass -File scripts/smoke-test.ps1",
+    "test:analyze": "powershell -ExecutionPolicy Bypass -File scripts/analyze-smoke-test.ps1"
   },
   "dependencies": {
     "@simplewebauthn/server": "^13.3.2",

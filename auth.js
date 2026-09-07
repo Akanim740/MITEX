@@ -771,6 +771,8 @@ async function initMarketplace() {
     });
   }
   initValuator();
+  initSiteLab();
+  initDescGen();
   const valuatorQ = new URLSearchParams(location.search).get("valuator");
   if (valuatorQ === "1") {
     const box = $("#valuatorBox");
@@ -862,6 +864,113 @@ function initValuator() {
       result.style.color = "var(--danger, #f87171)";
     } finally {
       setLoading(btn, false, "Estimate fair price");
+    }
+  });
+}
+
+function scoreBadge(score, max) {
+  const pct = max ? score / max : 0;
+  const cls = pct >= 0.8 ? "green" : pct >= 0.55 ? "gold" : "red";
+  const label = pct >= 0.8 ? "Good" : pct >= 0.55 ? "Needs work" : "Poor";
+  return `<span class="chip ${cls}">${score}/${max} &middot; ${label}</span>`;
+}
+
+function initSiteLab() {
+  const urlInput = $("#labUrl");
+  const result = $("#labResult");
+  if (!urlInput || !result) return;
+  const buttonLabels = {
+    "analyze": ["Analyze with AI", "Analyzing..."],
+    "analyze/health": ["Health Score", "Scanning..."],
+    "analyze/seo": ["SEO Check", "Scanning..."],
+    "analyze/performance": ["Performance", "Scanning..."],
+  };
+
+  const load = (endpoint) => async (ev) => {
+    const btn = ev.currentTarget;
+    const url = urlInput.value.trim();
+    if (!url) {
+      result.innerHTML = `<div class="muted">Enter a website URL first (e.g. https://your-site.com).</div>`;
+      return;
+    }
+    setLoading(btn, true, (buttonLabels[endpoint] || [])[1] || "Scanning...");
+    result.innerHTML = `<div class="muted">Scanning <strong>${esc(url)}</strong>...</div>`;
+    try {
+      const r = await api(endpoint, { method: "POST", body: { url }, auth: false });
+      if (endpoint === "analyze") {
+        result.innerHTML = `
+          <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;">
+            <span class="chip ${r.grade === "excellent shape" ? "green" : r.grade === "solid shape" ? "gold" : "red"}">AI grade: ${esc(r.grade)}</span>
+            ${scoreBadge(r.health.score, r.health.max)}
+            ${scoreBadge(r.seo.score, r.seo.max)}
+            ${scoreBadge(r.performance.score, r.performance.max)}
+          </div>
+          ${r.fetchIssue ? `<div class="muted" style="margin-top:8px;">${esc(r.fetchIssue)}</div>` : ""}
+          <div style="margin-top:10px;">${esc(r.brief)}</div>
+          <div style="margin-top:10px;font-size:.84rem;color:var(--muted);">
+            ${r.live ? `Live snapshot: ${r.signals.words} words &middot; ${r.signals.images} images &middot; ${r.signals.loadMs != null ? r.signals.loadMs + "ms" : "no timing"} &middot; ${(r.signals.bytes / 1024).toFixed(1)}KB &middot; ${r.signals.securityHeaders}/4 security headers` : "Offline estimate based on the details you supplied."}
+          </div>
+          <div style="margin-top:8px;font-size:.82rem;" class="muted">Health</div>
+          ${renderChecksToStr(r.health.checks)}
+          <div style="margin-top:8px;font-size:.82rem;" class="muted">SEO</div>
+          ${renderChecksToStr(r.seo.checks)}
+          <div style="margin-top:8px;font-size:.82rem;" class="muted">Performance</div>
+          ${renderChecksToStr(r.performance.checks)}`;
+      } else if (endpoint === "analyze/health" || endpoint === "analyze/performance" || endpoint === "analyze/seo") {
+        result.innerHTML = `${scoreBadge(r.score, r.max)}<div style="margin-top:10px;">${r.note ? esc(r.note) : ""}</div>${renderChecksToStr(r.checks)}`;
+      }
+    } catch (err) {
+      result.innerHTML = `<div class="chip red">${esc(err.message || "Analysis unavailable right now.")}</div>`;
+    } finally {
+      setLoading(btn, false, (buttonLabels[endpoint] || [])[0] || "Analyze");
+    }
+  };
+
+  $("#labAnalyzeBtn").addEventListener("click", load("analyze"));
+  $("#labHealthBtn").addEventListener("click", load("analyze/health"));
+  $("#labSeoBtn").addEventListener("click", load("analyze/seo"));
+  $("#labPerfBtn").addEventListener("click", load("analyze/performance"));
+}
+
+function renderChecksToStr(checks) {
+  return (checks || [])
+    .map((c) => {
+      const icon = c.status === "pass" ? "&#10003;" : c.status === "fail" ? "&#10007;" : "&#9888;";
+      const color = c.status === "pass" ? "var(--green,#25d366)" : c.status === "fail" ? "var(--danger,#f87171)" : "var(--gold,#fbbf24)";
+      return `<div style="padding:4px 0;display:flex;gap:8px;"><span style="color:${color};">${icon}</span><span style="font-size:.85rem;"><span class="muted">${esc(c.label)}</span>${c.detail ? ` <span class="muted" style="opacity:.75;">- ${esc(c.detail)}</span>` : ""}</span></div>`;
+    })
+    .join("");
+}
+
+function initDescGen() {
+  const btn = $("#genBtn");
+  const out = $("#genResult");
+  if (!btn || !out) return;
+  btn.addEventListener("click", async () => {
+    const title = $("#genTitle").value.trim();
+    if (!title) {
+      out.value = "Give the listing a title first.";
+      return;
+    }
+    setLoading(btn, true, "Writing...");
+    try {
+      const r = await api("/api/analyze/describe", {
+        method: "POST",
+        body: {
+          title,
+          tech_stack: $("#genTech").value.trim(),
+          level: $("#genLevel").value ? Number($("#genLevel").value) : null,
+          assetType: $("#genAsset").value,
+        },
+        auth: false,
+      });
+      out.value = r.description;
+      const tags = $("#genTags");
+      if (tags) tags.innerHTML = (r.tags || []).map((t) => `<span class="chip">${esc(t)}</span>`).join(" ");
+    } catch (err) {
+      out.value = err.message || "Generator unavailable right now.";
+    } finally {
+      setLoading(btn, false, "Generate listing description");
     }
   });
 }
