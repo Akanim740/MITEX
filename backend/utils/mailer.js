@@ -92,6 +92,14 @@ function verificationEmail(user, rawToken) {
   };
 }
 
+function otpEmail(user, otp) {
+  return {
+    subject: "Your MITEX verification code",
+    text: `Hi ${user.name},\n\nYour MITEX email verification code is:\n\n${otp}\n\nEnter this code on the MITEX website to verify your account. It expires in 10 minutes.\n\nIf you didn't create this account, you can safely ignore this email.\n\n- MITEX team`,
+    html: emailWrap(`<p style="color:#e5e7eb;font-size:15px;line-height:1.6;">Hi ${user.name},</p><p style="color:#e5e7eb;font-size:15px;line-height:1.6;">Use the code below to verify your email address and secure your account:</p><div style="background:#1f2937;border-radius:12px;padding:22px;margin:18px 0;text-align:center;"><span style="font-family:'Courier New',monospace;font-size:38px;font-weight:800;letter-spacing:10px;color:#fbbf24;">${otp}</span></div><p style="color:#9ca3af;font-size:13px;margin-top:14px;">This code expires in 10 minutes. If you didn't create this account, you can safely ignore this email.</p>`),
+  };
+}
+
 function resetEmail(user, rawToken) {
   const url = `${APP_URL}/reset-password.html?token=${rawToken}`;
   return {
@@ -184,4 +192,4 @@ function refundEmail(user, order) {
   };
 }
 
-module.exports = { sendMail, verificationEmail, resetEmail, testEmail, hireEmail, receiptEmail, salaryEmail, deliveryEmail, enquiryReply, refundEmail, buyerWaitingEmail, listingReadyEmail, smtpConfigured, libraryLoaded, APP_URL, listMailbox };
+module.exports = { sendMail, verificationEmail, otpEmail, resetEmail, testEmail, hireEmail, receiptEmail, salaryEmail, deliveryEmail, enquiryReply, refundEmail, buyerWaitingEmail, listingReadyEmail, smtpConfigured, libraryLoaded, APP_URL, listMailbox };

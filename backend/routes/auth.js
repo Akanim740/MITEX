@@ -3,8 +3,8 @@ const bcrypt = require("bcryptjs");
 const router = express.Router();
 
 const { signAccessToken, requireAuth, requireRole, resolveRefreshSession, ACCESS_TTL } = require("../middleware/auth");
-const { randomToken, sha256 } = require("../utils/tokens");
-const { sendMail, verificationEmail, resetEmail, smtpConfigured } = require("../utils/mailer");
+const { randomToken, randomOtp, sha256 } = require("../utils/tokens");
+const { sendMail, verificationEmail, otpEmail, resetEmail, smtpConfigured } = require("../utils/mailer");
 const { validateDob, encNin } = require("../utils/verify");
 const paystack = require("../utils/paystack");
 
@@ -13,6 +13,14 @@ const REFRESH_COOKIE = "mitex_refresh";
 const VERIFY_TOKEN_HOURS = 24;
 const RESET_TOKEN_HOURS = 1;
 const REFRESH_DAYS = Number(process.env.REFRESH_TTL_DAYS || 7);
+const OTP_TTL_MIN = 10;
+const OTP_MAX_ATTEMPTS = 5;
+const OTP_LOCK_MIN = 15;
+const OTP_RESEND_COOLDOWN_MS = 60 * 1000;
+
+// In-memory OTP guardrails (single-instance prod server keeps this reliable).
+const otpAttempts = new Map(); // email -> { count, lockedUntil }
+const otpLastSent = new Map(); // email -> timestamp
 
 function setRefreshCookie(res, rawToken) {
   res.cookie(REFRESH_COOKIE, rawToken, {
@@ -30,6 +38,20 @@ async function issueSession(store, res, user) {
   await store.sessions.create({ userId: user.id, tokenHash: sha256(rawRefresh), expiresAt });
   setRefreshCookie(res, rawRefresh);
   return { accessToken: signAccessToken(user), refreshToken: rawRefresh };
+}
+
+async function sendOtp(store, user) {
+  const otp = randomOtp();
+  await store.tokens.deleteByUser(user.id, "verify_otp");
+  await store.tokens.create({
+    userId: user.id,
+    tokenHash: sha256(otp),
+    type: "verify_otp",
+    expiresAt: new Date(Date.now() + OTP_TTL_MIN * 60 * 1000).toISOString(),
+  });
+  const mail = otpEmail(user, otp);
+  const result = await sendMail({ to: user.email, subject: mail.subject, text: mail.text, html: mail.html });
+  return { devOtp: otp, result };
 }
 
 // POST /api/auth/register
@@ -106,12 +128,11 @@ router.post("/register", async (req, res) => {
       expiresAt: new Date(Date.now() + VERIFY_TOKEN_HOURS * 3600 * 1000).toISOString(),
     });
 
-    const mail = verificationEmail(user, rawVerify);
-    const result = await sendMail({ to: user.email, subject: mail.subject, text: mail.text });
+    const { devOtp, result } = await sendOtp(store, user);
 
     res.status(201).json({
-      message: "Account created. Check your email to verify your address.",
-      ...(result.dev && process.env.NODE_ENV !== "production" ? { devToken: rawVerify, devVerifyUrl: mail.url } : {}),
+      message: "Account created. Enter the 6-digit code sent to your email to verify your account.",
+      ...(result.dev && process.env.NODE_ENV !== "production" ? { devOtp, devToken: rawVerify } : {}),
       user: { id: user.id, name: user.name, email: user.email, role: user.role, email_verified: 0 },
       payment_saved: paymentSaved,
       payment_pending: paymentPending,
@@ -238,7 +259,7 @@ router.get("/verify-email", async (req, res) => {
   }
 });
 
-// POST /api/auth/resend-verification (requires login)
+// POST /api/auth/resend-verification (requires login) - send a fresh OTP
 router.post("/resend-verification", requireAuth, async (req, res) => {
   try {
     const store = req.store;
@@ -246,21 +267,104 @@ router.post("/resend-verification", requireAuth, async (req, res) => {
       return res.json({ message: "Email is already verified" });
     }
 
-    const rawVerify = randomToken(32);
-    await store.tokens.deleteByUser(req.user.id, "verify");
-    await store.tokens.create({
-      userId: req.user.id,
-      tokenHash: sha256(rawVerify),
-      type: "verify",
-      expiresAt: new Date(Date.now() + VERIFY_TOKEN_HOURS * 3600 * 1000).toISOString(),
-    });
-
-    const mail = verificationEmail(req.user, rawVerify);
-    const result = await sendMail({ to: req.user.email, subject: mail.subject, text: mail.text });
+    const { devOtp, result } = await sendOtp(store, req.user);
 
     res.json({
-      message: "Verification email sent",
-      ...(result.dev && process.env.NODE_ENV !== "production" ? { devToken: rawVerify, devVerifyUrl: mail.url } : {}),
+      message: "A new verification code has been sent to your email.",
+      ...(result.dev && process.env.NODE_ENV !== "production" ? { devOtp } : {}),
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// POST /api/auth/verify-otp - verify the account with the emailed 6-digit code
+router.post("/verify-otp", async (req, res) => {
+  try {
+    const store = req.store;
+    const email = String(req.body.email || "").trim().toLowerCase();
+    const otp = String(req.body.otp || "").trim();
+    if (!EMAIL_RE.test(email)) {
+      return res.status(400).json({ error: "Invalid email address" });
+    }
+    if (!/^\d{6}$/.test(otp)) {
+      return res.status(400).json({ error: "Enter the 6-digit code from your email" });
+    }
+
+    const user = await store.users.findByEmail(email);
+    if (!user) {
+      return res.status(400).json({ error: "No account found for that email" });
+    }
+    if (user.email_verified) {
+      return res.json({ message: "Email is already verified", already_verified: true });
+    }
+
+    // Brute-force guard: 5 wrong attempts, then lock for 15 minutes.
+    const now = Date.now();
+    const attempt = otpAttempts.get(email);
+    if (attempt && attempt.lockedUntil > now) {
+      const minsLeft = Math.ceil((attempt.lockedUntil - now) / 60000);
+      return res.status(429).json({ error: `Too many attempts. Try again in ${minsLeft} minute(s) or request a new code.` });
+    }
+    if (!attempt) {
+      otpAttempts.set(email, { count: 0, lockedUntil: 0 });
+    } else if (attempt.count >= OTP_MAX_ATTEMPTS) {
+      const lockedUntil = Date.now() + OTP_LOCK_MIN * 60 * 1000;
+      otpAttempts.set(email, { count: 0, lockedUntil });
+      return res.status(429).json({ error: `Too many attempts. Try again in ${OTP_LOCK_MIN} minutes or request a new code.` });
+    }
+
+    const row = await store.tokens.findValid(sha256(otp), "verify_otp");
+    if (!row || String(row.user_id) !== String(user.id)) {
+      const cur = otpAttempts.get(email);
+      const count = cur ? cur.count + 1 : 1;
+      const lockedUntil = count >= OTP_MAX_ATTEMPTS ? Date.now() + OTP_LOCK_MIN * 60 * 1000 : 0;
+      otpAttempts.set(email, { count, lockedUntil });
+      return res.status(400).json({ error: count >= OTP_MAX_ATTEMPTS ? `Too many attempts. Try again in ${OTP_LOCK_MIN} minutes or request a new code.` : "Incorrect or expired code. Check your email and try again." });
+    }
+
+    await store.tokens.markUsed(row.id);
+    await store.users.update(user.id, { email_verified: true });
+    otpAttempts.delete(email);
+
+    res.json({ message: "Email verified successfully. Your account is now secure." });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// POST /api/auth/resend-otp - send a new code by email (rate-limited)
+router.post("/resend-otp", async (req, res) => {
+  try {
+    const store = req.store;
+    const email = String(req.body.email || "").trim().toLowerCase();
+
+    const user = await store.users.findByEmail(email);
+
+    // Never reveal whether an account exists.
+    if (!user) {
+      return res.json({ message: "If an account exists for that email, a new code has been sent." });
+    }
+    if (user.email_verified) {
+      return res.json({ message: "Email is already verified" });
+    }
+
+    const now = Date.now();
+    const last = otpLastSent.get(email) || 0;
+    const waitMs = OTP_RESEND_COOLDOWN_MS - (now - last);
+    if (waitMs > 0) {
+      return res.status(429).json({ error: `Please wait ${Math.ceil(waitMs / 1000)}s before requesting another code.` });
+    }
+
+    const { devOtp, result } = await sendOtp(store, user);
+    otpLastSent.set(email, Date.now());
+    otpAttempts.delete(email);
+
+    res.json({
+      message: "A new verification code has been sent to your email.",
+      ...(result.dev && process.env.NODE_ENV !== "production" ? { devOtp } : {}),
     });
   } catch (err) {
     console.error(err);

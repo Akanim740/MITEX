@@ -34,7 +34,7 @@ CREATE TABLE tokens (
   id         INT AUTO_INCREMENT PRIMARY KEY,
   user_id    INT NOT NULL,
   token_hash VARCHAR(64) NOT NULL UNIQUE,
-  type       ENUM('verify','reset') NOT NULL,
+  type       ENUM('verify','reset','verify_otp') NOT NULL,
   expires_at VARCHAR(32) NOT NULL,
   used       TINYINT(1) NOT NULL DEFAULT 0,
   created_at VARCHAR(32) NOT NULL,
@@ -179,7 +179,7 @@ CREATE TABLE notifications (
 --   id         BIGSERIAL PRIMARY KEY,
 --   user_id    BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
 --   token_hash TEXT NOT NULL UNIQUE,
---   type       TEXT NOT NULL CHECK (type IN ('verify','reset')),
+--   type       TEXT NOT NULL CHECK (type IN ('verify','reset','verify_otp')),
 --   expires_at TEXT NOT NULL,
 --   used       BOOLEAN NOT NULL DEFAULT FALSE,
 --   created_at TEXT NOT NULL

@@ -52,6 +52,34 @@ try {
   $verify = Invoke-RestMethod "$base/api/auth/verify-email?token=$($reg.devToken)"
   Check "email verification works" ($verify.message -like "*verified*")
 
+  # ---- OTP email verification ----
+  $otpEmail = "otpbuyer$([int](Get-Date -UFormat %s))@example.com"
+  $otpReg = Invoke-RestMethod -Method Post -Uri "$base/api/auth/register" -ContentType application/json -Body (@{ name = "OTP Buyer"; email = $otpEmail; password = "Passw0rd123"; dob = "1995-06-15" } | ConvertTo-Json)
+  Check "register returns devOtp" ($otpReg.devOtp -ne $null -and $otpReg.devOtp -match "^\d{6}$")
+
+  # wrong OTP rejected
+  $badOtp = $false
+  try {
+    Invoke-RestMethod -Method Post -Uri "$base/api/auth/verify-otp" -ContentType application/json -Body (@{ email = $otpEmail; otp = "000000" } | ConvertTo-Json) | Out-Null
+  } catch { $badOtp = (StatusOf $_) -eq 400 }
+  Check "wrong OTP rejected (400)" $badOtp
+
+  # correct OTP verifies account
+  $otpOk = Invoke-RestMethod -Method Post -Uri "$base/api/auth/verify-otp" -ContentType application/json -Body (@{ email = $otpEmail; otp = $otpReg.devOtp } | ConvertTo-Json)
+  Check "correct OTP verifies account" ($otpOk.message -like "*verified*")
+
+  # resend-otp issues a fresh code for an unverified account
+  $otp2Email = "otp2$([int](Get-Date -UFormat %s))@example.com"
+  Invoke-RestMethod -Method Post -Uri "$base/api/auth/register" -ContentType application/json -Body (@{ name = "OTP Two"; email = $otp2Email; password = "Passw0rd123"; dob = "1995-06-15" } | ConvertTo-Json) | Out-Null
+  $otpResend = Invoke-RestMethod -Method Post -Uri "$base/api/auth/resend-otp" -ContentType application/json -Body (@{ email = $otp2Email } | ConvertTo-Json)
+  Check "resend-otp returns new code" ($otpResend.devOtp -ne $null -and $otpResend.devOtp -match "^\d{6}$")
+  $otp2Ok = Invoke-RestMethod -Method Post -Uri "$base/api/auth/verify-otp" -ContentType application/json -Body (@{ email = $otp2Email; otp = $otpResend.devOtp } | ConvertTo-Json)
+  Check "resend code verifies account" ($otp2Ok.message -like "*verified*")
+
+  # non-existent email does not leak existence
+  $ghost = Invoke-RestMethod -Method Post -Uri "$base/api/auth/resend-otp" -ContentType application/json -Body (@{ email = "nobody$( [int](Get-Date -UFormat %s))@example.com" } | ConvertTo-Json)
+  Check "resend-otp hides user existence" ($ghost.message -like "*If an account exists*")
+
   # duplicate register rejected
   $dup = $false
   try {

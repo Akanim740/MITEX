@@ -58,9 +58,17 @@
 
       <div id="successBox" class="hidden">
         <p class="success-text" id="successMsg"></p>
+        <div id="otpBox" class="otp-box hidden">
+          <label>Verification code
+            <input type="text" id="verifyOtp" inputmode="numeric" maxlength="6" placeholder="123456" autocomplete="one-time-code" />
+          </label>
+          <p id="otpError" class="error hidden"></p>
+          <button type="button" id="verifyOtpBtn" class="btn btn-primary btn-full">Verify account</button>
+          <button type="button" id="resendOtpBtn" class="btn btn-ghost btn-full" style="margin-top:8px;">Resend code</button>
+        </div>
+        <p id="verifiedMsg" class="success-text hidden"></p>
         <div id="devBox" class="dev-box hidden">
-          <strong>Developer mode:</strong> email sending is not configured yet.
-          <button type="button" id="devVerifyBtn" class="btn btn-ghost btn-sm" style="margin-top:10px;">Verify my email now</button>
+          <strong>Developer mode:</strong> email sending is not configured yet. Your code: <b id="devOtp"></b>
         </div>
         <a href="/login.html" class="btn btn-primary btn-full" style="margin-top:12px;">Continue to Sign In</a>
       </div>

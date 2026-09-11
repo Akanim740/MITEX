@@ -46,12 +46,16 @@
     <h1>My Account</h1>
 
     <div id="verifyBanner" class="banner hidden">
-      <span>Please verify your email address to secure your account.</span>
-      <button type="button" id="resendBtn" class="btn btn-primary btn-sm">Resend verification email</button>
+      <span>Please verify your email address to secure your account. Enter the 6-digit code we emailed you.</span>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;width:100%;">
+        <input type="text" id="acctVerifyOtp" inputmode="numeric" maxlength="6" placeholder="123456" autocomplete="one-time-code" style="max-width:150px;padding:8px 12px;border-radius:8px;border:1px solid var(--card-border);background:var(--card);color:var(--text);" />
+        <button type="button" id="verifyOtpBtn" class="btn btn-primary btn-sm">Verify code</button>
+        <button type="button" id="resendBtn" class="btn btn-ghost btn-sm">Resend code</button>
+      </div>
+      <p id="acctOtpMsg" class="muted hidden" style="font-size:0.85rem;margin:8px 0 0;"></p>
     </div>
     <div id="devVerifyBox" class="dev-box hidden" style="margin-bottom:26px;">
-      <strong>Developer mode:</strong> email sending is not configured yet.
-      <button type="button" id="devVerifyBtn" class="btn btn-ghost btn-sm" style="margin-top:10px;">Verify my email now</button>
+      <strong>Developer mode:</strong> email sending is not configured yet. Your code: <b id="devOtp"></b>
     </div>
 
     <div class="account-grid">

@@ -38,7 +38,7 @@ db.exec(`
     id         INTEGER PRIMARY KEY AUTOINCREMENT,
     user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     token_hash TEXT NOT NULL UNIQUE,
-    type       TEXT NOT NULL CHECK (type IN ('verify','reset')),
+    type       TEXT NOT NULL CHECK (type IN ('verify','reset','verify_otp')),
     expires_at TEXT NOT NULL,
     used       INTEGER NOT NULL DEFAULT 0,
     created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
@@ -286,6 +286,31 @@ if (ordersTableSql && !String(ordersTableSql.sql).includes("'refunded'")) {
 {
   const orderCols = db.prepare("PRAGMA table_info(orders)").all().map((c) => c.name);
   if (!orderCols.includes("notes")) db.exec("ALTER TABLE orders ADD COLUMN notes TEXT");
+}
+
+// Older databases were created with a tokens type CHECK that lacks 'verify_otp'.
+// SQLite cannot alter a CHECK constraint, so rebuild the tokens table once.
+const tokensTableSql = db.prepare("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'tokens'").get();
+if (tokensTableSql && !String(tokensTableSql.sql).includes("'verify_otp'")) {
+  db.exec("PRAGMA foreign_keys = OFF");
+  db.exec("BEGIN");
+  db.exec(`
+    CREATE TABLE tokens_new (
+      id         INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      token_hash TEXT NOT NULL UNIQUE,
+      type       TEXT NOT NULL CHECK (type IN ('verify','reset','verify_otp')),
+      expires_at TEXT NOT NULL,
+      used       INTEGER NOT NULL DEFAULT 0,
+      created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+    );
+    INSERT INTO tokens_new (id, user_id, token_hash, type, expires_at, used, created_at)
+      SELECT id, user_id, token_hash, type, expires_at, used, created_at FROM tokens;
+    DROP TABLE tokens;
+    ALTER TABLE tokens_new RENAME TO tokens;
+  `);
+  db.exec("COMMIT");
+  db.exec("PRAGMA foreign_keys = ON");
 }
 
 const nowISO = () => new Date().toISOString();

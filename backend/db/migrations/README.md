@@ -6,6 +6,9 @@ Run order (Supabase dashboard -> SQL Editor -> New query -> paste -> Run):
    (users.dob/nin_bvn/nin_file/payment_enc, applications.dob/nin_bvn,
    orders.notes) and creates the not-ready-delivery tables
    (`buy_intents`, `push_subscriptions`, `notifications`).
+2. `2026-09-11-otp-verification.sql` — relaxes `tokens.type` so OTP
+   verification codes (`verify_otp`) can be stored for email-based account
+   verification. Do not skip this one, registration 500s without it.
 
 After running the SQL, refresh the PostgREST schema cache if registration
 still 500s:

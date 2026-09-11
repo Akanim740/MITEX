@@ -209,7 +209,7 @@ function initRegister() {
       return showFormError(errEl, "Password must be at least 8 characters and include letters and numbers.");
     }
 
-    const btn = $("#submitBtn");
+const btn = $("#submitBtn");
     setLoading(btn, true, "Creating account...");
     try {
       const data = await api("/api/auth/register", {
@@ -227,25 +227,65 @@ function initRegister() {
             ? " One-tap checkout is enabled - it activates after your first purchase saves your card."
             : "");
 
-      if (data.devToken) {
+      window.__verifyEmail = email;
+      if (data.devOtp) {
         $("#devBox").classList.remove("hidden");
-        $("#devVerifyBtn").addEventListener("click", async () => {
-          setLoading($("#devVerifyBtn"), true, "Verifying...");
-          try {
-            const v = await api(`/api/auth/verify-email?token=${encodeURIComponent(data.devToken)}`, { auth: false });
-            $("#devVerifyBtn").textContent = "Verified";
-            $("#devVerifyBtn").disabled = true;
-            $("#successMsg").textContent = v.message;
-      } catch (err) {
-        toastError(err.message, "Couldn't save preference");
+        $("#devOtp").textContent = data.devOtp;
+        $("#verifyOtp").value = data.devOtp;
       }
-    });
-      }
+      $("#otpBox").classList.remove("hidden");
+      $("#verifyOtpBtn").addEventListener("click", verifyAccountOtp);
+      $("#resendOtpBtn").addEventListener("click", resendAccountOtp);
     } catch (err) {
       showFormError(errEl, err.message);
       setLoading(btn, false, "Create Account");
     }
   });
+}
+
+async function verifyAccountOtp() {
+  const input = $("#verifyOtp");
+  const errEl = $("#otpError");
+  const btn = $("#verifyOtpBtn");
+  errEl.classList.add("hidden");
+  const otp = input.value.trim();
+  if (!otp) {
+    errEl.textContent = "Enter the 6-digit code from your email.";
+    return errEl.classList.remove("hidden");
+  }
+  setLoading(btn, true, "Verifying...");
+  try {
+    await api("/api/auth/verify-otp", { method: "POST", auth: false, body: { email: window.__verifyEmail, otp } });
+    $("#otpBox").classList.add("hidden");
+    $("#devBox").classList.add("hidden");
+    $("#verifiedMsg").classList.remove("hidden");
+    $("#verifiedMsg").textContent = "Email verified successfully. Your account is now secure. You can sign in.";
+  } catch (err) {
+    errEl.textContent = err.message;
+    errEl.classList.remove("hidden");
+    setLoading(btn, false, "Verify account");
+  }
+}
+
+async function resendAccountOtp() {
+  const btn = $("#resendOtpBtn");
+  const errEl = $("#otpError");
+  errEl.classList.add("hidden");
+  setLoading(btn, true, "Sending...");
+  try {
+    const data = await api("/api/auth/resend-otp", { method: "POST", auth: false, body: { email: window.__verifyEmail } });
+    if (data.devOtp) {
+      $("#devBox").classList.remove("hidden");
+      $("#devOtp").textContent = data.devOtp;
+      $("#verifyOtp").value = data.devOtp;
+    }
+    btn.textContent = "Code sent";
+    setTimeout(() => setLoading(btn, false, "Resend code"), 3000);
+  } catch (err) {
+    errEl.textContent = err.message;
+    errEl.classList.remove("hidden");
+    setLoading(btn, false, "Resend code");
+  }
 }
 
 function initLogin() {
@@ -460,7 +500,8 @@ async function loadProfile() {
   }
 
   $("#resendBtn").addEventListener("click", resendVerification);
-  $("#devVerifyBtn").addEventListener("click", devVerify);
+  const acctVerifyBtn = $("#verifyOtpBtn");
+  if (acctVerifyBtn) acctVerifyBtn.addEventListener("click", verifyAccountFromBanner);
   $("#profileForm").addEventListener("submit", saveProfile);
   $("#passwordForm").addEventListener("submit", changePassword);
 
@@ -1353,27 +1394,48 @@ async function resendVerification() {
   setLoading(btn, true, "Sending...");
   try {
     const data = await api("/api/auth/resend-verification", { method: "POST" });
-    if (data.devToken) {
-      window.__devVerifyToken = data.devToken;
+    if (data.devOtp) {
       $("#devVerifyBox").classList.remove("hidden");
+      $("#devOtp").textContent = data.devOtp;
+      if ($("#acctVerifyOtp")) $("#acctVerifyOtp").value = data.devOtp;
     }
-    btn.textContent = "Email sent";
+    bannerOtpMsg("A new code has been sent to your email.", false);
+    btn.textContent = "Code sent";
+    setTimeout(() => setLoading(btn, false, "Resend code"), 3000);
   } catch (err) {
-    btn.textContent = err.message;
-    setTimeout(() => setLoading(btn, false, "Resend verification email"), 2500);
+    bannerOtpMsg(err.message, true);
+    setTimeout(() => setLoading(btn, false, "Resend code"), 2500);
   }
 }
 
-async function devVerify() {
-  const token = window.__devVerifyToken;
-  if (!token) return;
+function bannerOtpMsg(text, isError) {
+  const el = $("#acctOtpMsg");
+  if (!el) return;
+  el.textContent = text;
+  el.style.color = isError ? "var(--danger, #f87171)" : "";
+  el.classList.remove("hidden");
+}
+
+async function verifyAccountFromBanner() {
+  const input = $("#acctVerifyOtp");
+  const otp = input ? input.value.trim() : "";
+  const msg = $("#acctOtpMsg");
+  if (!otp) {
+    bannerOtpMsg("Enter the 6-digit code from your email.", true);
+    return;
+  }
+  const btn = $("#verifyOtpBtn");
+  setLoading(btn, true, "Verifying...");
   try {
-    const v = await api(`/api/auth/verify-email?token=${encodeURIComponent(token)}`, { auth: false });
-    $("#devVerifyBox").classList.add("hidden");
+    const v = await api("/api/auth/verify-otp", { method: "POST", auth: false, body: { email: currentUser.email, otp } });
     $("#verifyBanner").classList.add("hidden");
-    verifiedChipUpdate(v);
+    $("#devVerifyBox").classList.add("hidden");
+    verifiedChipUpdate();
+    if (typeof showToast === "function") showToast(v.message, "success");
+    else if (msg) { msg.textContent = v.message; msg.classList.remove("hidden"); }
   } catch (err) {
-    toastError(err.message, "Verification failed");
+    bannerOtpMsg(err.message, true);
+    setLoading(btn, false, "Verify code");
   }
 }
 

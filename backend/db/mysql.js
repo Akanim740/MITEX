@@ -106,7 +106,7 @@ async function init() {
       id         INT AUTO_INCREMENT PRIMARY KEY,
       user_id    INT NOT NULL,
       token_hash VARCHAR(64) NOT NULL UNIQUE,
-      type       ENUM('verify','reset') NOT NULL,
+      type       ENUM('verify','reset','verify_otp') NOT NULL,
       expires_at VARCHAR(32) NOT NULL,
       used       TINYINT(1) NOT NULL DEFAULT 0,
       created_at VARCHAR(32) NOT NULL,
