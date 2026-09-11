@@ -62,6 +62,7 @@ if (page === "register") initRegister();
 if (page === "login") initLogin();
 if (page === "reset") initReset();
 if (page === "account") initAccount();
+if (page === "valuator") initValuator();
 if (page === "marketplace") initMarketplace();
 if (page === "demo-checkout") initDemoCheckout();
 if (page === "payment-success") initPaymentSuccess();
@@ -770,19 +771,11 @@ async function initMarketplace() {
       });
     });
   }
-  initValuator();
   initSiteLab();
   initDescGen();
-  const valuatorQ = new URLSearchParams(location.search).get("valuator");
-  if (valuatorQ === "1") {
-    const box = $("#valuatorBox");
-    if (box) {
-      box.open = true;
-      setTimeout(() => {
-        const top = box.getBoundingClientRect().top + window.scrollY - 90;
-        window.scrollTo({ top: Math.max(0, top), behavior: "smooth" });
-      }, 120);
-    }
+  if (new URLSearchParams(location.search).get("valuator") === "1") {
+    location.replace("/valuator.html");
+    return;
   }
   initMarketStats();
   grid.innerHTML = skeletonCards();

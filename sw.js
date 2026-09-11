@@ -4,6 +4,7 @@ const CACHE = VERSION + "-cache";
 const CORE_ASSETS = [
   "/index.html",
   "/marketplace.html",
+  "/valuator.html",
   "/login.html",
   "/register.html",
   "/account.html",

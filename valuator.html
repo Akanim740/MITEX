@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>MITEX AI Valuator | Get a Fair Selling Price</title>
+  <meta name="description" content="Not sure what to charge for your website or digital business? The MITEX AI Valuator estimates a fair selling price in seconds." />
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23070b14'/%3E%3Ctext x='32' y='44' font-family='Arial' font-size='34' font-weight='bold' fill='%23fbbf24' text-anchor='middle'%3EM%3C/text%3E%3C/svg%3E" />
+  <link rel="manifest" href="/manifest.webmanifest" />
+  <meta name="theme-color" content="#070b14" />
+  <link rel="apple-touch-icon" href="/icons/icon-192.png" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="MITEX" />
+  <script src="/pwa.js" defer></script>
+  <script src="/analytics.js" defer></script>
+  <script src="/cookie-consent.js" defer></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;600;700;800&family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="auth.css" />
+  <style>
+    .val-main { width: min(680px, 94%); margin-inline: auto; padding: 46px 0 90px; }
+    .val-hero { text-align: center; margin-bottom: 30px; }
+    .val-hero h1 { font-family: "Sora", sans-serif; font-size: clamp(1.7rem, 4vw, 2.4rem); }
+    .val-hero p { color: var(--muted); max-width: 520px; margin-inline: auto; }
+    .val-card { background: var(--card); border: 1px solid var(--card-border); border-radius: 22px; padding: 30px 28px; display: grid; gap: 14px; }
+    .val-card label { display: grid; gap: 6px; font-size: .9rem; font-weight: 600; }
+    .val-card input, .val-card select, .val-card textarea { width: 100%; padding: 12px 14px; border-radius: 12px; border: 1px solid var(--card-border); background: var(--card); color: var(--text); font-size: .92rem; font-family: inherit; outline: none; transition: border-color .25s ease, box-shadow .25s ease; }
+    .val-card input:focus, .val-card select:focus, .val-card textarea:focus { border-color: rgba(251,191,36,.6); box-shadow: 0 0 0 4px rgba(251,191,36,.12); }
+    .val-note { font-size: .85rem; color: var(--muted); text-align: center; margin-top: 4px; }
+    .val-back { display: inline-flex; align-items: center; gap: 6px; text-decoration: none; color: var(--muted); font-size: .88rem; margin-bottom: 16px; }
+    .val-back:hover { color: var(--gold); }
+    .val-result { font-size: 1.02rem; line-height: 1.6; }
+  </style>
+  <script src="/ui.js"></script>
+  </head>
+<body data-page="valuator">
+  <header class="topbar">
+    <div class="topbar-inner">
+      <a class="logo" href="/index.html">MIT<span>EX</span></a>
+      <div id="navAuthArea"></div>
+    </div>
+  </header>
+
+  <main class="val-main">
+    <a class="val-back" href="/marketplace.html">
+      <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>
+      Back to marketplace
+    </a>
+    <div class="val-hero">
+      <h1>MITEX AI <span style="color:#fbbf24;">Valuator</span></h1>
+      <p>Tell us a bit about your website or digital business and get a fair selling price in seconds. Free, no sign-up needed.</p>
+    </div>
+
+    <div class="val-card">
+      <label>Asset type
+        <select id="valAsset"><option value="website">Website</option><option value="business">Digital Business</option></select>
+      </label>
+      <label>Quality level
+        <select id="valLevel">
+          <option value="">Not sure</option>
+          <option value="1">1 - basic</option><option value="2">2</option><option value="3">3</option><option value="4">4 - solid</option>
+          <option value="5">5</option><option value="6">6 - pro</option><option value="7">7 - flagship</option>
+        </select>
+      </label>
+      <label>Tech features (comma separated)
+        <textarea id="valTech" rows="2" placeholder="e.g. Payments, JWT Auth, Admin, SEO"></textarea>
+      </label>
+      <label>What does it do? <textarea id="valDesc" rows="3" placeholder="Describe what the site or business does..."></textarea></label>
+      <button type="button" class="btn btn-primary btn-full" id="valBtn">Estimate fair price</button>
+      <div id="valResult" class="val-result muted"></div>
+      <p class="val-note">This is a fair-market estimate, not an offer. Listings for sale live in the marketplace.</p>
+    </div>
+  </main>
+
+  <script src="/currencies.js"></script>
+  <script src="/i18n.js"></script>
+  <script src="auth.js"></script>
+</body>
+</html>
