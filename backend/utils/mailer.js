@@ -76,10 +76,16 @@ async function sendMail({ to, subject, text, html }) {
   try {
     await transporter.sendMail(msg);
     sent = true;
+  } catch (err) {
+    // SMTP failures must never break the surrounding flow (registration,
+    // password reset, OTP resend). Log the real reason for the admin and keep
+    // going - the mailbox record still captures the intended message.
+    console.error("[mailer:smtp] send failed:", err.message);
+    console.error(`[mailer:smtp] To: ${to} | Subject: ${subject}`);
   } finally {
     pushMailbox({ to, subject, text, html, dev: false, sent });
   }
-  return { dev: false };
+  return { dev: false, sent };
 }
 
 function verificationEmail(user, rawToken) {

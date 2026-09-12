@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Your Business Deserves a Website That Works — MITEX</title>
+<style>
+  :root {
+    --bg: #070b14;
+    --card: #0e1626;
+    --border: rgba(255,255,255,0.1);
+    --text: #e8ecf4;
+    --muted: #9aa5b8;
+    --gold: #fbbf24;
+    --green: #25d366;
+    --violet: #8b5cf6;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: "Segoe UI", Roboto, Arial, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.6;
+  }
+
+  .page {
+    max-width: 820px;
+    margin: 24px auto;
+    padding: 40px 44px;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+  }
+
+  .logo {
+    font-family: "Segoe UI", Arial, sans-serif;
+    font-weight: 800;
+    font-size: 1.5rem;
+    letter-spacing: 0.5px;
+  }
+  .logo span { color: var(--gold); }
+
+  .tagline {
+    color: var(--muted);
+    font-size: 0.95rem;
+    margin-top: 4px;
+  }
+
+  h1 {
+    font-size: 2rem;
+    line-height: 1.25;
+    margin: 28px 0 8px;
+  }
+  h1 em {
+    font-style: normal;
+    background: linear-gradient(90deg, var(--gold), #fde68a);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+
+  .lead {
+    color: var(--muted);
+    font-size: 1.05rem;
+    max-width: 640px;
+    margin-bottom: 24px;
+  }
+
+  .box {
+    background: rgba(255,255,255,0.04);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 20px;
+    margin-bottom: 16px;
+  }
+
+  .box h3 {
+    color: var(--gold);
+    font-size: 0.85rem;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    margin-bottom: 12px;
+  }
+
+  ul { list-style: none; }
+  ul li {
+    padding: 6px 0;
+    color: var(--text);
+    font-size: 0.98rem;
+  }
+  ul li::before {
+    content: "\2713";
+    color: var(--green);
+    margin-right: 10px;
+    font-weight: 700;
+  }
+
+  .pricing {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 12px;
+  }
+  .price-card {
+    background: rgba(255,255,255,0.03);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 14px;
+    text-align: center;
+  }
+  .price-card .name {
+    color: var(--muted);
+    font-size: 0.8rem;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+  .price-card .amount {
+    font-size: 1.4rem;
+    font-weight: 800;
+    color: var(--gold);
+    margin: 6px 0 2px;
+  }
+  .price-card .what {
+    color: var(--muted);
+    font-size: 0.78rem;
+  }
+
+  .cta {
+    margin-top: 24px;
+    background: linear-gradient(90deg, var(--gold), var(--gold-2, #f59e0b));
+    color: #131a2e;
+    font-weight: 800;
+    font-size: 1.1rem;
+    text-align: center;
+    padding: 16px;
+    border-radius: 999px;
+    text-decoration: none;
+    display: block;
+    transition: transform .15s ease;
+  }
+  .cta:hover { transform: translateY(-2px); }
+
+  .contacts {
+    display: flex;
+    justify-content: center;
+    gap: 28px;
+    margin-top: 14px;
+    flex-wrap: wrap;
+  }
+  .contacts a {
+    color: var(--muted);
+    text-decoration: none;
+    font-size: 0.95rem;
+  }
+  .contacts a:hover { color: var(--gold); }
+
+  .foot {
+    text-align: center;
+    color: var(--muted);
+    font-size: 0.82rem;
+    margin-top: 22px;
+    border-top: 1px solid var(--border);
+    padding-top: 16px;
+  }
+
+  .number-highlight {
+    color: var(--green);
+    font-weight: 700;
+  }
+
+  @media (max-width: 600px) {
+    .page { padding: 28px 22px; margin: 0; border-radius: 0; border: none; }
+    h1 { font-size: 1.6rem; }
+    .pricing { grid-template-columns: 1fr; }
+  }
+
+  @media print {
+    body { background: #fff; }
+    .page { box-shadow: none; border: 1px solid #ddd; }
+  }
+</style>
+</head>
+<body>
+  <div class="page">
+    <div class="logo">MIT<span>EX</span></div>
+    <p class="tagline">Premium websites for ambitious businesses</p>
+
+    <h1>Your business deserves a website that <em>actually works</em>.</h1>
+    <p class="lead">
+      Most business owners in our market either have no website, or one that is slow,
+      broken, and doesn't convert. In the next 5 minutes you'll see exactly what your
+      competitors are using to win customers — and what it would cost you to have one.
+    </p>
+
+    <div class="box">
+      <h3>What you get with a MITEX website</h3>
+      <ul>
+        <li>A modern, professional website people trust — built from scratch, no templates</li>
+        <li>Works perfectly on phones, tablets and computers (where your customers really are)</li>
+        <li>Business enquiries go straight to your WhatsApp or email — you never miss a sale</li>
+        <li>Optional online store with payment: customers can buy right on the site, 24/7</li>
+        <li>Found on Google when people search for what you sell</li>
+        <li>I set everything up and teach you how to manage it yourself</li>
+      </ul>
+    </div>
+
+    <div class="box">
+      <h3>Fast & transparent pricing (no hidden fees)</h3>
+      <div class="pricing">
+        <div class="price-card">
+          <div class="name">Starter</div>
+          <div class="amount">₦60,000</div>
+          <div class="what">1-page professional site, WhatsApp enquiries, live in 4-7 days</div>
+        </div>
+        <div class="price-card">
+          <div class="name">Business</div>
+          <div class="amount">₦120,000</div>
+          <div class="what">Multi-page site with gallery, SEO &amp; enquiry forms, live in 1-2 weeks</div>
+        </div>
+        <div class="price-card">
+          <div class="name">Store</div>
+          <div class="amount">₦250,000</div>
+          <div class="what">Full online shop with payments, order dashboard &amp; training, 2-3 weeks</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="box">
+      <h3>Why businesses chose us (their words)</h3>
+      <ul>
+        <li>Worth every naira — delivery in one week, orders every day</li>
+        <li>Smooth handover, they taught me to manage the site myself</li>
+        <li>Domain, payments, deployment — everything handled</li>
+      </ul>
+    </div>
+
+    <a class="cta" href="https://wa.me/2347011633770?text=Hello%20MITEX%2C%20I%20want%20a%20website%20for%20my%20business.">
+      Start My Website Today — Free Consultation
+    </a>
+    <div class="contacts">
+      <a href="tel:+2347011633770">Call: +234 701 163 3770</a>
+      <a href="https://wa.me/2347011633770">WhatsApp: +234 701 163 3770</a>
+    </div>
+    <p class="foot">
+      No payment until you approve a plan. If you're not sure what you need, we'll tell you honestly —
+      even if that means you don't need us yet. <span class="number-highlight">Mon – Sat, 9am – 7pm (WAT)</span>
+    </p>
+  </div>
+</body>
+</html>

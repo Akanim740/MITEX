@@ -1095,6 +1095,100 @@ ul {
   gap: 20px;
 }
 
+.case-grid {
+  gap: 20px;
+}
+
+.case-card {
+  padding: 28px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  transition: transform 0.25s ease, border-color 0.25s ease;
+}
+
+.case-card:hover {
+  transform: translateY(-5px);
+  border-color: rgba(139, 92, 246, 0.45);
+}
+
+.case-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.case-tag {
+  display: inline-block;
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--gold);
+  border: 1px solid rgba(251, 191, 36, 0.4);
+  border-radius: 999px;
+  padding: 5px 12px;
+}
+
+.case-metric {
+  font-family: var(--font-head);
+  font-size: 2.2rem;
+  font-weight: 800;
+  line-height: 1;
+  background: linear-gradient(90deg, var(--violet), #c084fc);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.case-metric-num {
+  background: linear-gradient(90deg, var(--violet), #c084fc);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.case-metric small {
+  display: block;
+  font-family: var(--font-body);
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+  background: none;
+  -webkit-text-fill-color: var(--muted);
+  margin-top: 5px;
+}
+
+.case-card h3 {
+  font-family: var(--font-head);
+  font-size: 1.15rem;
+  font-weight: 700;
+}
+
+.case-card > p {
+  color: var(--muted);
+  font-size: 0.93rem;
+  line-height: 1.7;
+}
+
+.case-quote {
+  margin-top: auto;
+  padding-top: 14px;
+  border-top: 1px solid var(--card-border);
+  color: var(--text) !important;
+  font-size: 0.95rem !important;
+  font-style: italic;
+}
+
+.case-quote::before {
+  content: "\201C";
+  color: var(--gold);
+  font-size: 1.4rem;
+}
+
 .testi-card {
   padding: 28px;
   display: flex;
@@ -1410,6 +1504,10 @@ ul {
 
 .showcase-grid {
   grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+}
+
+.case-grid {
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
 }
 
 .steps-grid {

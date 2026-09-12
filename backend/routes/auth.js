@@ -42,13 +42,21 @@ async function issueSession(store, res, user) {
 
 async function sendOtp(store, user) {
   const otp = randomOtp();
-  await store.tokens.deleteByUser(user.id, "verify_otp");
-  await store.tokens.create({
-    userId: user.id,
-    tokenHash: sha256(otp),
-    type: "verify_otp",
-    expiresAt: new Date(Date.now() + OTP_TTL_MIN * 60 * 1000).toISOString(),
-  });
+  try {
+    await store.tokens.deleteByUser(user.id, "verify_otp");
+    await store.tokens.create({
+      userId: user.id,
+      tokenHash: sha256(otp),
+      type: "verify_otp",
+      expiresAt: new Date(Date.now() + OTP_TTL_MIN * 60 * 1000).toISOString(),
+    });
+  } catch (err) {
+    // The live DB may not accept 'verify_otp' yet (migration 2026-09-11 not
+    // applied on Supabase). Degrade gracefully to the email link instead of
+    // failing registration/verification with a 500.
+    console.error("[otp] DB cannot store verify_otp token yet (run 2026-09-11-otp-verification.sql on Supabase):", err.message);
+    return { otpUnsupported: true };
+  }
   const mail = otpEmail(user, otp);
   const result = await sendMail({ to: user.email, subject: mail.subject, text: mail.text, html: mail.html });
   return { devOtp: otp, result };
@@ -128,11 +136,19 @@ router.post("/register", async (req, res) => {
       expiresAt: new Date(Date.now() + VERIFY_TOKEN_HOURS * 3600 * 1000).toISOString(),
     });
 
-    const { devOtp, result } = await sendOtp(store, user);
+    const { devOtp, result, otpUnsupported } = await sendOtp(store, user);
+
+    let message = "Account created. Enter the 6-digit code sent to your email to verify your account.";
+    if (otpUnsupported) {
+      const mail = verificationEmail(user, rawVerify);
+      await sendMail({ to: user.email, subject: mail.subject, text: mail.text, html: mail.html });
+      message = "Account created. Click the verification link sent to your email to activate it.";
+    }
 
     res.status(201).json({
-      message: "Account created. Enter the 6-digit code sent to your email to verify your account.",
-      ...(result.dev && process.env.NODE_ENV !== "production" ? { devOtp, devToken: rawVerify } : {}),
+      message,
+      ...(otpUnsupported ? { verifyBy: "link" } : {}),
+      ...(result && result.dev && process.env.NODE_ENV !== "production" ? { devOtp, devToken: rawVerify } : {}),
       user: { id: user.id, name: user.name, email: user.email, role: user.role, email_verified: 0 },
       payment_saved: paymentSaved,
       payment_pending: paymentPending,
@@ -267,7 +283,21 @@ router.post("/resend-verification", requireAuth, async (req, res) => {
       return res.json({ message: "Email is already verified" });
     }
 
-    const { devOtp, result } = await sendOtp(store, req.user);
+    const { devOtp, result, otpUnsupported } = await sendOtp(store, req.user);
+
+    if (otpUnsupported) {
+      const rawVerify = randomToken(32);
+      await store.tokens.deleteByUser(req.user.id, "verify");
+      await store.tokens.create({
+        userId: req.user.id,
+        tokenHash: sha256(rawVerify),
+        type: "verify",
+        expiresAt: new Date(Date.now() + VERIFY_TOKEN_HOURS * 3600 * 1000).toISOString(),
+      });
+      const mail = verificationEmail(req.user, rawVerify);
+      await sendMail({ to: req.user.email, subject: mail.subject, text: mail.text, html: mail.html });
+      return res.json({ message: "Verification link sent to your email.", verifyBy: "link" });
+    }
 
     res.json({
       message: "A new verification code has been sent to your email.",
@@ -358,9 +388,23 @@ router.post("/resend-otp", async (req, res) => {
       return res.status(429).json({ error: `Please wait ${Math.ceil(waitMs / 1000)}s before requesting another code.` });
     }
 
-    const { devOtp, result } = await sendOtp(store, user);
+    const { devOtp, result, otpUnsupported } = await sendOtp(store, user);
     otpLastSent.set(email, Date.now());
     otpAttempts.delete(email);
+
+    if (otpUnsupported) {
+      const rawVerify = randomToken(32);
+      await store.tokens.deleteByUser(user.id, "verify");
+      await store.tokens.create({
+        userId: user.id,
+        tokenHash: sha256(rawVerify),
+        type: "verify",
+        expiresAt: new Date(Date.now() + VERIFY_TOKEN_HOURS * 3600 * 1000).toISOString(),
+      });
+      const mail = verificationEmail(user, rawVerify);
+      await sendMail({ to: user.email, subject: mail.subject, text: mail.text, html: mail.html });
+      return res.json({ message: "If an account exists for that email, a new code has been sent." });
+    }
 
     res.json({
       message: "A new verification code has been sent to your email.",

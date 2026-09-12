@@ -106,7 +106,7 @@ const counterObserver = new IntersectionObserver(
   { threshold: 0.5 }
 );
 
-document.querySelectorAll(".stat-number").forEach((el) => counterObserver.observe(el));
+document.querySelectorAll(".stat-number, .case-metric-num").forEach((el) => counterObserver.observe(el));
 
 function animateCounter(el) {
   const target = Number(el.dataset.count) || 0;

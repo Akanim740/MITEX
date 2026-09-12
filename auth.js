@@ -228,14 +228,21 @@ const btn = $("#submitBtn");
             : "");
 
       window.__verifyEmail = email;
-      if (data.devOtp) {
-        $("#devBox").classList.remove("hidden");
-        $("#devOtp").textContent = data.devOtp;
-        $("#verifyOtp").value = data.devOtp;
+      if (data.verifyBy === "link") {
+        $("#otpBox").classList.add("hidden");
+        $("#linkBox").classList.remove("hidden");
+        $("#linkMsg").textContent =
+          "Check your inbox and click the verification link in the email from MITEX to activate your account.";
+      } else {
+        if (data.devOtp) {
+          $("#devBox").classList.remove("hidden");
+          $("#devOtp").textContent = data.devOtp;
+          $("#verifyOtp").value = data.devOtp;
+        }
+        $("#otpBox").classList.remove("hidden");
+        $("#verifyOtpBtn").addEventListener("click", verifyAccountOtp);
+        $("#resendOtpBtn").addEventListener("click", resendAccountOtp);
       }
-      $("#otpBox").classList.remove("hidden");
-      $("#verifyOtpBtn").addEventListener("click", verifyAccountOtp);
-      $("#resendOtpBtn").addEventListener("click", resendAccountOtp);
     } catch (err) {
       showFormError(errEl, err.message);
       setLoading(btn, false, "Create Account");
