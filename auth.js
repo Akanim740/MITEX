@@ -937,7 +937,7 @@ function initSiteLab() {
     setLoading(btn, true, (buttonLabels[endpoint] || [])[1] || "Scanning...");
     result.innerHTML = `<div class="muted">Scanning <strong>${esc(url)}</strong>...</div>`;
     try {
-      const r = await api(endpoint, { method: "POST", body: { url }, auth: false });
+      const r = await api("/api/" + endpoint, { method: "POST", body: { url }, auth: false });
       if (endpoint === "analyze") {
         result.innerHTML = `
           <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;">
