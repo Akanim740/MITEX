@@ -26,10 +26,17 @@ app.use((req, res, next) => {
   next();
 });
 
-// Block public access to source code and internal files
-const BLOCKED_PATH = /^\/(\.git|\.env|backend|node_modules|scripts|deliveries)(\/|$)|\.(sql|db|md|log|ps1|lock)$|^\/package(-lock)?\.json$|^\/render\.ya?ml$/i;
+// Block public access to source code and internal files.
+// IMPORTANT: test the DECODED path (req.path stays percent-encoded), otherwise
+// tokens like %2e and %65 can be used to smuggle ".db"/"backend" past the
+// filter while serve-static happily decodes them. Try/catch guards malformed
+// escapes (e.g. a trailing "%" which throws URIError on decode).
+const BLOCKED_PATH = /^\/(\.git|\.env|backend|node_modules|scripts|deliveries)(\/|$)|\.(sql|db|md|log|ps1|lock|jar|war)$|^\/package(-lock)?\.json$|^\/render\.ya?ml$/i;
 app.use((req, res, next) => {
-  if (BLOCKED_PATH.test(req.path)) return res.status(404).json({ error: "Not found" });
+  try {
+    const decoded = decodeURIComponent(req.path);
+    if (BLOCKED_PATH.test(decoded)) return res.status(404).json({ error: "Not found" });
+  } catch {}
   next();
 });
 
@@ -183,6 +190,7 @@ getStore()
 
     setInterval(async () => {
       try {
+        // Expire stale pending checkout orders (30 min no-pay → failed).
         const stale = await store.orders.listAll("pending");
         const cutoff = Date.now() - 30 * 60 * 1000;
         for (const order of stale) {
@@ -190,6 +198,13 @@ getStore()
           if (created < cutoff) {
             await store.orders.markFailed(order.reference);
           }
+        }
+
+        // Release "waiting" buy-intents older than 4 days: a buyer that never
+        // follows through must not block later buyers or get a surprise
+        // "ready" notification when delivery eventually lands.
+        if (store.buyIntents && store.buyIntents.expireStale) {
+          await store.buyIntents.expireStale(4 * 24 * 60 * 60 * 1000);
         }
       } catch {}
     }, 15 * 60 * 1000);

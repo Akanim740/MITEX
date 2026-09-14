@@ -65,8 +65,13 @@ async function assertPublicHost(hostname) {
   const host = String(hostname || "").trim().toLowerCase().replace(/^\[|\]$/g, "");
   const allowPrivate = process.env.MITEX_AUDIT_ALLOW_PRIVATE === "1";
   if (isPrivateHost(host) && !allowPrivate) throw new Error("Refused to scan a non-public host");
-  const addresses = await dns.resolve(host, "A").catch(() => []);
-  if (addresses.some((ip) => isPrivateIp(ip)) && !allowPrivate) throw new Error("Refused to scan a host resolving to a private address");
+  // Resolve BOTH record families: a host may be AAAA-only, which a lone "A"
+  // lookup would miss and let link-local IPv6 targets through unpinned.
+  const addresses = (await dns.resolve(host, "A").catch(() => [])).concat(await dns.resolve(host, "AAAA").catch(() => []));
+  if (addresses.length && addresses.some((ip) => isPrivateIp(ip)) && !allowPrivate) {
+    throw new Error("Refused to scan a host resolving to a private address");
+  }
+  return addresses;
 }
 
 function validUrl(raw) {
@@ -106,8 +111,16 @@ function fetchOnce(u, { redirectsLeft = MAX_REDIRECTS } = {}) {
               return null;
             }
           })();
-          if (!next || !["http:", "https:"].includes(next.protocol) || isPrivateHost(next.hostname)) {
+          if (!next || !["http:", "https:"].includes(next.protocol)) {
             return resolve({ ok: false, status, headers, error: "Unsafe redirect" });
+          }
+          // Re-validate the redirect target by DNS, not just hostname: a public
+          // relay could hand us a private/link-local IP to follow.
+          if (process.env.MITEX_AUDIT_ALLOW_PRIVATE !== "1") {
+            assertPublicHost(next.hostname)
+              .then(() => resolve(fetchOnce(next, { redirectsLeft: redirectsLeft - 1 })))
+              .catch(() => resolve({ ok: false, status, headers, error: "Unsafe redirect" }));
+            return;
           }
           return resolve(fetchOnce(next, { redirectsLeft: redirectsLeft - 1 }));
         }

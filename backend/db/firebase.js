@@ -536,6 +536,12 @@ const buyIntents = {
   async setStatus(id, status) {
     await col("buy_intents").doc(String(id)).update({ status, updated_at: nowISO() });
   },
+  async expireStale(olderThanMs) {
+    const cutoff = new Date(Date.now() - olderThanMs).toISOString();
+    const snap = await col("buy_intents").where("status", "==", "waiting").where("created_at", "<", cutoff).get();
+    const writes = snap.docs.map((d) => col("buy_intents").doc(d.id).update({ status: "cancelled", updated_at: nowISO() }));
+    await Promise.all(writes);
+  },
   async remove(id) {
     await col("buy_intents").doc(String(id)).delete();
     return true;

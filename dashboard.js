@@ -224,7 +224,6 @@ $("#refreshSubs").addEventListener("click", loadSubscribers);
 $("#refreshEmployees").addEventListener("click", loadEmployees);
 $("#refreshApplications").addEventListener("click", loadApplications);
 $("#refreshSalaries").addEventListener("click", loadSalaries);
-$("#refreshMyProjects").addEventListener("click", loadMyProjects);
 
 document.querySelectorAll("[data-app-filter]").forEach((chip) =>
   chip.addEventListener("click", () => {
@@ -780,9 +779,10 @@ async function loadSalaries() {
   body.innerHTML = window.MITEXUi ? window.MITEXUi.skelRows(4, 7) : '<tr><td colspan="7" class="empty-state">Loading...</td></tr>';
 
   if (isAdmin) {
+    const sel = $("#sEmployee");
+    sel.innerHTML = '<option value="">Loading employees...</option>';
     try {
       salaryStaffCache = await API.get("/api/auth/staff");
-      const sel = $("#sEmployee");
       sel.innerHTML =
         '<option value="">Choose employee...</option>' +
         salaryStaffCache.map((s) => `<option value="${esc(s.id)}">${esc(s.name)}</option>`).join("");

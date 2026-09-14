@@ -493,6 +493,10 @@ const buyIntents = {
   async setStatus(id, status) {
     await db.collection("buy_intents").updateOne({ _id: oid(id) }, { $set: { status, updated_at: nowISO() } });
   },
+  async expireStale(olderThanMs) {
+    const cutoff = new Date(Date.now() - olderThanMs).toISOString();
+    await db.collection("buy_intents").updateMany({ status: "waiting", created_at: { $lt: cutoff } }, { $set: { status: "cancelled", updated_at: nowISO() } });
+  },
   async remove(id) {
     return (await db.collection("buy_intents").deleteOne({ _id: oid(id) })).deletedCount > 0;
   },

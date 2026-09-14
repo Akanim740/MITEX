@@ -20,7 +20,7 @@ function validateListing(body, partial = false) {
   }
   if (!partial || body.price !== undefined) {
     const price = Number(body.price);
-    if (!Number.isFinite(price) || price < 0) errors.push("Price must be a positive number");
+    if (!Number.isFinite(price) || price <= 0) errors.push("Price must be a positive number greater than zero");
     out.price = price;
   }
   if (body.level !== undefined) {
@@ -33,16 +33,26 @@ function validateListing(body, partial = false) {
   }
   if (body.status !== undefined) {
     if (!["available", "sold"].includes(body.status)) errors.push("Status must be 'available' or 'sold'");
+    // Only admin/editor may set status=sold directly (staff cannot mark sold).
+    if (body.status === "sold") out._requiresAdmin = true;
     out.status = body.status;
   }
+  // URL fields must be http(s) or empty to prevent data: / javascript: / file:// XSS.
+  const safeUrl = (v) => { const s = String(v || "").trim().slice(0, 500); return s && /^https?:\/\//i.test(s) ? s : s ? null : null; };
   if (body.thumbnail !== undefined) {
-    out.thumbnail = String(body.thumbnail || "").trim().slice(0, 500) || null;
+    const t = safeUrl(body.thumbnail);
+    if (body.thumbnail && !t) errors.push("Thumbnail URL must start with http:// or https://");
+    out.thumbnail = t;
   }
   if (body.deliveryUrl !== undefined) {
-    out.delivery_url = String(body.deliveryUrl || "").trim().slice(0, 800) || null;
+    const d = safeUrl(body.deliveryUrl);
+    if (body.deliveryUrl && !d) errors.push("Delivery URL must start with http:// or https://");
+    out.delivery_url = d;
   }
   if (body.demoUrl !== undefined) {
-    out.demo_url = String(body.demoUrl || "").trim().slice(0, 800) || null;
+    const d = safeUrl(body.demoUrl);
+    if (body.demoUrl && !d) errors.push("Demo URL must start with http:// or https://");
+    out.demo_url = d;
   }
   if (body.assetType !== undefined) {
     const t = String(body.assetType || "website").trim().toLowerCase();
@@ -98,7 +108,13 @@ async function attachEmployee(store, row, req) {
 }
 
 // One paid-orders pass → per-listing purchase counts for the Trust Score.
+// Cached for a short window: the underlying listAll("paid") is a full-table
+// scan, so hammering it on every marketplace render burns the request budget.
+const trustCache = { at: 0, counts: null };
+const TRUST_CACHE_MS = 60 * 1000;
 async function trustCounts(store) {
+  const now = Date.now();
+  if (trustCache.counts && now - trustCache.at < TRUST_CACHE_MS) return trustCache.counts;
   const counts = new Map();
   try {
     const paid = await store.orders.listAll("paid");
@@ -110,6 +126,10 @@ async function trustCounts(store) {
       counts.set(k, c);
     }
   } catch {}
+  // Cache even on error: retry the scan only after the window elapses, so a
+  // slow/broken orders table cannot make the marketplace itself crawl.
+  trustCache.counts = counts;
+  trustCache.at = now;
   return counts;
 }
 
@@ -250,6 +270,14 @@ router.put("/:id", requireAuth, requireRole("admin", "editor", "staff"), async (
 
     const { errors, values } = validateListing(req.body, true);
     if (errors.length) return res.status(400).json({ error: errors.join("; ") });
+
+    // Staff are not allowed to mark a listing sold (sets the "bought" signal
+    // used by trust scores and hides it from public browsing). Only admins/
+    // editors may, and only via the explicit status field.
+    if (values._requiresAdmin && isStaff(req)) {
+      return res.status(403).json({ error: "Only admins can mark a listing as sold" });
+    }
+    delete values._requiresAdmin;
 
     // Only admins can (re)assign employees.
     if (isStaff(req)) delete values.employee_id;

@@ -35,6 +35,29 @@ const CURRENCIES = {
 
 const DEFAULT_COUNTRY = "NG";
 
+// Friendly country/region labels for CURRENCIES keys (used by the register
+// country selector). Sorted by name for display.
+const COUNTRY_NAMES = {
+  AE: "United Arab Emirates", AU: "Australia", BD: "Bangladesh", BR: "Brazil", CA: "Canada",
+  CI: "Côte d'Ivoire", CM: "Cameroon", CN: "China", DE: "Germany", EG: "Egypt", ES: "Spain",
+  FR: "France", GB: "United Kingdom", GH: "Ghana", ID: "Indonesia", IN: "India", IT: "Italy",
+  JP: "Japan", KE: "Kenya", MX: "Mexico", NG: "Nigeria", NL: "Netherlands", PH: "Philippines",
+  PK: "Pakistan", PT: "Portugal", SA: "Saudi Arabia", SN: "Senegal", TZ: "Tanzania", UG: "Uganda",
+  US: "United States", ZA: "South Africa",
+};
+
+function countryOptionsHtml(selected) {
+  const entries = Object.entries(COUNTRY_NAMES).sort((a, b) => a[1].localeCompare(b[1]));
+  const sel = String(selected || "").toUpperCase();
+  return entries
+    .map(([code, name]) => {
+      const cur = CURRENCIES[code] || {};
+      const label = `${name} (${cur.symbol || code})`;
+      return `<option value="${code}"${code === sel ? " selected" : ""}>${label}</option>`;
+    })
+    .join("");
+}
+
 function detectCountry() {
   try {
     const lang = navigator.language || navigator.userLanguage || "";

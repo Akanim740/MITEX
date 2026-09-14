@@ -1,10 +1,11 @@
-const VERSION = "mitex-v6";
+const VERSION = "mitex-v7";
 const CACHE = VERSION + "-cache";
 
 const CORE_ASSETS = [
   "/index.html",
   "/marketplace.html",
   "/valuator.html",
+  "/transfer.html",
   "/login.html",
   "/register.html",
   "/account.html",
@@ -13,6 +14,8 @@ const CORE_ASSETS = [
   "/checkout-demo.html",
   "/payment-success.html",
   "/worker.html",
+  "/careers.html",
+  "/onboard.html",
   "/privacy.html",
   "/terms.html",
   "/refund.html",

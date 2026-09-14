@@ -700,11 +700,6 @@ const LANG_LABELS = {
   tl: "Filipino",
   ru: "Русский",
   tr: "Türkçe",
-  bn: "বাংলা",
-  ur: "اردو",
-  am: "አማርኛ",
-  zu: "isiZulu",
-  af: "Afrikaans",
 };
 
 const LANG_BY_COUNTRY = {

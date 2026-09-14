@@ -29,10 +29,22 @@ async function captureCard(store, buyer, authorization, customer) {
 
 async function settleOrder(store, order) {
   if (order.status === "paid") return;
+  // Double-sell guard: re-check listing availability under an optimistic lock.
+  // If the listing is already sold (another buyer raced), mark this order
+  // failed instead of silently charging two people for the same asset.
+  if (order.listing_id) {
+    const listing = await store.listings.get(order.listing_id);
+    if (listing && String(listing.status) === "sold") {
+      console.warn(`[payments] settleOrder race: listing ${order.listing_id} already sold; failing order ${order.reference}`);
+      await store.orders.markFailed(order.reference);
+      return { raceSold: true };
+    }
+  }
+
   await store.orders.markPaid(order.reference, new Date().toISOString());
   if (order.listing_id) {
     const listing = await store.listings.get(order.listing_id);
-    if (listing && listing.status === "available") {
+    if (listing && String(listing.status) === "available") {
       await store.listings.update(order.listing_id, { status: "sold" });
     }
     // Clear any waiting buyers now that the listing is purchased.
@@ -165,6 +177,12 @@ router.post("/one-tap", requireAuth, async (req, res) => {
     });
 
     if (saved.demo || !paystack.isConfigured()) {
+      // Production guard: if Paystack is somehow not configured in production,
+      // do NOT allow a demo settle to silently bypass real payment.
+      if (process.env.NODE_ENV === "production" && !saved.demo) {
+        await store.orders.markFailed(order.reference);
+        return res.status(500).json({ error: "Payment gateway not configured. Please try again later." });
+      }
       await settleOrder(store, order);
       return res.json({ message: "Payment successful (simulated one-tap)", reference, status: "paid", demo: true });
     }
@@ -299,6 +317,9 @@ router.post("/demo-pay/:reference", requireAuth, async (req, res) => {
     if (paystack.isConfigured()) {
       return res.status(403).json({ error: "Demo payments are disabled when Paystack is configured" });
     }
+    if (process.env.NODE_ENV === "production") {
+      return res.status(403).json({ error: "Demo payments are disabled in production" });
+    }
     const store = req.store;
     const order = await store.orders.findByReference(req.params.reference);
     if (!order) return res.status(404).json({ error: "Order not found" });
@@ -332,9 +353,21 @@ router.post("/webhook", express.raw({ type: "*/*" }), async (req, res) => {
 
     if (event.event === "charge.success" && event.data && event.data.reference) {
       const order = await store.orders.findByReference(event.data.reference);
-      if (order && order.status !== "paid") {
-        await settleOrder(store, order);
+      if (!order || order.status === "paid") { res.sendStatus(200); return; }
+
+      // Verify amount (kobo) and currency before settling — prevents forged
+      // or replayed webhooks from marking an order paid without valid funds.
+      const expectedKobo = Math.round(order.amount * 100);
+      if (event.data.amount && event.data.amount < expectedKobo) {
+        console.warn(`[payments] webhook amount mismatch: expected≥${expectedKobo}, got ${event.data.amount}`);
+        res.sendStatus(200); return;
       }
+      if (event.data.currency && String(event.data.currency).toUpperCase() !== "NGN") {
+        console.warn(`[payments] webhook currency mismatch: expected NGN, got ${event.data.currency}`);
+        res.sendStatus(200); return;
+      }
+
+      await settleOrder(store, order);
       // One-tap card capture: webhooks carry the authorization; call the
       // success-settle capture too in case the webhook happened before settle.
       if (order) {
@@ -345,8 +378,9 @@ router.post("/webhook", express.raw({ type: "*/*" }), async (req, res) => {
 
     res.sendStatus(200);
   } catch (err) {
-    console.error(err);
-    res.sendStatus(200);
+    console.error("[payments] webhook error:", err);
+    // Return 500 so Paystack retries the event; a 200 would be acknowledged.
+    res.sendStatus(500);
   }
 });
 
@@ -407,6 +441,17 @@ router.post("/refund/:reference", requireAuth, requireRole("admin"), async (req,
     const order = await store.orders.findByReference(req.params.reference);
     if (!order) return res.status(404).json({ error: "Order not found" });
     if (order.status === "refunded") return res.status(409).json({ error: "Already refunded" });
+
+    // Push the money back through Paystack first (production). Demo-mode orders
+    // were never really charged, so we only flip the local status.
+    if (paystack.isConfigured() && order.currency === "NGN") {
+      try {
+        await paystack.refundTransaction(order.reference, order.amount);
+      } catch (err) {
+        console.error("[payments] paystack refund failed:", err.message);
+        return res.status(502).json({ error: "Refund could not be processed by the payment gateway. Please try again." });
+      }
+    }
 
     await store.orders.updateStatus(order.reference, "refunded");
 

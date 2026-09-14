@@ -661,6 +661,15 @@ const buyIntents = {
   async setStatus(id, status) {
     await supabase.from("buy_intents").update({ status, updated_at: nowISO() }).eq("id", id);
   },
+  async expireStale(olderThanMs) {
+    const cutoff = new Date(Date.now() - olderThanMs).toISOString();
+    const { error } = await supabase
+      .from("buy_intents")
+      .update({ status: "cancelled", updated_at: nowISO() })
+      .eq("status", "waiting")
+      .lt("created_at", cutoff);
+    if (error) throw error;
+  },
   async remove(id) {
     const { error } = await supabase.from("buy_intents").delete().eq("id", id);
     return !error;

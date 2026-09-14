@@ -13,8 +13,10 @@ async function runSeed() {
   const existing = await store.users.findByEmail(adminEmail);
   if (!existing) {
     if (process.env.NODE_ENV === "production" && !adminPassword) {
-      console.error("FATAL: ADMIN_PASSWORD must be set in production to create the seed admin");
-      process.exit(1);
+      // Throw (not process.exit) so an orchestrator/entrypoint can react
+      // cleanly instead of a hard crash-loop — and so callers on a fresh
+      // database get a clear, non-silent error they can act on.
+      throw new Error("ADMIN_PASSWORD must be set in production to create the seed admin. Set it and redeploy.");
     }
     const hash = await bcrypt.hash(adminPassword || "ChangeMe123!", 12);
     await store.users.create({

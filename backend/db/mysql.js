@@ -750,6 +750,10 @@ const buyIntents = {
   async setStatus(id, status) {
     await pool.query("UPDATE buy_intents SET status = ?, updated_at = ? WHERE id = ?", [status, nowISO(), id]);
   },
+  async expireStale(olderThanMs) {
+    const cutoff = new Date(Date.now() - olderThanMs).toISOString();
+    await pool.query("UPDATE buy_intents SET status = 'cancelled', updated_at = ? WHERE status = 'waiting' AND created_at < ?", [nowISO(), cutoff]);
+  },
   async remove(id) {
     const [res] = await pool.query("DELETE FROM buy_intents WHERE id = ?", [id]);
     return res.affectedRows > 0;

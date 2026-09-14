@@ -16,6 +16,9 @@ services:
         value: https://mitex.onrender.com
       - key: CORS_ORIGIN
         value: https://mitex.onrender.com
+      # ===== Node version =====
+      - key: NODE_VERSION
+        value: 20
       # ===== Database (Supabase Postgres) =====
       - key: DB_CLIENT
         sync: false
@@ -23,9 +26,16 @@ services:
         sync: false
       - key: SUPABASE_SERVICE_KEY
         sync: false
-      # Seed admin + 23 listings on first boot (safe to leave on - idempotent)
+      # Seed admin + 23 listings on first boot (safe to leave on - idempotent).
+      # ADMIN_PASSWORD is REQUIRED in production or seeding aborts with a clear error.
       - key: SEED_ON_BOOT
         value: "true"
+      - key: ADMIN_EMAIL
+        sync: false
+      - key: ADMIN_PASSWORD
+        sync: false
+      - key: ADMIN_NAME
+        value: MITEX Admin
       # ===== Auth secrets =====
       - key: JWT_ACCESS_SECRET
         generateValue: true
@@ -38,6 +48,26 @@ services:
       # after connecting it, e.g. mitex.store
       - key: WEBAUTHN_RP_ID
         value: mitex.onrender.com
+      # ===== Email (SMTP) - required for OTP login, notifications, receipts =====
+      - key: SMTP_HOST
+        sync: false
+      - key: SMTP_PORT
+        sync: false
+      - key: SMTP_SECURE
+        sync: false
+      - key: SMTP_USER
+        sync: false
+      - key: SMTP_PASS
+        sync: false
+      - key: SMTP_FROM
+        sync: false
+      # ===== Push notifications (optional) =====
+      - key: VAPID_PUBLIC_KEY
+        sync: false
+      - key: VAPID_PRIVATE_KEY
+        sync: false
+      - key: VAPID_SUBJECT
+        sync: false
       # ===== Paystack =====
       - key: PAYSTACK_SECRET_KEY
         sync: false

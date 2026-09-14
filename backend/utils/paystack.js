@@ -105,10 +105,28 @@ async function chargeAuthorization({ email, amountNaira, authorizationCode, cust
   return { demo: false, status: "success", data: data.data };
 }
 
+async function refundTransaction(reference, amountNaira) {
+  if (!isConfigured()) return { demo: true };
+  const body = { transaction: reference };
+  // Paystack allows partial refunds by amount in kobo; omitting it refunds the full amount.
+  if (amountNaira && amountNaira > 0) body.amount = Math.round(amountNaira * 100);
+  const res = await fetch("https://api.paystack.co/refund", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${SECRET}`, "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  const data = await res.json();
+  if (!data.status) throw new Error(data.message || "Refund failed");
+  return { demo: false, ...data.data };
+}
+
 function verifyWebhookSignature(rawBody, signature) {
   if (!signature) return false;
   const hash = crypto.createHmac("sha512", SECRET).update(rawBody).digest("hex");
+  // Reject mismatched lengths before timingSafeEqual, which throws on
+  // length mismatch and lands in the caller's catch as an unintended 200.
+  if (hash.length !== Buffer.byteLength(signature, "utf8")) return false;
   return crypto.timingSafeEqual(Buffer.from(hash), Buffer.from(signature));
 }
 
-module.exports = { isConfigured, initializeTransaction, verifyTransaction, tokenizeCard, chargeAuthorization, verifyWebhookSignature };
+module.exports = { isConfigured, initializeTransaction, verifyTransaction, tokenizeCard, chargeAuthorization, refundTransaction, verifyWebhookSignature };

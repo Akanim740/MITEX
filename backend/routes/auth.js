@@ -324,7 +324,8 @@ router.post("/verify-otp", async (req, res) => {
 
     const user = await store.users.findByEmail(email);
     if (!user) {
-      return res.status(400).json({ error: "No account found for that email" });
+      // Keep the response generic so attackers cannot enumerate accounts.
+      return res.status(400).json({ error: "Incorrect or expired code. Check your email and try again." });
     }
     if (user.email_verified) {
       return res.json({ message: "Email is already verified", already_verified: true });

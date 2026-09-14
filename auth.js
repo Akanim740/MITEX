@@ -62,12 +62,23 @@ if (page === "register") initRegister();
 if (page === "login") initLogin();
 if (page === "reset") initReset();
 if (page === "account") initAccount();
-if (page === "valuator") initValuator();
+if (page === "valuator") {
+  initValuator();
+  renderMarketNav();
+}
 if (page === "marketplace") initMarketplace();
 if (page === "demo-checkout") initDemoCheckout();
 if (page === "payment-success") initPaymentSuccess();
 
-if (page === "marketplace" || page === "account") initNotifications();
+if (page === "marketplace") {
+  initMarketplace();
+  initNotifications();
+} else if (page === "transfer") {
+  renderMarketNav();
+  initNotifications();
+} else if (page === "account") {
+  initNotifications();
+}
 
 function naira(value) {
   if (typeof formatPriceWithOriginal === "function") {
@@ -175,6 +186,18 @@ function initRegister() {
     localStorage.setItem("mitex_locale", typeof detectLocale === "function" ? detectLocale(cc) : "en");
   }
 
+  // Populate the country / region picker from the currency table and keep the
+  // user's selection as the site-wide display locale + currency.
+  const countrySel = $("#rCountry");
+  if (countrySel && typeof countryOptionsHtml === "function") {
+    countrySel.innerHTML = countryOptionsHtml(localStorage.getItem("mitex_country") || "NG");
+    countrySel.addEventListener("change", () => {
+      const cc = countrySel.value || "NG";
+      localStorage.setItem("mitex_country", cc);
+      localStorage.setItem("mitex_locale", typeof detectLocale === "function" ? detectLocale(cc) : "en");
+    });
+  }
+
   passInput.addEventListener("input", () => {
     const score = passwordScore(passInput.value);
     bars.forEach((b, i) => {
@@ -200,6 +223,7 @@ function initRegister() {
     const password = passInput.value;
     const dob = $("#rDob") ? $("#rDob").value : "";
     const saveCard = $("#rSaveCard") ? $("#rSaveCard").checked : false;
+    const country = ($("#rCountry") && $("#rCountry").value) || localStorage.getItem("mitex_country") || "NG";
 
     if (!dob) {
       return showFormError(errEl, "Your date of birth is required (you must be 18 or older).");
@@ -215,7 +239,7 @@ const btn = $("#submitBtn");
       const data = await api("/api/auth/register", {
         method: "POST",
         auth: false,
-        body: { name, email, dob, saveCard, password, country: localStorage.getItem("mitex_country") || "NG", locale: localStorage.getItem("mitex_locale") || "en" },
+        body: { name, email, dob, saveCard, password, country, locale: localStorage.getItem("mitex_locale") || "en" },
       });
       $("#registerForm").classList.add("hidden");
       $("#successBox").classList.remove("hidden");
@@ -881,6 +905,7 @@ function initValuator() {
   if (!btn || !result) return;
   btn.addEventListener("click", async () => {
     const payload = {
+      title: $("#valTitle") ? $("#valTitle").value.trim() : "",
       assetType: $("#valAsset") && $("#valAsset").value,
       level: $("#valLevel") && $("#valLevel").value ? Number($("#valLevel").value) : null,
       tech_stack: $("#valTech") ? $("#valTech").value.trim() : "",

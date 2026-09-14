@@ -717,6 +717,15 @@ const buyIntents = {
   async setStatus(id, status) {
     db.prepare("UPDATE buy_intents SET status = ?, updated_at = ? WHERE id = ?").run(status, nowISO(), id);
   },
+  // Mark stale "waiting" intents cancelled so the buy_intents id never grows
+  // indefinitely and a buyer that walked away cannot be "ready"-fanned later.
+  async expireStale(olderThanMs) {
+    const cutoff = new Date(Date.now() - olderThanMs).toISOString();
+    const res = db
+      .prepare("UPDATE buy_intents SET status = 'cancelled', updated_at = ? WHERE status = 'waiting' AND created_at < ?")
+      .run(nowISO(), cutoff);
+    if (res.changes > 0) console.log(`[sqlite] expired ${res.changes} stale buy-intent(s)`);
+  },
   async remove(id) {
     return db.prepare("DELETE FROM buy_intents WHERE id = ?").run(id).changes > 0;
   },
