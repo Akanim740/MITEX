@@ -67,11 +67,14 @@ if (page === "valuator") {
   renderMarketNav();
 }
 if (page === "marketplace") initMarketplace();
+if (page === "packages") initPackages();
 if (page === "demo-checkout") initDemoCheckout();
 if (page === "payment-success") initPaymentSuccess();
 
 if (page === "marketplace") {
   initMarketplace();
+  initNotifications();
+} else if (page === "packages") {
   initNotifications();
 } else if (page === "transfer") {
   renderMarketNav();
@@ -765,6 +768,7 @@ function renderMarketNav() {
     area.innerHTML = `
       <div style="display:flex;gap:18px;align-items:center;">
         <a href="/index.html" style="color:var(--muted);text-decoration:none;">Home</a>
+        <a href="/packages.html" style="color:var(--muted);text-decoration:none;">Packages</a>
         <div class="dropdown" data-dropdown>
           <button class="drop-btn" type="button" aria-expanded="false">
             <span class="avatar">${esc(initial)}</span> Account
@@ -788,6 +792,7 @@ function renderMarketNav() {
     area.innerHTML = `
       <div style="display:flex;gap:18px;align-items:center;">
         <a href="/index.html" style="color:var(--muted);text-decoration:none;">Home</a>
+        <a href="/packages.html" style="color:var(--muted);text-decoration:none;">Packages</a>
         <a href="/login.html?next=/marketplace.html" style="color:var(--muted);text-decoration:none;">Sign In</a>
         <a href="/register.html?next=/marketplace.html" class="btn btn-primary btn-sm">Get Started</a>
       </div>`;
@@ -864,6 +869,108 @@ async function initMarketplace() {
     renderListings(searchInput ? searchInput.value : "");
   } catch (err) {
     grid.innerHTML = `<p class="empty-market">${esc(err.message)}</p>`;
+  }
+}
+
+async function initPackages() {
+  renderMarketNav();
+  if (typeof applyTranslations === "function") applyTranslations();
+  if (typeof initLangSwitcher === "function") initLangSwitcher();
+  const grid = $("#pkgGrid");
+  grid.innerHTML = packageSkeletons();
+  try {
+    const pkgs = await api("/api/packages", { auth: false });
+    renderPackages(pkgs);
+  } catch (err) {
+    grid.innerHTML = `<p class="empty-market" style="grid-column:1/-1;">${esc(err.message)}</p>`;
+  }
+}
+
+function packageSkeletons(n = 5) {
+  let out = "";
+  for (let i = 0; i < n; i++) {
+    out += `
+      <div class="pkg-card" aria-hidden="true">
+        <div class="skel" style="height:14px;width:40%;"></div>
+        <div class="skel" style="height:26px;width:75%;"></div>
+        <div class="skel" style="height:14px;width:100%;"></div>
+        <div class="skel" style="height:38px;width:60%;"></div>
+        <div class="skel" style="height:100px;width:100%;"></div>
+        <div class="skel" style="height:42px;width:100%;"></div>
+      </div>`;
+  }
+  return out;
+}
+
+async function renderPackages(pkgs) {
+  const grid = $("#pkgGrid");
+  if (!grid || !Array.isArray(pkgs) || !pkgs.length) {
+    if (grid) grid.innerHTML = `<p class="empty-market" style="grid-column:1/-1;">Packages coming soon.</p>`;
+    return;
+  }
+
+  grid.innerHTML = pkgs
+    .map((p) => {
+      const featured = p.popular ? " featured" : "";
+      const popular = p.popular ? `<span class="pkg-popular">Most popular</span>` : "";
+      const priceBlock = p.price
+        ? `<div class="pkg-price"><span data-price-ngn="${p.price}">${naira(p.price)}</span><small>${esc(p.pages)} &middot; ${esc(p.delivery)}</small></div>`
+        : `<div class="pkg-price">Tailored<small>${esc(p.pages)} &middot; ${esc(p.delivery)}</small></div>`;
+      const features = (p.features || [])
+        .map((f) => `<li>${esc(f)}</li>`)
+        .join("");
+      const cta = p.price
+        ? `<button class="btn btn-primary btn-full" data-order="${esc(p.key)}">Order Now</button>`
+        : `<a class="btn btn-ghost btn-full" href="https://wa.me/2347011633770?text=${encodeURIComponent("Hello MITEX, I'd like a custom website quote please.")}" target="_blank" rel="noopener">Request a Quote</a>`;
+      return `
+        <article class="pkg-card${featured}">
+          ${popular}
+          <span class="pkg-code">${esc(p.code)} package</span>
+          <h3>${esc(p.name)}</h3>
+          <p class="pkg-tagline">${esc(p.tagline)}</p>
+          ${priceBlock}
+          <div class="pkg-meta">
+            <span class="chip gold">${esc(p.pages)}</span>
+            <span class="chip">${esc(p.delivery)}</span>
+            <span class="chip">${esc(p.support)}</span>
+          </div>
+          <ul class="pkg-features">${features}</ul>
+          <div class="pkg-cta">${cta}</div>
+        </article>`;
+    })
+    .join("");
+
+  grid.querySelectorAll("[data-order]").forEach((btn) => {
+    btn.addEventListener("click", () => orderPackage(btn.dataset.order, btn));
+  });
+}
+
+async function orderPackage(packageKey, btn) {
+  if (!isLoggedIn()) {
+    location.href = "/login.html?next=/packages.html";
+    return;
+  }
+
+  let notes = "";
+  const promptText = "Tell us about your website (e.g. business name, what you do, any features or pages you already know you want).\n\nYou can leave this empty and we'll collect the details after payment.";
+  const entered = prompt(promptText);
+  notes = (entered || "").trim();
+
+  if (btn) setLoading(btn, true, "Starting checkout...");
+  try {
+    const data = await api("/api/payments/package-checkout", {
+      method: "POST",
+      body: { packageKey, notes },
+    });
+    location.href = data.authorization_url;
+  } catch (err) {
+    if (err.code === "CUSTOM_QUOTE") {
+      location.href = "https://wa.me/2347011633770?text=" + encodeURIComponent("Hello MITEX, I'd like a custom website quote please.");
+      if (btn) setLoading(btn, false, "Order Now");
+      return;
+    }
+    toastError(err.message);
+    if (btn) setLoading(btn, false, "Order Now");
   }
 }
 
@@ -1076,6 +1183,7 @@ function initLangSwitcher() {
 
 function renderListings(query, page) {
   const grid = $("#listingsGrid");
+  if (!grid) return;
   const count = $("#resultCount");
   const pager = $("#pager");
   const q = (query || "").trim().toLowerCase();

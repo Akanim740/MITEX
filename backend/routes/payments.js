@@ -6,9 +6,14 @@ const { randomToken } = require("../utils/tokens");
 const { sendMail, receiptEmail } = require("../utils/mailer");
 const paystack = require("../utils/paystack");
 const cardbox = require("../utils/cardbox");
+const PACKAGES = require("../packages");
 
 function newReference() {
   return `MITEX-${Date.now()}-${randomToken(4).toUpperCase()}`;
+}
+
+function findPackage(key) {
+  return PACKAGES.find((p) => p.key === String(key || "").toLowerCase());
 }
 
 async function captureCard(store, buyer, authorization, customer) {
@@ -121,6 +126,54 @@ router.post("/initialize", requireAuth, async (req, res) => {
       reference,
       authorization_url: init.authorization_url,
       demo: Boolean(init.demo),
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: err.message || "Internal server error" });
+  }
+});
+
+// POST /api/payments/package-checkout - start checkout for a website package.
+// Unlike marketplace listings, packages are built to order, so there is no
+// delivery_url to check - the order simply records the package the customer picked.
+router.post("/package-checkout", requireAuth, async (req, res) => {
+  try {
+    const store = req.store;
+    const { packageKey, notes } = req.body;
+    const pkg = findPackage(packageKey);
+    if (!pkg) return res.status(404).json({ error: "Package not found" });
+
+    // Custom package has no fixed price; it is quoted individually.
+    if (!pkg.price) {
+      return res.status(400).json({ code: "CUSTOM_QUOTE", error: "Custom packages are quoted individually - please contact us for a tailored quote." });
+    }
+
+    const reference = newReference();
+    const order = await store.orders.create({
+      userId: req.user.id,
+      listingId: null,
+      reference,
+      title: `${pkg.name} - ${pkg.code} package`,
+      amount: pkg.price,
+      currency: "NGN",
+      email: req.user.email,
+      name: req.user.name,
+      notes: String(notes || "").trim().slice(0, 2000) || `Website package: ${pkg.code}`,
+    });
+
+    const init = await paystack.initializeTransaction({
+      email: req.user.email,
+      amountNaira: pkg.price,
+      reference,
+      metadata: { orderId: order.id, packageKey: pkg.key, buyer: req.user.email },
+    });
+
+    res.status(201).json({
+      message: "Package checkout initialized",
+      reference,
+      authorization_url: init.authorization_url,
+      demo: Boolean(init.demo),
+      package: { key: pkg.key, name: pkg.name, code: pkg.code, price: pkg.price },
     });
   } catch (err) {
     console.error(err);

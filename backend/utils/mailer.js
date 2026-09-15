@@ -146,10 +146,17 @@ function naira(amount) {
 }
 
 function receiptEmail(order) {
+  const isPackage = !order.listing_id;
+  const note = isPackage
+    ? "Our team has started building your website. We will reach out with updates and hand over the finished site on the agreed date."
+    : "Your website download is available in My Account on MITEX.";
+  const noteHtml = isPackage
+    ? `<p style="color:#e5e7eb;font-size:15px;line-height:1.6;">Our team has started building your website. We will reach out with updates and hand over the finished site on the agreed date.</p>`
+    : `<p style="color:#e5e7eb;font-size:15px;line-height:1.6;">Your website download is available in your <a href="${APP_URL}/account.html" style="color:#fbbf24;">My Account</a> page.</p>`;
   return {
     subject: `MITEX receipt - ${order.title} (${order.reference})`,
-    text: `Thank you for your purchase!\n\nOrder:   ${order.title}\nAmount:  ${naira(order.amount)}\nRef:     ${order.reference}\nDate:    ${order.paid_at || new Date().toISOString()}\n\nYour website download is available in My Account on MITEX.\nQuestions? WhatsApp +234 701 163 3770.\n\n- MITEX team`,
-    html: emailWrap(`<p style="color:#e5e7eb;font-size:15px;line-height:1.6;">Thank you for your purchase!</p><div style="background:#1f2937;border-radius:8px;padding:16px 20px;margin:16px 0;"><table style="width:100%;font-size:14px;color:#d1d5db;"><tr><td style="padding:4px 0;">Order</td><td style="padding:4px 0;text-align:right;color:#fff;">${esc(order.title)}</td></tr><tr><td style="padding:4px 0;">Amount</td><td style="padding:4px 0;text-align:right;color:#fbbf24;font-weight:700;">${naira(order.amount)}</td></tr><tr><td style="padding:4px 0;">Reference</td><td style="padding:4px 0;text-align:right;color:#fff;">${esc(order.reference)}</td></tr><tr><td style="padding:4px 0;">Date</td><td style="padding:4px 0;text-align:right;color:#fff;">${esc(order.paid_at || new Date().toISOString().slice(0,10))}</td></tr></table></div><p style="color:#e5e7eb;font-size:15px;line-height:1.6;">Your website download is available in your <a href="${APP_URL}/account.html" style="color:#fbbf24;">My Account</a> page.</p><p style="color:#9ca3af;font-size:13px;margin-top:16px;">Questions? WhatsApp +234 701 163 3770</p>`),
+    text: `Thank you for your purchase!\n\nOrder:   ${order.title}\nAmount:  ${naira(order.amount)}\nRef:     ${order.reference}\nDate:    ${order.paid_at || new Date().toISOString()}\n\n${note}\nQuestions? WhatsApp +234 701 163 3770.\n\n- MITEX team`,
+    html: emailWrap(`<p style="color:#e5e7eb;font-size:15px;line-height:1.6;">Thank you for your purchase!</p><div style="background:#1f2937;border-radius:8px;padding:16px 20px;margin:16px 0;"><table style="width:100%;font-size:14px;color:#d1d5db;"><tr><td style="padding:4px 0;">Order</td><td style="padding:4px 0;text-align:right;color:#fff;">${esc(order.title)}</td></tr><tr><td style="padding:4px 0;">Amount</td><td style="padding:4px 0;text-align:right;color:#fbbf24;font-weight:700;">${naira(order.amount)}</td></tr><tr><td style="padding:4px 0;">Reference</td><td style="padding:4px 0;text-align:right;color:#fff;">${esc(order.reference)}</td></tr><tr><td style="padding:4px 0;">Date</td><td style="padding:4px 0;text-align:right;color:#fff;">${esc(order.paid_at || new Date().toISOString().slice(0,10))}</td></tr></table></div>${noteHtml}<p style="color:#9ca3af;font-size:13px;margin-top:16px;">Questions? WhatsApp +234 701 163 3770</p>`),
   };
 }
 

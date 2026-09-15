@@ -154,6 +154,45 @@ try {
   $dash = Invoke-RestMethod "$base/api/auth/dashboard" -Headers $adminHdr
   Check "dashboard stats include orders + revenue" ($dash.orders.paid -ge 1 -and $dash.orders.revenue -ge 150000)
 
+  # ---- Website package checkout ----
+  $pkgs = ((Invoke-WebRequest "$base/api/packages").Content | ConvertFrom-Json)
+  Check "packages list returns 5 tiers" (@($pkgs).Count -eq 5)
+
+  $singlePkg = Invoke-RestMethod "$base/api/packages/standard"
+  Check "single package fetch works" ($singlePkg.key -eq "standard" -and $singlePkg.price -eq 250000)
+
+  $pkgUnauth = $false
+  try {
+    Invoke-RestMethod -Method Post -Uri "$base/api/payments/package-checkout" -ContentType application/json -Body (@{ packageKey = "standard" } | ConvertTo-Json) | Out-Null
+  } catch { $pkgUnauth = (StatusOf $_) -eq 401 }
+  Check "package checkout requires login (401)" $pkgUnauth
+
+  $pkgInit = Invoke-RestMethod -Method Post -Uri "$base/api/payments/package-checkout" -ContentType application/json -Headers $custHdr -Body (@{ packageKey = "standard"; notes = "Bakery website, 8 pages" } | ConvertTo-Json)
+  Check "package checkout initialized in demo mode" ($pkgInit.demo -eq $true -and $pkgInit.package.price -eq 250000)
+  Check "package checkout title uses package name" ($pkgInit.package.name -eq "Business Growth")
+  $pkgRef = $pkgInit.reference
+
+  $unknownPkg = $false
+  try {
+    Invoke-RestMethod -Method Post -Uri "$base/api/payments/package-checkout" -ContentType application/json -Headers $custHdr -Body (@{ packageKey = "nope" } | ConvertTo-Json) | Out-Null
+  } catch { $unknownPkg = (StatusOf $_) -eq 404 }
+  Check "unknown package rejected (404)" $unknownPkg
+
+  $customQuote = $false
+  try {
+    Invoke-RestMethod -Method Post -Uri "$base/api/payments/package-checkout" -ContentType application/json -Headers $custHdr -Body (@{ packageKey = "custom" } | ConvertTo-Json) | Out-Null
+  } catch { $customQuote = (StatusOf $_) -eq 400 }
+  Check "custom package requires quote (400)" $customQuote
+
+  $pkgPaid = Invoke-RestMethod -Method Post -Uri "$base/api/payments/demo-pay/$pkgRef" -Headers $custHdr
+  Check "package order demo payment succeeds" ($pkgPaid.status -eq "paid")
+
+  $pkgVerify = Invoke-RestMethod "$base/api/payments/verify/$pkgRef" -Headers $custHdr
+  Check "package order verify reflects paid" ($pkgVerify.status -eq "paid" -and $pkgVerify.order.amount -eq 250000)
+
+  $allOrders2 = Invoke-RestMethod "$base/api/payments/orders" -Headers $adminHdr
+  Check "admin sees package order" (($allOrders2 | Where-Object { $_.reference -eq $pkgRef }) -ne $null)
+
 } finally {
   if ($p -and -not $p.HasExited) { Stop-Process -Id $p.Id -Force }
   if (Test-Path $dotEnvBak) { Move-Item $dotEnvBak $dotEnvPath -Force }

@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Website Packages &amp; Pricing | MITEX</title>
+  <meta name="description" content="Website building packages from MITEX - from a professional online presence to a full e-commerce store. Transparent pricing, secure Paystack checkout and support included." />
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23070b14'/%3E%3Ctext x='32' y='44' font-family='Arial' font-size='34' font-weight='bold' fill='%23fbbf24' text-anchor='middle'%3EM%3C/text%3E%3C/svg%3E" />
+  <link rel="manifest" href="/manifest.webmanifest" />
+  <meta name="theme-color" content="#070b14" />
+  <link rel="apple-touch-icon" href="/icons/icon-192.png" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="MITEX" />
+  <script src="/pwa.js" defer></script>
+  <script src="/analytics.js" defer></script>
+  <script src="/cookie-consent.js" defer></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;600;700;800&family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="auth.css" />
+  <style>
+    .pkg-main { width: min(1100px, 94%); margin-inline: auto; padding: 46px 0 90px; }
+    .pkg-head { text-align: center; margin-bottom: 42px; }
+    .pkg-head h1 { font-family: "Sora", sans-serif; font-size: clamp(1.7rem, 4vw, 2.4rem); margin-bottom: 8px; }
+    .pkg-head p { color: var(--muted); max-width: 620px; margin-inline: auto; line-height: 1.6; }
+    .pkg-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 22px; align-items: stretch; }
+    .pkg-card { position: relative; background: var(--card); border: 1px solid var(--card-border); border-radius: 18px; padding: 28px; display: flex; flex-direction: column; gap: 14px; transition: transform .25s ease, border-color .25s ease; }
+    .pkg-card:hover { transform: translateY(-5px); }
+    .pkg-card.featured { border-color: rgba(251,191,36,.65); box-shadow: 0 0 0 4px rgba(251,191,36,.08); }
+    .pkg-popular { position: absolute; top: -12px; left: 50%; transform: translateX(-50%); background: linear-gradient(135deg, #fbbf24, #f59e0b); color: #070b14; font-size: .72rem; font-weight: 800; text-transform: uppercase; letter-spacing: .06em; padding: 5px 14px; border-radius: 999px; white-space: nowrap; }
+    .pkg-code { font-family: "Sora", sans-serif; font-size: .78rem; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: #fbbf24; }
+    .pkg-card h3 { font-family: "Sora", sans-serif; font-size: 1.25rem; margin: 0; }
+    .pkg-tagline { color: var(--muted); font-size: .92rem; line-height: 1.55; flex-grow: 1; }
+    .pkg-price { font-family: "Sora", sans-serif; font-size: 1.9rem; font-weight: 800; color: var(--gold); }
+    .pkg-price small { display: block; font-size: .78rem; font-weight: 500; color: var(--muted); font-family: "Inter", sans-serif; }
+    .pkg-meta { display: flex; flex-wrap: wrap; gap: 7px; }
+    .pkg-features { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+    .pkg-features li { font-size: .9rem; color: var(--text); display: flex; gap: 9px; align-items: flex-start; line-height: 1.45; }
+    .pkg-features li::before { content: "\2713"; color: #25d366; font-weight: 800; flex: none; }
+    .pkg-cta { margin-top: auto; }
+    .enquire-note { text-align: center; color: var(--muted); margin-top: 34px; font-size: .9rem; line-height: 1.6; }
+    .enquire-note a { color: #25d366; font-weight: 600; text-decoration: none; }
+    .enquire-note a:hover { text-decoration: underline; }
+    .trust-bar { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; margin-top: 30px; }
+    .skel { background: linear-gradient(90deg, var(--card) 25%, rgba(255,255,255,.05) 50%, var(--card) 75%); background-size: 200% 100%; animation: shimmer 1.4s infinite; border-radius: 10px; }
+    @keyframes shimmer { to { background-position: -200% 0; } }
+  </style>
+  <script src="/ui.js"></script>
+</head>
+<body data-page="packages">
+  <header class="topbar">
+    <div class="topbar-inner">
+      <a class="logo" href="/index.html">MIT<span>EX</span></a>
+      <div style="display:flex;align-items:center;gap:12px;">
+        <div class="lang-switcher" id="langSwitcher" style="position:relative;">
+          <button type="button" id="langBtn" style="background:var(--card);border:1px solid var(--card-border);border-radius:8px;padding:6px 10px;cursor:pointer;color:var(--text);font-size:0.85rem;display:flex;align-items:center;gap:6px;">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" style="opacity:0.7;"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+            <span id="langLabel">EN</span>
+            <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+          </button>
+          <div id="langDropdown" style="display:none;position:absolute;right:0;top:100%;margin-top:4px;background:var(--card);border:1px solid var(--card-border);border-radius:10px;padding:6px;min-width:160px;max-height:280px;overflow-y:auto;z-index:200;box-shadow:0 8px 24px rgba(0,0,0,.4);"></div>
+        </div>
+        <div id="navAuthArea"></div>
+      </div>
+    </div>
+  </header>
+
+  <main class="pkg-main">
+    <div class="pkg-head">
+      <h1>Website <span style="color:#fbbf24;">Packages</span></h1>
+      <p>Pick a package that fits your business today - every site is built from scratch by MITEX, mobile-friendly, secured and launched with support. Transparent pricing, no hidden fees.</p>
+    </div>
+
+    <div class="pkg-grid" id="pkgGrid"></div>
+
+    <div class="trust-bar" id="pkgTrust"></div>
+
+    <div class="enquire-note">
+      Not sure which package fits? Call or WhatsApp
+      <a href="https://wa.me/2347011633770" target="_blank" rel="noopener">+234 701 163 3770</a>
+      for a free consultation.
+    </div>
+  </main>
+
+  <script src="/currencies.js"></script>
+  <script src="/i18n.js"></script>
+  <script src="auth.js"></script>
+</body>
+</html>

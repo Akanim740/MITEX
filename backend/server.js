@@ -134,6 +134,7 @@ app.use("/api/enquiries", enquiryLimiter, require("./routes/enquiries"));
 app.use("/api/listings", require("./routes/listings"));
 app.use("/api/newsletter", require("./routes/newsletter"));
 app.use("/api/payments", require("./routes/payments"));
+app.use("/api/packages", require("./routes/packages"));
 app.use("/api/applications", require("./routes/applications"));
 app.use("/api/analyze", require("./routes/analyze"));
 app.use("/api/salaries", require("./routes/salaries"));
