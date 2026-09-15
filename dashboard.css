@@ -708,3 +708,16 @@ tbody tr:hover {
   max-width: 150px;
 }
 .fulfill-sel:disabled { opacity: .6; }
+
+.brief-cell { max-width: 280px; }
+.brief-text {
+  display: block;
+  font-size: 0.84rem;
+  color: var(--text-muted, #9aa7bd);
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 3.2em;
+  overflow: hidden;
+}
+.brief-cell.brief-open .brief-text { max-height: none; }
+.brief-toggle { margin-top: 4px; padding: 3px 8px; font-size: 0.78rem; }

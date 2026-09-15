@@ -875,11 +875,11 @@ $("#salaryForm").addEventListener("submit", async (e) => {
 
 async function loadOrders() {
   const body = $("#ordersBody");
-  body.innerHTML = window.MITEXUi ? window.MITEXUi.skelRows(4, 8) : '<tr><td colspan="8" class="empty-state">Loading...</td></tr>';
+  body.innerHTML = window.MITEXUi ? window.MITEXUi.skelRows(4, 9) : '<tr><td colspan="9" class="empty-state">Loading...</td></tr>';
   try {
     const rows = await API.get("/api/payments/orders");
     if (!rows.length) {
-      body.innerHTML = '<tr><td colspan="8" class="empty-state">No orders yet.</td></tr>';
+      body.innerHTML = '<tr><td colspan="9" class="empty-state">No orders yet.</td></tr>';
       return;
     }
     body.innerHTML = rows
@@ -889,20 +889,34 @@ async function loadOrders() {
           const buildCell = isPackage
             ? fulfillmentSelect(r.reference, r.fulfillment_status || "pending")
             : '<span class="muted">—</span>';
+          const briefCell = r.notes
+            ? `<div class="brief-cell"><span class="brief-text" data-full="${esc(r.notes)}">${esc(r.notes)}</span><button type="button" class="brief-toggle btn btn-ghost btn-sm" data-brief="${esc(r.reference)}">Show full</button></div>`
+            : '<span class="muted">—</span>';
           return `
         <tr>
           <td class="muted">${esc(r.reference)}</td>
-          <td><strong>${esc(r.title)}</strong>${r.notes ? `<br /><span class="muted" style="font-size:.8rem;">📝 ${esc(r.notes)}</span>` : ""}</td>
+          <td><strong>${esc(r.title)}</strong></td>
           <td>${esc(r.email)}${r.name ? `<br /><span class="muted">${esc(r.name)}</span>` : ""}</td>
           <td>${naira(r.amount)}</td>
           <td><span class="badge ${esc(r.status)}">${esc(r.status)}</span></td>
           <td>${buildCell}</td>
+          <td>${briefCell}</td>
           <td class="muted">${fmtDate(r.created_at)}</td>
           <td>${r.status === "paid" ? `<button class="btn btn-ghost btn-sm" data-refund="${esc(r.reference)}" style="color:var(--red,#ef4444);border-color:var(--red,#ef4444);">Refund</button>` : ""}</td>
         </tr>`;
         }
       )
       .join("");
+
+    body.querySelectorAll(".brief-toggle").forEach((btn) =>
+      btn.addEventListener("click", () => {
+        const cell = btn.closest(".brief-cell");
+        const text = cell.querySelector(".brief-text");
+        const expanded = cell.classList.toggle("brief-open");
+        btn.textContent = expanded ? "Show less" : "Show full";
+        if (expanded) text.textContent = cell.querySelector(".brief-text").dataset.full;
+      })
+    );
 
     body.querySelectorAll("[data-refund]").forEach((btn) =>
       btn.addEventListener("click", async () => {
@@ -937,7 +951,7 @@ async function loadOrders() {
       })
     );
   } catch (err) {
-    body.innerHTML = `<tr><td colspan="8" class="empty-state">${esc(err.message)}</td></tr>`;
+    body.innerHTML = `<tr><td colspan="9" class="empty-state">${esc(err.message)}</td></tr>`;
   }
 }
 
