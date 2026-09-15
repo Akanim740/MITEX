@@ -737,13 +737,18 @@ async function loadMyOrders() {
       body.innerHTML = '<tr><td colspan="5" class="muted">No orders yet. <a href="/marketplace.html" style="color:#fbbf24">Browse the marketplace</a> or <a href="/packages.html" style="color:#fbbf24">order a website package</a>.</td></tr>';
       return;
     }
+
+    let packages = [];
+    try { packages = await api("/api/packages", { auth: false }); } catch {}
+    const pkgFor = (o) => packages.find((p) => (o.title || "").indexOf(`${p.name} - ${p.code} package`) !== -1) || null;
+
     body.innerHTML = orders
-      .map(
-        (o) => {
-          const isPackage = !o.listing_id;
-          return `
-        <tr>
-          <td><strong>${esc(o.title)}</strong><br /><span class="muted">${esc(o.reference)}</span>${isPackage ? '<br /><span class="chip gold" style="margin-top:4px">Package order</span>' : ""}${o.notes && isPackage ? `<div class="myoffer-brief"><span class="myoffer-brief-text">${esc(o.notes)}</span><button type="button" class="myoffer-brief-toggle">${o.notes.length > 120 ? "Show description" : ""}</button></div>` : ""}</td>
+      .map((o) => {
+        const isPackage = !o.listing_id;
+        const pkg = isPackage ? pkgFor(o) : null;
+        return `
+        <tr class="order-row" data-ref="${esc(o.reference)}">
+          <td><strong>${esc(o.title)}</strong><br /><span class="muted">${esc(o.reference)}</span>${isPackage ? '<br /><span class="chip gold" style="margin-top:4px">Package order</span>' : ""}<br /><button type="button" class="btn btn-ghost btn-sm order-details-toggle" data-ref="${esc(o.reference)}">View details</button></td>
           <td>${naira(o.amount)}</td>
           <td>${statusChip(o.status)}${
             o.status === "paid" && !isPackage
@@ -752,21 +757,59 @@ async function loadMyOrders() {
           }</td>
           <td>${isPackage ? packageProgress(o.fulfillment_status || "pending") : '<span class="muted">—</span>'}</td>
           <td class="muted">${new Date(o.created_at).toLocaleDateString("en-NG")}</td>
+        </tr>
+        <tr class="order-detail hidden">
+          <td colspan="5">${orderDetailCard(o, pkg, isPackage)}</td>
         </tr>`;
-        }
-      )
+      })
       .join("");
 
-    body.querySelectorAll(".myoffer-brief-toggle").forEach((btn) =>
+    body.querySelectorAll(".order-details-toggle").forEach((btn) =>
       btn.addEventListener("click", () => {
-        const brief = btn.closest(".myoffer-brief");
-        brief.classList.toggle("myoffer-brief-open");
-        btn.textContent = brief.classList.contains("myoffer-brief-open") ? "Hide description" : "Show description";
+        const row = btn.closest(".order-row");
+        const detail = row.nextElementSibling;
+        const hidden = detail.classList.toggle("hidden");
+        btn.textContent = hidden ? "View details" : "Hide details";
       })
     );
   } catch (err) {
     body.innerHTML = `<tr><td colspan="5" class="error">${esc(err.message)}</td></tr>`;
   }
+}
+
+// Full order record shown when a customer expands an order in "My Orders".
+function orderDetailCard(o, pkg, isPackage) {
+  const fmtDay = (d) => (d ? new Date(d).toLocaleDateString("en-NG") : "—");
+  const info = `
+    <div class="order-detail-grid">
+      <div><span>Reference</span><b>${esc(o.reference)}</b></div>
+      <div><span>Order placed</span><b>${fmtDay(o.created_at)}</b></div>
+      <div><span>Payment</span><b>${o.paid_at ? `Paid on ${fmtDay(o.paid_at)}` : esc(o.status)}</b></div>
+      <div><span>Amount</span><b>${naira(o.amount)} <small class="muted">${esc(o.currency || "NGN")}</small></b></div>
+    </div>`;
+
+  let kickoff = "";
+  if (isPackage) {
+    const window = pkg ? esc(pkg.delivery) : "as scheduled";
+    const support = pkg ? esc(pkg.support) : "included support";
+    kickoff = `
+      <div class="order-kickoff">
+        <h4>What happens next</h4>
+        <p>Your website is built to order. Our team has started on your package and will keep this page updated with build progress.</p>
+        <ul>
+          <li><strong>Delivery window:</strong> ${window}</li>
+          <li><strong>After payment:</strong> ${support} included.</li>
+          <li><strong>Build updates:</strong> follow the progress bar next to this order.</li>
+        </ul>
+        <p class="muted" style="font-size:.85rem;">Need a change or a quick reply? Message us on <a href="https://wa.me/2347011633770?text=${encodeURIComponent("Hello MITEX, I'd like an update on my order " + o.reference + ".")}" target="_blank" rel="noopener" style="color:var(--gold,#fbbf24);">WhatsApp +234 701 163 3770</a> or reply to your receipt email.</p>
+      </div>`;
+  }
+
+  const brief = o.notes
+    ? `<div class="order-brief"><h4>Your description</h4><p>${esc(o.notes)}</p></div>`
+    : "";
+
+  return `${info}${brief}${kickoff}`;
 }
 
 // Renders a 4-stage build progress tracker for package (build-to-order) orders.

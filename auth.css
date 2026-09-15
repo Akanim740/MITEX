@@ -510,31 +510,64 @@ textarea {
   background: rgba(251, 191, 36, 0.08);
 }
 
-.myoffer-brief {
-  margin-top: 8px;
-  border-left: 2px solid var(--gold);
-  padding-left: 8px;
-  max-width: 320px;
+.order-detail > td {
+  background: rgba(251, 191, 36, 0.04);
+  padding: 14px 18px;
 }
-.myoffer-brief-text {
+.order-detail-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 10px 16px;
+  margin-bottom: 14px;
+}
+.order-detail-grid > div span {
   display: block;
-  font-size: 0.8rem;
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
   color: var(--muted);
+  margin-bottom: 2px;
+}
+.order-detail-grid > div b {
+  font-size: 0.9rem;
+  color: var(--text);
+  word-break: break-word;
+}
+.order-brief,
+.order-kickoff {
+  border: 1px solid var(--card-border);
+  border-radius: 12px;
+  padding: 12px 14px;
+  margin-top: 10px;
+  background: var(--card);
+}
+.order-brief h4,
+.order-kickoff h4 {
+  margin: 0 0 6px;
+  font-size: 0.8rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--gold);
+}
+.order-brief p {
+  margin: 0;
   white-space: pre-wrap;
   word-break: break-word;
-  max-height: 3em;
-  overflow: hidden;
+  font-size: 0.9rem;
+  color: var(--text);
 }
-.myoffer-brief-open .myoffer-brief-text { max-height: none; }
-.myoffer-brief-toggle {
-  display: block;
-  margin-top: 4px;
-  padding: 0;
-  border: none;
-  background: none;
-  color: var(--gold);
-  font-size: 0.75rem;
-  cursor: pointer;
+.order-kickoff p {
+  margin: 0 0 8px;
+  font-size: 0.85rem;
+  color: var(--text-muted, #9aa7bd);
+  line-height: 1.55;
+}
+.order-kickoff ul {
+  margin: 0 0 8px;
+  padding-left: 18px;
+  font-size: 0.85rem;
+  color: var(--text-muted, #9aa7bd);
+  line-height: 1.6;
 }
 
 .chip.green {
