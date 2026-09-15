@@ -743,7 +743,7 @@ async function loadMyOrders() {
           const isPackage = !o.listing_id;
           return `
         <tr>
-          <td><strong>${esc(o.title)}</strong><br /><span class="muted">${esc(o.reference)}</span>${isPackage ? '<br /><span class="chip gold" style="margin-top:4px">Package order</span>' : ""}</td>
+          <td><strong>${esc(o.title)}</strong><br /><span class="muted">${esc(o.reference)}</span>${isPackage ? '<br /><span class="chip gold" style="margin-top:4px">Package order</span>' : ""}${o.notes && isPackage ? `<div class="myoffer-brief"><span class="myoffer-brief-text">${esc(o.notes)}</span><button type="button" class="myoffer-brief-toggle">${o.notes.length > 120 ? "Show description" : ""}</button></div>` : ""}</td>
           <td>${naira(o.amount)}</td>
           <td>${statusChip(o.status)}${
             o.status === "paid" && !isPackage
@@ -756,6 +756,14 @@ async function loadMyOrders() {
         }
       )
       .join("");
+
+    body.querySelectorAll(".myoffer-brief-toggle").forEach((btn) =>
+      btn.addEventListener("click", () => {
+        const brief = btn.closest(".myoffer-brief");
+        brief.classList.toggle("myoffer-brief-open");
+        btn.textContent = brief.classList.contains("myoffer-brief-open") ? "Hide description" : "Show description";
+      })
+    );
   } catch (err) {
     body.innerHTML = `<tr><td colspan="5" class="error">${esc(err.message)}</td></tr>`;
   }

@@ -510,6 +510,33 @@ textarea {
   background: rgba(251, 191, 36, 0.08);
 }
 
+.myoffer-brief {
+  margin-top: 8px;
+  border-left: 2px solid var(--gold);
+  padding-left: 8px;
+  max-width: 320px;
+}
+.myoffer-brief-text {
+  display: block;
+  font-size: 0.8rem;
+  color: var(--muted);
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 3em;
+  overflow: hidden;
+}
+.myoffer-brief-open .myoffer-brief-text { max-height: none; }
+.myoffer-brief-toggle {
+  display: block;
+  margin-top: 4px;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--gold);
+  font-size: 0.75rem;
+  cursor: pointer;
+}
+
 .chip.green {
   color: var(--green);
   border-color: rgba(37, 211, 102, 0.45);
