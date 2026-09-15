@@ -282,6 +282,7 @@ const orders = {
       email: v.email,
       name: v.name ?? null,
       notes: v.notes ?? null,
+      fulfillment_status: v.fulfillmentStatus ?? null,
       status: "pending",
       paid_at: null,
       created_at: nowISO(),
@@ -311,6 +312,12 @@ const orders = {
     const row = await this.findByReference(reference);
     if (!row) return false;
     await col("orders").doc(row.id).update({ status });
+    return true;
+  },
+  async setFulfillment(reference, fulfillmentStatus) {
+    const row = await this.findByReference(reference);
+    if (!row) return false;
+    await col("orders").doc(row.id).update({ fulfillment_status: fulfillmentStatus });
     return true;
   },
   async listForUser(userId) {

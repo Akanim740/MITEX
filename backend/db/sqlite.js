@@ -286,6 +286,7 @@ if (ordersTableSql && !String(ordersTableSql.sql).includes("'refunded'")) {
 {
   const orderCols = db.prepare("PRAGMA table_info(orders)").all().map((c) => c.name);
   if (!orderCols.includes("notes")) db.exec("ALTER TABLE orders ADD COLUMN notes TEXT");
+  if (!orderCols.includes("fulfillment_status")) db.exec("ALTER TABLE orders ADD COLUMN fulfillment_status TEXT");
 }
 
 // Older databases were created with a tokens type CHECK that lacks 'verify_otp'.
@@ -523,9 +524,9 @@ const orders = {
   async create(v) {
     const res = db
       .prepare(
-        "INSERT INTO orders (user_id, listing_id, reference, title, amount, currency, email, name, notes) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
+        "INSERT INTO orders (user_id, listing_id, reference, title, amount, currency, email, name, notes, fulfillment_status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
       )
-      .run(v.userId ?? null, v.listingId ?? null, v.reference, v.title, v.amount, v.currency || "NGN", v.email, v.name ?? null, v.notes ?? null);
+      .run(v.userId ?? null, v.listingId ?? null, v.reference, v.title, v.amount, v.currency || "NGN", v.email, v.name ?? null, v.notes ?? null, v.fulfillmentStatus ?? null);
     return this.findByReference(v.reference);
   },
   async findByReference(reference) {
@@ -542,6 +543,9 @@ const orders = {
   },
   async updateStatus(reference, status) {
     return db.prepare("UPDATE orders SET status = ? WHERE reference = ?").run(status, reference).changes > 0;
+  },
+  async setFulfillment(reference, fulfillmentStatus) {
+    return db.prepare("UPDATE orders SET fulfillment_status = ? WHERE reference = ?").run(fulfillmentStatus, reference).changes > 0;
   },
   async listForUser(userId) {
     return db.prepare("SELECT * FROM orders WHERE user_id = ? ORDER BY created_at DESC").all(userId);

@@ -381,6 +381,7 @@ const orders = {
         email: v.email,
         name: v.name ?? null,
         notes: v.notes ?? null,
+        fulfillment_status: v.fulfillmentStatus ?? null,
         status: "pending",
         created_at: nowISO(),
       })
@@ -407,6 +408,10 @@ const orders = {
   },
   async updateStatus(reference, status) {
     const { error } = await supabase.from("orders").update({ status }).eq("reference", reference);
+    return !error;
+  },
+  async setFulfillment(reference, fulfillmentStatus) {
+    const { error } = await supabase.from("orders").update({ fulfillment_status: fulfillmentStatus }).eq("reference", reference);
     return !error;
   },
   async listForUser(userId) {

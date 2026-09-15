@@ -259,6 +259,7 @@ const orders = {
       email: v.email,
       name: v.name ?? null,
       notes: v.notes ?? null,
+      fulfillment_status: v.fulfillmentStatus ?? null,
       status: "pending",
       paid_at: null,
       created_at: nowISO(),
@@ -285,6 +286,9 @@ const orders = {
   },
   async updateStatus(reference, status) {
     return (await db.collection("orders").updateOne({ reference }, { $set: { status } })).modifiedCount > 0;
+  },
+  async setFulfillment(reference, fulfillmentStatus) {
+    return (await db.collection("orders").updateOne({ reference }, { $set: { fulfillment_status: fulfillmentStatus } })).modifiedCount > 0;
   },
   async listForUser(userId) {
     return db.collection("orders").find({ user_id: userId }).sort({ created_at: -1 }).toArray();

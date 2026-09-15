@@ -101,6 +101,7 @@ CREATE TABLE orders (
   email      VARCHAR(190) NOT NULL,
   name       VARCHAR(120),
   notes      TEXT,
+  fulfillment_status VARCHAR(20),
   status     ENUM('pending','paid','failed','refunded') NOT NULL DEFAULT 'pending',
   paid_at    VARCHAR(32),
   created_at VARCHAR(32) NOT NULL,

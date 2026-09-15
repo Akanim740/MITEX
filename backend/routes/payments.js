@@ -159,6 +159,7 @@ router.post("/package-checkout", requireAuth, async (req, res) => {
       email: req.user.email,
       name: req.user.name,
       notes: String(notes || "").trim().slice(0, 2000) || `Website package: ${pkg.code}`,
+      fulfillmentStatus: "pending",
     });
 
     const init = await paystack.initializeTransaction({
@@ -481,6 +482,30 @@ router.get("/orders/mine", requireAuth, async (req, res) => {
 router.get("/orders", requireAuth, requireRole("admin", "editor"), async (req, res) => {
   try {
     res.json(await req.store.orders.listAll(req.query.status));
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// PATCH /api/payments/orders/:reference/fulfillment - staff update build progress
+const FULFILLMENT_STAGES = ["pending", "in_progress", "review", "completed"];
+router.patch("/orders/:reference/fulfillment", requireAuth, requireRole("admin", "editor"), async (req, res) => {
+  try {
+    const store = req.store;
+    const order = await store.orders.findByReference(req.params.reference);
+    if (!order) return res.status(404).json({ error: "Order not found" });
+    const next = String((req.body && req.body.fulfillmentStatus) || "").toLowerCase();
+    if (!FULFILLMENT_STAGES.includes(next)) {
+      return res.status(400).json({ error: `fulfillmentStatus must be one of: ${FULFILLMENT_STAGES.join(", ")}` });
+    }
+    // Build progress only applies to build-to-order (package) orders, which have no listing.
+    if (order.listing_id || order.status !== "paid") {
+      return res.status(409).json({ error: "Build progress only applies to paid package orders" });
+    }
+    await store.orders.setFulfillment(order.reference, next);
+    const fresh = await store.orders.findByReference(order.reference);
+    res.json({ message: "Fulfillment status updated", reference: order.reference, fulfillmentStatus: fresh.fulfillment_status || next });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "Internal server error" });

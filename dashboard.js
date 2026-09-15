@@ -875,25 +875,32 @@ $("#salaryForm").addEventListener("submit", async (e) => {
 
 async function loadOrders() {
   const body = $("#ordersBody");
-  body.innerHTML = window.MITEXUi ? window.MITEXUi.skelRows(4, 6) : '<tr><td colspan="6" class="empty-state">Loading...</td></tr>';
+  body.innerHTML = window.MITEXUi ? window.MITEXUi.skelRows(4, 8) : '<tr><td colspan="8" class="empty-state">Loading...</td></tr>';
   try {
     const rows = await API.get("/api/payments/orders");
     if (!rows.length) {
-      body.innerHTML = '<tr><td colspan="6" class="empty-state">No orders yet.</td></tr>';
+      body.innerHTML = '<tr><td colspan="8" class="empty-state">No orders yet.</td></tr>';
       return;
     }
     body.innerHTML = rows
       .map(
-        (r) => `
+        (r) => {
+          const isPackage = !r.listing_id;
+          const buildCell = isPackage
+            ? fulfillmentSelect(r.reference, r.fulfillment_status || "pending")
+            : '<span class="muted">—</span>';
+          return `
         <tr>
           <td class="muted">${esc(r.reference)}</td>
           <td><strong>${esc(r.title)}</strong>${r.notes ? `<br /><span class="muted" style="font-size:.8rem;">📝 ${esc(r.notes)}</span>` : ""}</td>
           <td>${esc(r.email)}${r.name ? `<br /><span class="muted">${esc(r.name)}</span>` : ""}</td>
           <td>${naira(r.amount)}</td>
           <td><span class="badge ${esc(r.status)}">${esc(r.status)}</span></td>
+          <td>${buildCell}</td>
           <td class="muted">${fmtDate(r.created_at)}</td>
           <td>${r.status === "paid" ? `<button class="btn btn-ghost btn-sm" data-refund="${esc(r.reference)}" style="color:var(--red,#ef4444);border-color:var(--red,#ef4444);">Refund</button>` : ""}</td>
-        </tr>`
+        </tr>`;
+        }
       )
       .join("");
 
@@ -913,9 +920,38 @@ async function loadOrders() {
         }
       })
     );
+
+    body.querySelectorAll("[data-fulfill]").forEach((sel) =>
+      sel.addEventListener("change", async () => {
+        const ref = sel.dataset.fulfill;
+        sel.disabled = true;
+        try {
+          await API.patch(`/api/payments/orders/${encodeURIComponent(ref)}/fulfillment`, { fulfillmentStatus: sel.value });
+          toastSuccess("Build progress updated", "Order " + ref);
+        } catch (err) {
+          toastError(err.message, "Update failed");
+          sel.value = sel.dataset.prev;
+        } finally {
+          sel.disabled = false;
+        }
+      })
+    );
   } catch (err) {
-    body.innerHTML = `<tr><td colspan="6" class="empty-state">${esc(err.message)}</td></tr>`;
+    body.innerHTML = `<tr><td colspan="8" class="empty-state">${esc(err.message)}</td></tr>`;
   }
+}
+
+function fulfillmentSelect(reference, current) {
+  const stages = [
+    ["pending", "Awaiting start"],
+    ["in_progress", "Building"],
+    ["review", "In review"],
+    ["completed", "Delivered"],
+  ];
+  const opts = stages
+    .map(([v, label]) => `<option value="${v}"${v === current ? " selected" : ""}>${label}</option>`)
+    .join("");
+  return `<select class="fulfill-sel" data-fulfill="${esc(reference)}" data-prev="${esc(current)}" aria-label="Build progress">${opts}</select>`;
 }
 
 async function loadSubscribers() {

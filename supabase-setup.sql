@@ -92,6 +92,7 @@ CREATE TABLE orders (
   email      TEXT NOT NULL,
   name       TEXT,
   notes      TEXT,
+  fulfillment_status TEXT,
   status     TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','paid','failed','refunded')),
   paid_at    TEXT,
   created_at TEXT NOT NULL
@@ -218,6 +219,9 @@ CREATE TABLE salaries (
 --
 -- Purchase customisation notes on orders.
 --   ALTER TABLE orders ADD COLUMN IF NOT EXISTS notes TEXT;
+--
+-- Build-to-order package progress on orders.
+--   ALTER TABLE orders ADD COLUMN IF NOT EXISTS fulfillment_status TEXT;
 --
 -- Refunds: allow order status 'refunded' on existing databases.
 --   ALTER TABLE orders DROP CONSTRAINT orders_status_check;

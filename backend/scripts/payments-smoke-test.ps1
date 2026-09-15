@@ -193,6 +193,36 @@ try {
   $allOrders2 = Invoke-RestMethod "$base/api/payments/orders" -Headers $adminHdr
   Check "admin sees package order" (($allOrders2 | Where-Object { $_.reference -eq $pkgRef }) -ne $null)
 
+  # ---- Fulfillment (build progress) tracking for package orders ----
+  $minePkg = Invoke-RestMethod "$base/api/payments/orders/mine" -Headers $custHdr
+  $pkgRow = $minePkg | Where-Object { $_.reference -eq $pkgRef }
+  Check "package order starts with pending fulfillment" ($pkgRow.fulfillment_status -eq "pending")
+  Check "package order has no listing_id" ($pkgRow.listing_id -eq $null)
+
+  $custFulfill = $false
+  try {
+    Invoke-RestMethod -Method Patch -Uri "$base/api/payments/orders/$pkgRef/fulfillment" -ContentType application/json -Headers $custHdr -Body (@{ fulfillmentStatus = "in_progress" } | ConvertTo-Json) | Out-Null
+  } catch { $custFulfill = (StatusOf $_) -eq 403 }
+  Check "customer blocked from updating fulfillment (403)" $custFulfill
+
+  $badStage = $false
+  try {
+    Invoke-RestMethod -Method Patch -Uri "$base/api/payments/orders/$pkgRef/fulfillment" -ContentType application/json -Headers $adminHdr -Body (@{ fulfillmentStatus = "launched" } | ConvertTo-Json) | Out-Null
+  } catch { $badStage = (StatusOf $_) -eq 400 }
+  Check "invalid fulfillment stage rejected (400)" $badStage
+
+  $adv = Invoke-RestMethod -Method Patch -Uri "$base/api/payments/orders/$pkgRef/fulfillment" -ContentType application/json -Headers $adminHdr -Body (@{ fulfillmentStatus = "in_progress" } | ConvertTo-Json)
+  Check "admin advances fulfillment to building" ($adv.fulfillmentStatus -eq "in_progress")
+
+  $minePkg2 = Invoke-RestMethod "$base/api/payments/orders/mine" -Headers $custHdr
+  Check "customer sees updated progress" (($minePkg2 | Where-Object { $_.reference -eq $pkgRef }).fulfillment_status -eq "in_progress")
+
+  $marketFulfill = $false
+  try {
+    Invoke-RestMethod -Method Patch -Uri "$base/api/payments/orders/$ref/fulfillment" -ContentType application/json -Headers $adminHdr -Body (@{ fulfillmentStatus = "in_progress" } | ConvertTo-Json) | Out-Null
+  } catch { $marketFulfill = (StatusOf $_) -eq 409 }
+  Check "marketplace orders cannot track build progress (409)" $marketFulfill
+
 } finally {
   if ($p -and -not $p.HasExited) { Stop-Process -Id $p.Id -Force }
   if (Test-Path $dotEnvBak) { Move-Item $dotEnvBak $dotEnvPath -Force }

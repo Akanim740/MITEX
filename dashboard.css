@@ -697,3 +697,14 @@ tbody tr:hover {
     padding: 9px 10px;
   }
 }
+
+.fulfill-sel {
+  padding: 6px 8px;
+  border: 1px solid var(--card-border, #2a3550);
+  border-radius: 8px;
+  background: var(--card, #151c31);
+  color: var(--text, #e8ecf4);
+  font-size: 0.84rem;
+  max-width: 150px;
+}
+.fulfill-sel:disabled { opacity: .6; }

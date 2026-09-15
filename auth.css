@@ -639,3 +639,8 @@ textarea {
   border-radius: 10px;
   font-size: 0.88rem;
 }
+
+.pkg-progress { display:flex; align-items:center; gap:6px; }
+.pp-dot { width:14px; height:14px; border-radius:50%; background:var(--card-border,#334155); position:relative; flex:none; }
+.pp-dot.done { background:#10b981; }
+.pp-dot.cur::after { content:""; position:absolute; inset:-3px; border-radius:50%; border:2px solid #fbbf24; }

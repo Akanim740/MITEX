@@ -730,31 +730,53 @@ async function loadMyOrders() {
   const panel = document.querySelector("#orders-panel");
   if (!panel) return;
   const body = $("#ordersBody");
-  if (window.MITEXUi) body.innerHTML = window.MITEXUi.skelRows(3, 4);
+  if (window.MITEXUi) body.innerHTML = window.MITEXUi.skelRows(3, 5);
   try {
     const orders = await api("/api/payments/orders/mine");
     if (!orders.length) {
-      body.innerHTML = '<tr><td colspan="4" class="muted">No orders yet. <a href="/marketplace.html" style="color:#fbbf24">Browse the marketplace</a>.</td></tr>';
+      body.innerHTML = '<tr><td colspan="5" class="muted">No orders yet. <a href="/marketplace.html" style="color:#fbbf24">Browse the marketplace</a> or <a href="/packages.html" style="color:#fbbf24">order a website package</a>.</td></tr>';
       return;
     }
     body.innerHTML = orders
       .map(
-        (o) => `
+        (o) => {
+          const isPackage = !o.listing_id;
+          return `
         <tr>
-          <td><strong>${esc(o.title)}</strong><br /><span class="muted">${esc(o.reference)}</span></td>
+          <td><strong>${esc(o.title)}</strong><br /><span class="muted">${esc(o.reference)}</span>${isPackage ? '<br /><span class="chip gold" style="margin-top:4px">Package order</span>' : ""}</td>
           <td>${naira(o.amount)}</td>
           <td>${statusChip(o.status)}${
-            o.status === "paid"
+            o.status === "paid" && !isPackage
               ? ` <a class="btn btn-sm btn-primary" href="/api/payments/orders/${encodeURIComponent(o.id)}/download" target="_blank" rel="noopener" style="margin-left:8px">Download</a>`
               : ""
           }</td>
+          <td>${isPackage ? packageProgress(o.fulfillment_status || "pending") : '<span class="muted">—</span>'}</td>
           <td class="muted">${new Date(o.created_at).toLocaleDateString("en-NG")}</td>
-        </tr>`
+        </tr>`;
+        }
       )
       .join("");
   } catch (err) {
-    body.innerHTML = `<tr><td colspan="4" class="error">${esc(err.message)}</td></tr>`;
+    body.innerHTML = `<tr><td colspan="5" class="error">${esc(err.message)}</td></tr>`;
   }
+}
+
+// Renders a 4-stage build progress tracker for package (build-to-order) orders.
+function packageProgress(stage) {
+  const stages = [
+    { key: "pending", label: "Awaiting start" },
+    { key: "in_progress", label: "Building" },
+    { key: "review", label: "In review" },
+    { key: "completed", label: "Delivered" },
+  ];
+  const idx = stages.findIndex((s) => s.key === stage);
+  let dots = "";
+  stages.forEach((s, i) => {
+    const done = i <= idx;
+    dots += `<span class="pp-dot${done ? " done" : ""}${i === idx ? " cur" : ""}" title="${esc(s.label)}" aria-label="${esc(s.label)}"></span>`;
+  });
+  const curLabel = idx >= 0 ? stages[idx].label : esc(stage || "Pending");
+  return `<div class="pkg-progress">${dots}<span class="muted" style="font-size:.78rem;">${esc(curLabel)}</span></div>`;
 }
 
 function renderMarketNav() {

@@ -77,6 +77,10 @@ async function init() {
       "SELECT COUNT(*) AS n FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'orders' AND COLUMN_NAME = 'notes'"
     );
     if (!notesCol[0].n) await pool.query("ALTER TABLE orders ADD COLUMN notes TEXT");
+    const [fulCol] = await pool.query(
+      "SELECT COUNT(*) AS n FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'orders' AND COLUMN_NAME = 'fulfillment_status'"
+    );
+    if (!fulCol[0].n) await pool.query("ALTER TABLE orders ADD COLUMN fulfillment_status VARCHAR(20)");
     await pool.query("ALTER TABLE orders MODIFY COLUMN status ENUM('pending','paid','failed','refunded') NOT NULL DEFAULT 'pending'");
   } catch {}
 
@@ -173,6 +177,7 @@ async function init() {
       email      VARCHAR(190) NOT NULL,
       name       VARCHAR(120),
       notes      TEXT,
+      fulfillment_status VARCHAR(20),
       status     ENUM('pending','paid','failed','refunded') NOT NULL DEFAULT 'pending',
       paid_at    VARCHAR(32),
       created_at VARCHAR(32) NOT NULL,
@@ -533,8 +538,8 @@ const subscribers = {
 const orders = {
   async create(v) {
     await pool.query(
-      "INSERT INTO orders (user_id, listing_id, reference, title, amount, currency, email, name, notes, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-      [v.userId ?? null, v.listingId ?? null, v.reference, v.title, v.amount, v.currency || "NGN", v.email, v.name ?? null, v.notes ?? null, nowISO()]
+      "INSERT INTO orders (user_id, listing_id, reference, title, amount, currency, email, name, notes, fulfillment_status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+      [v.userId ?? null, v.listingId ?? null, v.reference, v.title, v.amount, v.currency || "NGN", v.email, v.name ?? null, v.notes ?? null, v.fulfillmentStatus ?? null, nowISO()]
     );
     return this.findByReference(v.reference);
   },
@@ -556,6 +561,10 @@ const orders = {
   },
   async updateStatus(reference, status) {
     const [res] = await pool.query("UPDATE orders SET status = ? WHERE reference = ?", [status, reference]);
+    return res.affectedRows > 0;
+  },
+  async setFulfillment(reference, fulfillmentStatus) {
+    const [res] = await pool.query("UPDATE orders SET fulfillment_status = ? WHERE reference = ?", [fulfillmentStatus, reference]);
     return res.affectedRows > 0;
   },
   async listForUser(userId) {
