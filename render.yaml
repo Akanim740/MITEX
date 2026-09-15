@@ -17,8 +17,10 @@ services:
       - key: CORS_ORIGIN
         value: https://mitex.onrender.com
       # ===== Node version =====
+      # Node 22+ required: @supabase/supabase-js needs native WebSocket (22+),
+      # and the sqlite driver uses node:sqlite (stable in 22.5+).
       - key: NODE_VERSION
-        value: 20
+        value: 22
       # ===== Database (Supabase Postgres) =====
       - key: DB_CLIENT
         sync: false
