@@ -583,6 +583,9 @@ const orders = {
   async updateStatus(reference, status) {
     return db.prepare("UPDATE orders SET status = ? WHERE reference = ?").run(status, reference).changes > 0;
   },
+  async updateReference(reference, newReference) {
+    return db.prepare("UPDATE orders SET reference = ? WHERE reference = ?").run(newReference, reference).changes > 0;
+  },
   async setFulfillment(reference, fulfillmentStatus) {
     return db.prepare("UPDATE orders SET fulfillment_status = ? WHERE reference = ?").run(fulfillmentStatus, reference).changes > 0;
   },

@@ -410,6 +410,10 @@ const orders = {
     const { error } = await supabase.from("orders").update({ status }).eq("reference", reference);
     return !error;
   },
+  async updateReference(reference, newReference) {
+    const { error } = await supabase.from("orders").update({ reference: newReference }).eq("reference", reference);
+    return !error;
+  },
   async setFulfillment(reference, fulfillmentStatus) {
     const { error } = await supabase.from("orders").update({ fulfillment_status: fulfillmentStatus }).eq("reference", reference);
     return !error;

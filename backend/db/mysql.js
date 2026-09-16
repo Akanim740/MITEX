@@ -580,6 +580,10 @@ const orders = {
     const [res] = await pool.query("UPDATE orders SET status = ? WHERE reference = ?", [status, reference]);
     return res.affectedRows > 0;
   },
+  async updateReference(reference, newReference) {
+    const [res] = await pool.query("UPDATE orders SET reference = ? WHERE reference = ?", [newReference, reference]);
+    return res.affectedRows > 0;
+  },
   async setFulfillment(reference, fulfillmentStatus) {
     const [res] = await pool.query("UPDATE orders SET fulfillment_status = ? WHERE reference = ?", [fulfillmentStatus, reference]);
     return res.affectedRows > 0;

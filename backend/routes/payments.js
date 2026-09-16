@@ -389,6 +389,68 @@ router.post("/demo-pay/:reference", requireAuth, async (req, res) => {
   }
 });
 
+// POST /api/payments/resume/:reference - buyer re-opens checkout for a pending/failed order.
+// The 30-min expiry marks abandoned orders failed, so a retry must be possible without
+// creating a fresh order. Paystack rejects a reused reference, so we rotate the order
+// to a NEW reference before re-initializing (same listing/package, same amount).
+router.post("/resume/:reference", requireAuth, async (req, res) => {
+  try {
+    const store = req.store;
+    const order = await store.orders.findByReference(req.params.reference);
+    if (!order) return res.status(404).json({ error: "Order not found" });
+    if (String(order.user_id) !== String(req.user.id)) {
+      return res.status(403).json({ error: "You do not have access to this order" });
+    }
+    if (order.status !== "pending" && order.status !== "failed") {
+      return res.status(409).json({ error: `This order can no longer be paid (status: ${order.status}).` });
+    }
+
+    // Marketplace listings must still be available and ready before re-init.
+    if (order.listing_id) {
+      const listing = await store.listings.get(order.listing_id);
+      if (!listing) return res.status(404).json({ error: "Listing not found" });
+      if (listing.status !== "available") {
+        return res.status(409).json({ error: "This listing has already been sold, so this checkout can no longer be resumed." });
+      }
+      if (!listing.delivery_url) {
+        return res.status(409).json({
+          code: "DELIVERY_NOT_READY",
+          error: "This website is still being completed. You'll be notified the moment it's ready to buy.",
+          listingId: String(listing.id),
+          deliveryReady: false,
+        });
+      }
+    }
+
+    const newRef = newReference();
+    await store.orders.updateReference(order.reference, newRef);
+
+    const init = await paystack.initializeTransaction({
+      email: order.email,
+      amountNaira: order.amount,
+      reference: newRef,
+      metadata: {
+        orderId: order.id,
+        kind: order.listing_id ? "listing" : "package",
+        listingId: order.listing_id ? String(order.listing_id) : null,
+        buyer: order.email,
+        resume: true,
+      },
+    });
+
+    res.json({
+      message: "Checkout resumed",
+      reference: newRef,
+      previous_reference: order.reference,
+      authorization_url: init.authorization_url,
+      demo: Boolean(init.demo),
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: err.message || "Internal server error" });
+  }
+});
+
 // POST /api/payments/webhook - Paystack server-to-server events
 router.post("/webhook", express.raw({ type: "*/*" }), async (req, res) => {
   try {

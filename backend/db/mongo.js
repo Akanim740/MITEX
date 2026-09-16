@@ -287,6 +287,9 @@ const orders = {
   async updateStatus(reference, status) {
     return (await db.collection("orders").updateOne({ reference }, { $set: { status } })).modifiedCount > 0;
   },
+  async updateReference(reference, newReference) {
+    return (await db.collection("orders").updateOne({ reference }, { $set: { reference: newReference } })).modifiedCount > 0;
+  },
   async setFulfillment(reference, fulfillmentStatus) {
     return (await db.collection("orders").updateOne({ reference }, { $set: { fulfillment_status: fulfillmentStatus } })).modifiedCount > 0;
   },

@@ -314,6 +314,12 @@ const orders = {
     await col("orders").doc(row.id).update({ status });
     return true;
   },
+  async updateReference(reference, newReference) {
+    const row = await this.findByReference(reference);
+    if (!row) return false;
+    await col("orders").doc(row.id).update({ reference: newReference });
+    return true;
+  },
   async setFulfillment(reference, fulfillmentStatus) {
     const row = await this.findByReference(reference);
     if (!row) return false;

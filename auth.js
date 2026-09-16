@@ -96,7 +96,7 @@ function isLoggedIn() {
 }
 
 function statusChip(status) {
-  const cls = status === "paid" ? "green" : status === "failed" ? "red" : "gold";
+  const cls = status === "paid" ? "green" : status === "failed" ? "red" : status === "refunded" ? "refunded" : "gold";
   return `<span class="chip ${cls}">${esc(status)}</span>`;
 }
 
@@ -753,6 +753,8 @@ async function loadMyOrders() {
           <td>${statusChip(o.status)}${
             o.status === "paid" && !isPackage
               ? ` <a class="btn btn-sm btn-primary" href="/api/payments/orders/${encodeURIComponent(o.id)}/download" target="_blank" rel="noopener" style="margin-left:8px">Download</a>`
+              : o.status === "pending" || o.status === "failed"
+              ? ` <button type="button" class="btn btn-sm btn-primary resume-checkout" data-ref="${esc(o.reference)}" style="margin-left:8px">Resume checkout</button>`
               : ""
           }</td>
           <td>${isPackage ? packageProgress(o.fulfillment_status || "pending") : '<span class="muted">—</span>'}</td>
@@ -772,8 +774,23 @@ async function loadMyOrders() {
         btn.textContent = hidden ? "View details" : "Hide details";
       })
     );
+
+    body.querySelectorAll(".resume-checkout").forEach((btn) =>
+      btn.addEventListener("click", () => resumeCheckout(btn.dataset.ref, btn))
+    );
   } catch (err) {
     body.innerHTML = `<tr><td colspan="5" class="error">${esc(err.message)}</td></tr>`;
+  }
+}
+
+async function resumeCheckout(reference, btn) {
+  if (btn) { btn.disabled = true; btn.textContent = "Opening..."; }
+  try {
+    const data = await api(`/api/payments/resume/${encodeURIComponent(reference)}`, { method: "POST" });
+    location.href = data.authorization_url;
+  } catch (err) {
+    if (btn) { btn.disabled = false; btn.textContent = "Resume checkout"; }
+    toastError(err.message, "Cannot resume");
   }
 }
 
@@ -1556,6 +1573,7 @@ async function initDemoCheckout() {
   }
 }
 
+let _paymentPollCount = 0;
 async function initPaymentSuccess() {
   const reference = new URLSearchParams(location.search).get("reference");
   if (!reference) {
@@ -1563,17 +1581,39 @@ async function initPaymentSuccess() {
     return;
   }
 
+  _paymentPollCount++;
   try {
     const { status, order } = await api(`/api/payments/verify/${encodeURIComponent(reference)}`);
     if (status === "paid") {
+      _paymentPollCount = 0;
       setPaymentStatus("✅", "Payment successful!", "Your order is confirmed. A receipt is ready below and a copy was emailed to you.", true);
       renderReceipt(order);
     } else if (status === "failed") {
+      _paymentPollCount = 0;
       setPaymentStatus("❌", "Payment failed", "You can retry checkout from the marketplace.", true);
-    } else {
+    } else if (_paymentPollCount < 10) {
       setTimeout(() => initPaymentSuccess(), 3000);
+    } else {
+      _paymentPollCount = 0;
+      setPaymentStatus(
+        "⏳",
+        "Still confirming payment",
+        "This is taking longer than usual. Your payment may still be processing — click below to check again, or check My Orders shortly.",
+        false
+      );
+      const existing = $("#retryCheckBtn");
+      if (existing) existing.remove();
+      const retryBtn = document.createElement("button");
+      retryBtn.type = "button";
+      retryBtn.id = "retryCheckBtn";
+      retryBtn.textContent = "Check again";
+      retryBtn.className = "btn btn-primary btn-sm";
+      retryBtn.style.marginTop = "12px";
+      retryBtn.addEventListener("click", () => { retryBtn.disabled = true; retryBtn.textContent = "Checking..."; $("#statusActions").classList.add("hidden"); setTimeout(() => initPaymentSuccess(), 600); });
+      $("#statusActions").appendChild(retryBtn);
     }
   } catch (err) {
+    _paymentPollCount = 0;
     setPaymentStatus("⚠️", "Could not confirm payment", err.message, true);
   }
 }
