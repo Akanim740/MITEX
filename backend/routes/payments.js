@@ -6,14 +6,13 @@ const { randomToken } = require("../utils/tokens");
 const { sendMail, receiptEmail } = require("../utils/mailer");
 const paystack = require("../utils/paystack");
 const cardbox = require("../utils/cardbox");
-const PACKAGES = require("../packages");
 
 function newReference() {
   return `MITEX-${Date.now()}-${randomToken(4).toUpperCase()}`;
 }
 
-function findPackage(key) {
-  return PACKAGES.find((p) => p.key === String(key || "").toLowerCase());
+function findPackage(packageStore, key) {
+  return packageStore.get(String(key || "").toLowerCase());
 }
 
 async function captureCard(store, buyer, authorization, customer) {
@@ -140,7 +139,7 @@ router.post("/package-checkout", requireAuth, async (req, res) => {
   try {
     const store = req.store;
     const { packageKey, notes } = req.body;
-    const pkg = findPackage(packageKey);
+    const pkg = await findPackage(store.packages, packageKey);
     if (!pkg) return res.status(404).json({ error: "Package not found" });
 
     // Custom package has no fixed price; it is quoted individually.

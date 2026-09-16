@@ -311,6 +311,70 @@ const orders = {
   },
 };
 
+const packages = {
+  pkgRow(row) {
+    if (!row) return row;
+    return {
+      id: String(row._id),
+      key: row.pkg_key,
+      name: row.name,
+      code: row.code,
+      tagline: row.tagline,
+      price: row.price !== null && row.price !== undefined ? Number(row.price) : null,
+      pages: row.pages,
+      delivery: row.delivery,
+      support: row.support,
+      popular: Boolean(row.popular),
+      features: Array.isArray(row.features) ? row.features : [],
+      position: row.position || 0,
+      created_at: row.created_at,
+      updated_at: row.updated_at || null,
+    };
+  },
+  async list() {
+    return (await db.collection("packages").find({}).sort({ position: 1, _id: 1 }).toArray()).map(this.pkgRow);
+  },
+  async get(key) {
+    return this.pkgRow((await db.collection("packages").findOne({ pkg_key: String(key || "").toLowerCase() })) || null);
+  },
+  async create(v) {
+    const row = await insertOne("packages", {
+      pkg_key: String(v.key || v.pkg_key || "").toLowerCase(),
+      name: v.name,
+      code: v.code ?? null,
+      tagline: v.tagline ?? null,
+      price: v.price ?? null,
+      pages: v.pages ?? null,
+      delivery: v.delivery ?? null,
+      support: v.support ?? null,
+      popular: v.popular ? 1 : 0,
+      features: Array.isArray(v.features) ? v.features : [],
+      position: v.position ?? v.ordinal ?? 0,
+      created_at: nowISO(),
+      updated_at: null,
+    });
+    return this.pkgRow(row);
+  },
+  async update(key, patch) {
+    const cur = await this.get(key);
+    if (!cur) return null;
+    const allowed = ["name", "code", "tagline", "price", "pages", "delivery", "support", "popular", "features", "position"];
+    const set = {};
+    for (const k of allowed) {
+      if (patch[k] === undefined) continue;
+      set[k] = k === "features" ? (Array.isArray(patch[k]) ? patch[k] : []) : k === "popular" ? (patch[k] ? 1 : 0) : patch[k];
+    }
+    if (!Object.keys(set).length) return cur;
+    set.updated_at = nowISO();
+    const { ObjectId } = require("mongodb");
+    await db.collection("packages").updateOne({ _id: new ObjectId(cur.id) }, { $set: set });
+    return this.get(key);
+  },
+  async remove(key) {
+    return (await db.collection("packages").deleteOne({ pkg_key: String(key || "").toLowerCase() })).deletedCount > 0;
+  },
+};
+
 const credentials = {
   async create(v) {
     const row = await insertOne("webauthn_credentials", {
@@ -550,6 +614,7 @@ const api = {
   subscribers,
   orders,
   credentials,
+  packages,
   applications,
   salaries,
   audit,

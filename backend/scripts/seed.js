@@ -72,7 +72,33 @@ async function runSeed() {
   }
   console.log(`  Catalog: ${created} new listings created (${existingListings.length} already present)`);
 
+  await seedPackages(store);
   console.log("Done.");
+}
+
+async function seedPackages(store) {
+  const DEFAULT_PACKAGES = require("../packages");
+  let seeded = 0;
+  for (let i = 0; i < DEFAULT_PACKAGES.length; i++) {
+    const pkg = DEFAULT_PACKAGES[i];
+    const existing = await store.packages.get(pkg.key);
+    if (existing) continue;
+    await store.packages.create({
+      key: pkg.key,
+      name: pkg.name,
+      code: pkg.code,
+      tagline: pkg.tagline,
+      price: pkg.price ?? null,
+      pages: pkg.pages,
+      delivery: pkg.delivery,
+      support: pkg.support,
+      popular: pkg.popular ? 1 : 0,
+      features: pkg.features || [],
+      position: i + 1,
+    });
+    seeded++;
+  }
+  console.log(`  Packages: ${seeded} new packages seeded (${DEFAULT_PACKAGES.length} tiers defined)`);
 }
 
 async function seed() {

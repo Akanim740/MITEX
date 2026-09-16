@@ -477,6 +477,80 @@ const credentials = {
   },
 };
 
+const packages = {
+  pkgRow(row) {
+    if (!row) return row;
+    let features = [];
+    try { features = JSON.parse(row.features || "[]"); } catch {}
+    return {
+      id: row.id,
+      key: row.pkg_key,
+      name: row.name,
+      code: row.code,
+      tagline: row.tagline,
+      price: row.price !== null && row.price !== undefined ? Number(row.price) : null,
+      pages: row.pages,
+      delivery: row.delivery,
+      support: row.support,
+      popular: Boolean(row.popular),
+      features,
+      position: row.position || 0,
+      created_at: row.created_at,
+      updated_at: row.updated_at || null,
+    };
+  },
+  async list() {
+    const { data, error } = await supabase.from("packages").select("*").order("position", { ascending: true }).order("id", { ascending: true });
+    if (error) throw error;
+    return (data || []).map(this.pkgRow);
+  },
+  async get(key) {
+    const { data, error } = await supabase.from("packages").select("*").eq("pkg_key", String(key || "").toLowerCase()).maybeSingle();
+    if (error) throw error;
+    return this.pkgRow(data) || null;
+  },
+  async create(v) {
+    const { data, error } = await supabase
+      .from("packages")
+      .insert({
+        pkg_key: String(v.key || v.pkg_key || "").toLowerCase(),
+        name: v.name,
+        code: v.code ?? null,
+        tagline: v.tagline ?? null,
+        price: v.price ?? null,
+        pages: v.pages ?? null,
+        delivery: v.delivery ?? null,
+        support: v.support ?? null,
+        popular: v.popular ? true : false,
+        features: JSON.stringify(Array.isArray(v.features) ? v.features : []),
+        position: v.position ?? v.ordinal ?? 0,
+        created_at: nowISO(),
+      })
+      .select()
+      .single();
+    if (error) throw error;
+    return this.pkgRow(data);
+  },
+  async update(key, patch) {
+    const cur = await this.get(key);
+    if (!cur) return null;
+    const allowed = ["name", "code", "tagline", "price", "pages", "delivery", "support", "popular", "features", "position"];
+    const set = { updated_at: nowISO() };
+    for (const k of allowed) {
+      if (patch[k] === undefined) continue;
+      set[k] = k === "features" ? JSON.stringify(Array.isArray(patch[k]) ? patch[k] : []) : k === "popular" ? (patch[k] ? true : false) : patch[k];
+    }
+    const { data, error } = await supabase.from("packages").update(set).eq("pkg_key", String(key || "").toLowerCase()).select().single();
+    if (error) throw error;
+    return this.pkgRow(data);
+  },
+  async remove(key) {
+    const { error } = await supabase.from("packages").delete().eq("pkg_key", String(key || "").toLowerCase());
+    if (error) throw error;
+    return true;
+  },
+};
+
 const applications = {
   async create(v) {
     const { data, error } = await supabase
@@ -739,6 +813,7 @@ const api = {
   subscribers,
   orders,
   credentials,
+  packages,
   applications,
   salaries,
   audit,

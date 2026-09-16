@@ -376,6 +376,75 @@ const credentials = {
   },
 };
 
+const packages = {
+  pkgRow(row) {
+    if (!row) return row;
+    return {
+      id: row.id,
+      key: row.pkg_key,
+      name: row.name,
+      code: row.code,
+      tagline: row.tagline,
+      price: row.price !== null && row.price !== undefined ? Number(row.price) : null,
+      pages: row.pages,
+      delivery: row.delivery,
+      support: row.support,
+      popular: Boolean(row.popular),
+      features: Array.isArray(row.features) ? row.features : [],
+      position: row.position || 0,
+      created_at: row.created_at,
+      updated_at: row.updated_at || null,
+    };
+  },
+  async list() {
+    const snap = await col("packages").get();
+    return snap.docs
+      .map((d) => this.pkgRow({ ...d.data(), id: d.id }))
+      .sort((a, b) => (a.position || 0) - (b.position || 0) || (a.created_at < b.created_at ? -1 : 1));
+  },
+  async get(key) {
+    const snap = await col("packages").where("pkg_key", "==", String(key || "").toLowerCase()).limit(1).get();
+    if (snap.empty) return null;
+    const d = snap.docs[0];
+    return this.pkgRow({ ...d.data(), id: d.id });
+  },
+  async create(v) {
+    return addDoc("packages", {
+      pkg_key: String(v.key || v.pkg_key || "").toLowerCase(),
+      name: v.name,
+      code: v.code ?? null,
+      tagline: v.tagline ?? null,
+      price: v.price ?? null,
+      pages: v.pages ?? null,
+      delivery: v.delivery ?? null,
+      support: v.support ?? null,
+      popular: v.popular ? 1 : 0,
+      features: Array.isArray(v.features) ? v.features : [],
+      position: v.position ?? v.ordinal ?? 0,
+      created_at: nowISO(),
+      updated_at: null,
+    });
+  },
+  async update(key, patch) {
+    const cur = await this.get(key);
+    if (!cur) return null;
+    const allowed = ["name", "code", "tagline", "price", "pages", "delivery", "support", "popular", "features", "position"];
+    const set = { updated_at: nowISO() };
+    for (const k of allowed) {
+      if (patch[k] === undefined) continue;
+      set[k] = k === "features" ? (Array.isArray(patch[k]) ? patch[k] : []) : k === "popular" ? (patch[k] ? 1 : 0) : patch[k];
+    }
+    await col("packages").doc(cur.id).update(set);
+    return this.get(key);
+  },
+  async remove(key) {
+    const cur = await this.get(key);
+    if (!cur) return false;
+    await col("packages").doc(cur.id).delete();
+    return true;
+  },
+};
+
 const applications = {
   async create(v) {
     return addDoc("applications", {
@@ -609,6 +678,7 @@ const api = {
   subscribers,
   orders,
   credentials,
+  packages,
   applications,
   salaries,
   audit,

@@ -188,6 +188,23 @@ CREATE TABLE IF NOT EXISTS orders (
     read       INTEGER NOT NULL DEFAULT 0,
     created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
   );
+
+  CREATE TABLE IF NOT EXISTS packages (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    pkg_key    TEXT NOT NULL UNIQUE,
+    name       TEXT NOT NULL,
+    code       TEXT,
+    tagline    TEXT,
+    price      INTEGER,
+    pages      TEXT,
+    delivery   TEXT,
+    support    TEXT,
+    popular    INTEGER NOT NULL DEFAULT 0,
+    features   TEXT,
+    position   INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+    updated_at TEXT
+  );
 `);
 
 for (const col of ["delivery_url", "employee_id", "demo_url", "protected", "asset_type"]) {
@@ -320,6 +337,28 @@ function stripSecret(row) {
   if (!row) return row;
   const { password_hash, ...rest } = row;
   return rest;
+}
+
+function pkgRow(row) {
+  if (!row) return row;
+  let features = [];
+  try { features = JSON.parse(row.features || "[]"); } catch {}
+  return {
+    id: row.id,
+    key: row.pkg_key,
+    name: row.name,
+    code: row.code,
+    tagline: row.tagline,
+    price: row.price,
+    pages: row.pages,
+    delivery: row.delivery,
+    support: row.support,
+    popular: Boolean(row.popular),
+    features,
+    position: row.position,
+    created_at: row.created_at,
+    updated_at: row.updated_at,
+  };
 }
 
 const users = {
@@ -564,6 +603,57 @@ const orders = {
   },
 };
 
+const packages = {
+  async list() {
+    return db.prepare("SELECT * FROM packages ORDER BY position ASC, id ASC").all().map(pkgRow);
+  },
+  async get(key) {
+    return pkgRow(db.prepare("SELECT * FROM packages WHERE pkg_key = ?").get(String(key || "").toLowerCase())) || null;
+  },
+  async create(v) {
+    const res = db
+      .prepare("INSERT INTO packages (pkg_key, name, code, tagline, price, pages, delivery, support, popular, features, position, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
+      .run(
+        String(v.key || v.pkg_key || "").toLowerCase(),
+        v.name,
+        v.code ?? null,
+        v.tagline ?? null,
+        v.price ?? null,
+        v.pages ?? null,
+        v.delivery ?? null,
+        v.support ?? null,
+        v.popular ? 1 : 0,
+        JSON.stringify(v.features || []),
+        v.position ?? v.ordinal ?? 0,
+        new Date().toISOString()
+      );
+    return pkgRow(db.prepare("SELECT * FROM packages WHERE id = ?").get(res.lastInsertRowid));
+  },
+  async update(key, patch) {
+    const cur = await this.get(key);
+    if (!cur) return null;
+    const allowed = ["name", "code", "tagline", "price", "pages", "delivery", "support", "popular", "features", "position"];
+    const sets = [];
+    const params = [];
+    for (const k of allowed) {
+      if (patch[k] === undefined) continue;
+      sets.push(k === "pkg_key" ? "pkg_key = ?" : `${k} = ?`);
+      if (k === "features") params.push(JSON.stringify(patch[k] || []));
+      else if (k === "popular") params.push(patch[k] ? 1 : 0);
+      else if (patch[k] === null) params.push(null);
+      else params.push(patch[k]);
+    }
+    if (!sets.length) return cur;
+    sets.push("updated_at = ?");
+    params.push(new Date().toISOString());
+    db.prepare(`UPDATE packages SET ${sets.join(", ")} WHERE id = ?`).run(...params, cur.id);
+    return this.get(key);
+  },
+  async remove(key) {
+    return db.prepare("DELETE FROM packages WHERE pkg_key = ?").run(String(key || "").toLowerCase()).changes > 0;
+  },
+};
+
 const credentials = {
   async create(v) {
     db.prepare(
@@ -784,6 +874,7 @@ module.exports = {
   subscribers,
   orders,
   credentials,
+  packages,
   applications,
   salaries,
   audit,

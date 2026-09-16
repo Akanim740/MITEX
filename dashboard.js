@@ -189,6 +189,7 @@ const loaders = {
   overview: loadOverview,
   enquiries: loadEnquiries,
   listings: loadListings,
+  packages: loadPackages,
   orders: loadOrders,
   subscribers: loadSubscribers,
   employees: loadEmployees,
@@ -219,6 +220,7 @@ document.querySelectorAll("[data-view]").forEach((btn) => {
 
 $("#refreshEnquiries").addEventListener("click", loadEnquiries);
 $("#refreshListings").addEventListener("click", loadListings);
+$("#refreshPackages").addEventListener("click", loadPackages);
 $("#refreshOrders").addEventListener("click", loadOrders);
 $("#refreshSubs").addEventListener("click", loadSubscribers);
 $("#refreshEmployees").addEventListener("click", loadEmployees);
@@ -452,6 +454,125 @@ async function loadListings() {
           await API.del(`/api/listings/${btn.dataset.del}`);
           toastSuccess("Listing deleted.", "Done");
           loadListings();
+        } catch (err) {
+          toastError(err.message);
+        }
+      });
+    });
+  } catch (err) {
+    body.innerHTML = `<tr><td colspan="7" class="empty-state">${esc(err.message)}</td></tr>`;
+  }
+}
+
+// ---- Packages ----
+const packageForm = $("#packageForm");
+
+packageForm.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const key = $("#pKey").value.trim().replace(/\s+/g, "-").toLowerCase();
+  if (!key) return toastError("Package key is required");
+  const features = $("#pFeatures")
+    .value.split("\n")
+    .map((f) => f.trim())
+    .filter(Boolean);
+  const payload = {
+    key,
+    name: $("#pName").value.trim(),
+    code: $("#pCode").value.trim(),
+    tagline: $("#pTagline").value.trim(),
+    price: $("#pPrice").value ? Number($("#pPrice").value) : null,
+    pages: $("#pPages").value.trim(),
+    delivery: $("#pDelivery").value.trim(),
+    support: $("#pSupport").value.trim(),
+    popular: $("#pPopular").value === "1",
+    features,
+    position: $("#pkgPos").value ? Number($("#pkgPos").value) : 0,
+  };
+  const isEdit = $("#pkgKey").value;
+  try {
+    if (isEdit) {
+      await API.put(`/api/packages/${encodeURIComponent(isEdit)}`, payload);
+    } else {
+      await API.post("/api/packages", payload);
+    }
+    toastSuccess(isEdit ? "Package updated." : "Package added.", isEdit ? "Saved" : "Added");
+    resetPackageForm();
+    loadPackages();
+  } catch (err) {
+    toastError(err.message, "Save failed");
+  }
+});
+
+$("#cancelPkgEdit").addEventListener("click", resetPackageForm);
+
+function resetPackageForm() {
+  packageForm.reset();
+  $("#pkgId").value = "";
+  $("#pkgKey").value = "";
+  $("#packageSubmit").textContent = "Add Package";
+  $("#cancelPkgEdit").classList.add("hidden");
+  if ($("#pkgPos")) $("#pkgPos").value = "";
+}
+
+async function loadPackages() {
+  const body = $("#packagesBody");
+  body.innerHTML = window.MITEXUi ? window.MITEXUi.skelRows(4, 7) : '<tr><td colspan="7" class="empty-state">Loading...</td></tr>';
+  try {
+    const rows = await API.get("/api/packages");
+    if (!rows.length) {
+      body.innerHTML = '<tr><td colspan="7" class="empty-state">No packages yet. Add your first website package above.</td></tr>';
+      return;
+    }
+    body.innerHTML = rows
+      .map(
+        (r) => `
+        <tr>
+          <td><code>${esc(r.key)}</code></td>
+          <td><strong>${esc(r.name)}</strong></td>
+          <td>${esc(r.code || "-")}</td>
+          <td>${r.price ? naira(r.price) : '<span class="muted">Quote</span>'}</td>
+          <td>${r.popular ? '<span class="badge popular">Popular</span>' : '<span class="muted">-</span>'}</td>
+          <td>${r.position ?? "-"}</td>
+          <td>
+            <div class="row-actions">
+              <button class="icon-btn" data-pkg-edit="${r.key}">Edit</button>
+              <button class="icon-btn delete" data-pkg-del="${r.key}">Delete</button>
+            </div>
+          </td>
+        </tr>`
+      )
+      .join("");
+
+    body.querySelectorAll("[data-pkg-edit]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const row = rows.find((r) => r.key === btn.dataset.pkgEdit);
+        if (!row) return;
+        $("#pkgId").value = row.id ?? "";
+        $("#pkgKey").value = row.key;
+        $("#pKey").value = row.key;
+        $("#pName").value = row.name;
+        $("#pCode").value = row.code || "";
+        $("#pTagline").value = row.tagline || "";
+        $("#pPrice").value = row.price ?? "";
+        $("#pPages").value = row.pages || "";
+        $("#pDelivery").value = row.delivery || "";
+        $("#pSupport").value = row.support || "";
+        $("#pPopular").value = row.popular ? "1" : "0";
+        $("#pFeatures").value = (row.features || []).join("\n");
+        $("#pkgPos").value = row.position ?? "";
+        $("#packageSubmit").textContent = "Save Changes";
+        $("#cancelPkgEdit").classList.remove("hidden");
+        window.scrollTo({ top: 0, behavior: "smooth" });
+      });
+    });
+
+    body.querySelectorAll("[data-pkg-del]").forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        if (!confirm("Delete this package?")) return;
+        try {
+          await API.del(`/api/packages/${encodeURIComponent(btn.dataset.pkgDel)}`);
+          toastSuccess("Package deleted.", "Done");
+          loadPackages();
         } catch (err) {
           toastError(err.message);
         }

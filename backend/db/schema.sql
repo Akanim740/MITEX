@@ -152,6 +152,23 @@ CREATE TABLE notifications (
   INDEX idx_notifications_user (user_id)
 );
 
+CREATE TABLE packages (
+  id         INT AUTO_INCREMENT PRIMARY KEY,
+  pkg_key    VARCHAR(60) NOT NULL UNIQUE,
+  name       VARCHAR(150) NOT NULL,
+  code       VARCHAR(40),
+  tagline    VARCHAR(500),
+  price      INT NULL,
+  pages      VARCHAR(80),
+  delivery   VARCHAR(80),
+  support    VARCHAR(80),
+  popular    TINYINT(1) NOT NULL DEFAULT 0,
+  features   TEXT,
+  position   INT NOT NULL DEFAULT 0,
+  created_at VARCHAR(32) NOT NULL,
+  updated_at VARCHAR(32)
+);
+
 -- ---------- Supabase / Postgres ----------
 -- Run this in the Supabase SQL editor instead of the MySQL section.
 

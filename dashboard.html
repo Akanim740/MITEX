@@ -67,6 +67,7 @@
             <div class="drop-menu">
               <button type="button" data-view="enquiries" data-admin-only>Enquiries</button>
               <button type="button" data-view="listings">Listings</button>
+              <button type="button" data-view="packages" data-admin-only>Packages</button>
               <button type="button" data-view="orders" data-admin-only>Orders</button>
               <button type="button" data-view="subscribers" data-admin-only>Subscribers</button>
               <button type="button" data-view="employees" data-admin-only>Employees</button>
@@ -163,6 +164,47 @@
               <tr><th>Title</th><th>Price</th><th>Level</th><th>Employee</th><th>Status</th><th>Created</th><th></th></tr>
             </thead>
             <tbody id="listingsBody"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section id="view-packages" class="view hidden">
+        <div class="view-head">
+          <h2>Website Packages</h2>
+          <button class="btn btn-ghost btn-sm" id="refreshPackages" type="button">Refresh</button>
+        </div>
+        <p class="muted" style="margin-bottom:14px;">The tiers customers choose when ordering a website. Edits apply instantly on the pricing page and checkout.</p>
+
+        <form id="packageForm" class="listing-form">
+          <input type="hidden" id="pkgId" />
+          <input type="hidden" id="pkgKey" />
+          <label>Key (URL slug, e.g. starter)<input type="text" id="pKey" required maxlength="60" placeholder="e.g. starter" /></label>
+          <label>Name<input type="text" id="pName" required maxlength="150" placeholder="e.g. Online Presence" /></label>
+          <label>Code<input type="text" id="pCode" maxlength="40" placeholder="e.g. Starter" /></label>
+          <label>Price (NGN - leave empty for quote-only)<input type="number" id="pPrice" min="0" step="1000" /></label>
+          <label class="span-2">Tagline<input type="text" id="pTagline" maxlength="500" placeholder="One-line pitch shown on the pricing page" /></label>
+          <label>Pages<input type="text" id="pPages" maxlength="80" placeholder="e.g. Up to 5 pages" /></label>
+          <label>Delivery<input type="text" id="pDelivery" maxlength="80" placeholder="e.g. 10-14 days" /></label>
+          <label>Support<input type="text" id="pSupport" maxlength="80" placeholder="e.g. 1 month support" /></label>
+          <label>Popular badge
+            <select id="pPopular"><option value="0">No</option><option value="1">Yes</option></select>
+          </label>
+          <label>Position (sort order)
+            <input type="number" id="pkgPos" min="0" step="1" placeholder="e.g. 1" />
+          </label>
+          <label class="span-2">Features (one per line)<textarea id="pFeatures" rows="6" placeholder="Mobile-responsive design&#10;Contact & enquiry form"></textarea></label>
+          <div class="form-actions span-2">
+            <button type="submit" class="btn btn-primary btn-sm" id="packageSubmit">Add Package</button>
+            <button type="button" class="btn btn-ghost btn-sm hidden" id="cancelPkgEdit">Cancel Edit</button>
+          </div>
+        </form>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>Key</th><th>Name</th><th>Code</th><th>Price</th><th>Popular</th><th>Position</th><th></th></tr>
+            </thead>
+            <tbody id="packagesBody"></tbody>
           </table>
         </div>
       </section>

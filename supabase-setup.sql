@@ -98,6 +98,24 @@ CREATE TABLE orders (
   created_at TEXT NOT NULL
 );
 
+CREATE TABLE packages (
+  id         BIGSERIAL PRIMARY KEY,
+  pkg_key    TEXT NOT NULL UNIQUE,
+  name       TEXT NOT NULL,
+  code       TEXT,
+  tagline    TEXT,
+  price      NUMERIC(14,2),
+  pages      TEXT,
+  delivery   TEXT,
+  support    TEXT,
+  popular    BOOLEAN NOT NULL DEFAULT FALSE,
+  features   TEXT,
+  position   INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TEXT
+);
+ALTER TABLE packages ENABLE ROW LEVEL SECURITY;
+
 CREATE TABLE audit_logs (
   id         BIGSERIAL PRIMARY KEY,
   user_id    BIGINT,

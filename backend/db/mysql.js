@@ -276,6 +276,23 @@ async function init() {
       created_at VARCHAR(32) NOT NULL,
       INDEX idx_notifications_user (user_id)
     );
+
+    CREATE TABLE IF NOT EXISTS packages (
+      id         INT AUTO_INCREMENT PRIMARY KEY,
+      pkg_key    VARCHAR(60) NOT NULL UNIQUE,
+      name       VARCHAR(150) NOT NULL,
+      code       VARCHAR(40),
+      tagline    VARCHAR(500),
+      price      INT NULL,
+      pages      VARCHAR(80),
+      delivery   VARCHAR(80),
+      support    VARCHAR(80),
+      popular    TINYINT(1) NOT NULL DEFAULT 0,
+      features   TEXT,
+      position   INT NOT NULL DEFAULT 0,
+      created_at VARCHAR(32) NOT NULL,
+      updated_at VARCHAR(32)
+    );
   `);
 
   // Older databases: add columns that arrived after first launch
@@ -586,6 +603,65 @@ const orders = {
   },
 };
 
+const packages = {
+  pkgRow(row) {
+    if (!row) return row;
+    let features = [];
+    try { features = JSON.parse(row.features || "[]"); } catch {}
+    return {
+      id: row.id,
+      key: row.pkg_key,
+      name: row.name,
+      code: row.code,
+      tagline: row.tagline,
+      price: row.price !== null && row.price !== undefined ? Number(row.price) : null,
+      pages: row.pages,
+      delivery: row.delivery,
+      support: row.support,
+      popular: Boolean(row.popular),
+      features,
+      position: row.position,
+      created_at: row.created_at,
+      updated_at: row.updated_at,
+    };
+  },
+  async list() {
+    const [rows] = await pool.query("SELECT * FROM packages ORDER BY position ASC, id ASC");
+    return rows.map(this.pkgRow);
+  },
+  async get(key) {
+    const [rows] = await pool.query("SELECT * FROM packages WHERE pkg_key = ?", [String(key || "").toLowerCase()]);
+    return this.pkgRow(rows[0]) || null;
+  },
+  async create(v) {
+    const [res] = await pool.query(
+      "INSERT INTO packages (pkg_key, name, code, tagline, price, pages, delivery, support, popular, features, position, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+      [String(v.key || v.pkg_key || "").toLowerCase(), v.name, v.code ?? null, v.tagline ?? null, v.price ?? null, v.pages ?? null, v.delivery ?? null, v.support ?? null, v.popular ? 1 : 0, JSON.stringify(v.features || []), v.position ?? v.ordinal ?? 0, nowISO()]
+    );
+    return this.pkgRow((await pool.query("SELECT * FROM packages WHERE id = ?", [res.insertId]))[0][0]);
+  },
+  async update(key, patch) {
+    const cur = await this.get(key);
+    if (!cur) return null;
+    const allowed = ["name", "code", "tagline", "price", "pages", "delivery", "support", "popular", "features", "position"];
+    const sets = ["updated_at = ?"];
+    const vals = [nowISO()];
+    for (const k of allowed) {
+      if (patch[k] === undefined) continue;
+      sets.push(`${k} = ?`);
+      if (k === "features") vals.push(JSON.stringify(patch[k] || []));
+      else if (k === "popular") vals.push(patch[k] ? 1 : 0);
+      else vals.push(patch[k]);
+    }
+    await pool.query(`UPDATE packages SET ${sets.join(", ")} WHERE id = ?`, [...vals, cur.id]);
+    return this.get(key);
+  },
+  async remove(key) {
+    const [res] = await pool.query("DELETE FROM packages WHERE pkg_key = ?", [String(key || "").toLowerCase()]);
+    return res.affectedRows > 0;
+  },
+};
+
 const credentials = {
   async create(v) {
     await pool.query(
@@ -816,6 +892,7 @@ const api = {
   subscribers,
   orders,
   credentials,
+  packages,
   applications,
   salaries,
   audit,
