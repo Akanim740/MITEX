@@ -856,9 +856,9 @@ function renderMarketNav() {
     } catch {}
     const initial = (user && user.name ? user.name : "?").charAt(0).toUpperCase();
     area.innerHTML = `
-      <div style="display:flex;gap:14px;align-items:center;">
-        <a href="/index.html" style="color:var(--muted);text-decoration:none;">Home</a>
-        <a href="/packages.html" style="color:var(--muted);text-decoration:none;">Packages</a>
+      <div class="mkt-nav" style="display:flex;gap:14px;align-items:center;">
+        <a href="/index.html" class="mkt-link" style="color:var(--muted);text-decoration:none;">Home</a>
+        <a href="/packages.html" class="mkt-link" style="color:var(--muted);text-decoration:none;">Packages</a>
         <div class="dropdown notif-dd" data-notif-dd>
           <button class="drop-btn notif-bell" type="button" aria-expanded="false" aria-label="Notifications">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:18px;height:18px;"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
@@ -897,9 +897,9 @@ function renderMarketNav() {
     loadNotifPanel();
   } else {
     area.innerHTML = `
-      <div style="display:flex;gap:18px;align-items:center;">
-        <a href="/index.html" style="color:var(--muted);text-decoration:none;">Home</a>
-        <a href="/packages.html" style="color:var(--muted);text-decoration:none;">Packages</a>
+      <div class="mkt-nav" style="display:flex;gap:18px;align-items:center;">
+        <a href="/index.html" class="mkt-link" style="color:var(--muted);text-decoration:none;">Home</a>
+        <a href="/packages.html" class="mkt-link" style="color:var(--muted);text-decoration:none;">Packages</a>
         <a href="/login.html?next=/marketplace.html" style="color:var(--muted);text-decoration:none;">Sign In</a>
         <a href="/register.html?next=/marketplace.html" class="btn btn-primary btn-sm">Get Started</a>
       </div>`;

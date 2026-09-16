@@ -25,7 +25,7 @@
     .pkg-head { text-align: center; margin-bottom: 42px; }
     .pkg-head h1 { font-family: "Sora", sans-serif; font-size: clamp(1.7rem, 4vw, 2.4rem); margin-bottom: 8px; }
     .pkg-head p { color: var(--muted); max-width: 620px; margin-inline: auto; line-height: 1.6; }
-    .pkg-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 22px; align-items: stretch; }
+    .pkg-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(300px, 100%), 1fr)); gap: 22px; align-items: stretch; }
     .pkg-card { position: relative; background: var(--card); border: 1px solid var(--card-border); border-radius: 18px; padding: 28px; display: flex; flex-direction: column; gap: 14px; transition: transform .25s ease, border-color .25s ease; }
     .pkg-card:hover { transform: translateY(-5px); }
     .pkg-card.featured { border-color: rgba(251,191,36,.65); box-shadow: 0 0 0 4px rgba(251,191,36,.08); }

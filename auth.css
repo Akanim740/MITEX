@@ -44,6 +44,7 @@ body {
   color: var(--text);
   line-height: 1.55;
   min-height: 100vh;
+  overflow-x: hidden;
 }
 
 .hidden {
@@ -804,3 +805,21 @@ textarea {
 .pp-dot { width:14px; height:14px; border-radius:50%; background:var(--card-border,#334155); position:relative; flex:none; }
 .pp-dot.done { background:#10b981; }
 .pp-dot.cur::after { content:""; position:absolute; inset:-3px; border-radius:50%; border:2px solid #fbbf24; }
+
+/* ===== Mobile: keep the topbar inside the viewport ===== */
+@media (max-width: 700px) {
+  .mkt-link {
+    display: none;
+  }
+}
+
+@media (max-width: 560px) {
+  .topbar-inner {
+    flex-wrap: wrap;
+    row-gap: 8px;
+  }
+
+  .mkt-nav {
+    gap: 10px;
+  }
+}
