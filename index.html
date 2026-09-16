@@ -31,6 +31,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;600;700;800&family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="styles.css" />
+  <link rel="stylesheet" href="3d.css" />
   <script type="application/ld+json">
   {
     "@context": "https://schema.org",
@@ -116,7 +117,9 @@
         </div>
 
         <div class="hero-visual reveal delay-1" aria-hidden="true">
-          <div class="browser">
+          <div class="browser-stage">
+            <div class="browser-shadow" aria-hidden="true"></div>
+            <div class="browser">
             <div class="browser-bar">
               <span class="dot red"></span><span class="dot yellow"></span><span class="dot green"></span>
               <span class="url">mitex.store/premium</span>
@@ -133,6 +136,7 @@
                 <div class="mini-card"></div>
               </div>
             </div>
+          </div>
           </div>
         </div>
       </div>
@@ -678,5 +682,6 @@
   </div>
 
   <script src="script.js"></script>
+  <script src="3d.js" defer></script>
 </body>
 </html>

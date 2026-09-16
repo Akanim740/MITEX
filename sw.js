@@ -1,4 +1,4 @@
-const VERSION = "mitex-v8";
+const VERSION = "mitex-v9";
 const CACHE = VERSION + "-cache";
 
 const CORE_ASSETS = [
@@ -22,6 +22,8 @@ const CORE_ASSETS = [
   "/refund.html",
   "/404.html",
   "/styles.css",
+  "/3d.css",
+  "/3d.js",
   "/script.js",
   "/auth.css",
   "/auth.js",
