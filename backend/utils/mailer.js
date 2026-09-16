@@ -210,4 +210,24 @@ function refundEmail(user, order) {
   };
 }
 
-module.exports = { sendMail, verificationEmail, otpEmail, resetEmail, testEmail, hireEmail, receiptEmail, salaryEmail, deliveryEmail, enquiryReply, refundEmail, buyerWaitingEmail, listingReadyEmail, smtpConfigured, libraryLoaded, APP_URL, listMailbox };
+// Buyer notification: build progress changed on their package order.
+const FULFILLMENT_LABELS = { pending: "Awaiting start", in_progress: "Building", review: "In review", completed: "Delivered" };
+function fulfillmentEmail(buyer, order, stage) {
+  const label = FULFILLMENT_LABELS[stage] || stage;
+  return {
+    subject: `Update on "${order.title}" (${label})`,
+    text: `Hi ${buyer.name},\n\nGood news! Here's the latest on your website order "${order.title}" (${order.reference}).\n\nCurrent progress: ${label}\n\nTrack your build anytime from My Orders:\n${APP_URL}/account.html#orders-panel\n\n- MITEX team`,
+    html: emailWrap(`<p style="color:#e5e7eb;font-size:15px;line-height:1.6;">Hi ${esc(buyer.name)},</p><p style="color:#e5e7eb;font-size:15px;line-height:1.6;">Here's the latest on your website order.</p><div style="background:#1f2937;border-radius:8px;padding:16px 20px;margin:16px 0;"><table style="width:100%;font-size:14px;color:#d1d5db;"><tr><td style="padding:4px 0;">Order</td><td style="padding:4px 0;text-align:right;color:#fff;">${esc(order.title)}</td></tr><tr><td style="padding:4px 0;">Reference</td><td style="padding:4px 0;text-align:right;color:#fff;">${esc(order.reference)}</td></tr><tr><td style="padding:4px 0;">Progress</td><td style="padding:4px 0;text-align:right;color:#fbbf24;font-weight:700;">${esc(label)}</td></tr></table></div>${emailBtn(APP_URL + "/account.html#orders-panel", "Track My Order")}`),
+  };
+}
+
+// Admin notification: a new order has been paid.
+function newOrderAdminEmail(order) {
+  return {
+    subject: `New sale: ${order.title} (${order.reference})`,
+    text: `New order received.\n\nItem: ${order.title}\nReference: ${order.reference}\nAmount: ${naira(order.amount)}\nBuyer: ${order.email}\n\nManage this order in the admin dashboard:\n${APP_URL}/dashboard.html#view-orders\n\n- MITEX system`,
+    html: emailWrap(`<p style="color:#e5e7eb;font-size:15px;line-height:1.6;">A new order has been paid.</p><div style="background:#1f2937;border-radius:8px;padding:16px 20px;margin:16px 0;"><table style="width:100%;font-size:14px;color:#d1d5db;"><tr><td style="padding:4px 0;">Item</td><td style="padding:4px 0;text-align:right;color:#fff;">${esc(order.title)}</td></tr><tr><td style="padding:4px 0;">Reference</td><td style="padding:4px 0;text-align:right;color:#fff;">${esc(order.reference)}</td></tr><tr><td style="padding:4px 0;">Amount</td><td style="padding:4px 0;text-align:right;color:#fbbf24;font-weight:700;">${naira(order.amount)}</td></tr><tr><td style="padding:4px 0;">Buyer</td><td style="padding:4px 0;text-align:right;color:#fff;">${esc(order.email)}</td></tr></table></div>${emailBtn(APP_URL + "/dashboard.html#view-orders", "Manage Orders")}`),
+  };
+}
+
+module.exports = { sendMail, verificationEmail, otpEmail, resetEmail, testEmail, hireEmail, receiptEmail, salaryEmail, deliveryEmail, enquiryReply, refundEmail, buyerWaitingEmail, listingReadyEmail, fulfillmentEmail, newOrderAdminEmail, smtpConfigured, libraryLoaded, APP_URL, listMailbox };

@@ -856,9 +856,24 @@ function renderMarketNav() {
     } catch {}
     const initial = (user && user.name ? user.name : "?").charAt(0).toUpperCase();
     area.innerHTML = `
-      <div style="display:flex;gap:18px;align-items:center;">
+      <div style="display:flex;gap:14px;align-items:center;">
         <a href="/index.html" style="color:var(--muted);text-decoration:none;">Home</a>
         <a href="/packages.html" style="color:var(--muted);text-decoration:none;">Packages</a>
+        <div class="dropdown notif-dd" data-notif-dd>
+          <button class="drop-btn notif-bell" type="button" aria-expanded="false" aria-label="Notifications">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:18px;height:18px;"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+            <span class="notif-badge hidden" id="notifBadge">0</span>
+          </button>
+          <div class="drop-menu notif-panel">
+            <div class="notif-head">
+              <strong>Notifications</strong>
+              <button type="button" id="notifMarkAll" class="notif-mark-all">Mark all read</button>
+            </div>
+            <div class="notif-list" id="notifList">
+              <div class="notif-empty">No notifications yet.</div>
+            </div>
+          </div>
+        </div>
         <div class="dropdown" data-dropdown>
           <button class="drop-btn" type="button" aria-expanded="false">
             <span class="avatar">${esc(initial)}</span> Account
@@ -878,6 +893,8 @@ function renderMarketNav() {
       localStorage.removeItem("mitex_user");
       location.reload();
     });
+    wireNotifBell();
+    loadNotifPanel();
   } else {
     area.innerHTML = `
       <div style="display:flex;gap:18px;align-items:center;">
@@ -887,6 +904,77 @@ function renderMarketNav() {
         <a href="/register.html?next=/marketplace.html" class="btn btn-primary btn-sm">Get Started</a>
       </div>`;
   }
+}
+
+function wireNotifBell() {
+  const dd = document.querySelector("[data-notif-dd]");
+  if (!dd) return;
+  const btn = dd.querySelector(".notif-bell");
+  btn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    const open = dd.classList.toggle("open");
+    btn.setAttribute("aria-expanded", String(open));
+    if (open) loadNotifPanel();
+  });
+  document.addEventListener("click", (e) => {
+    if (!dd.contains(e.target)) dd.classList.remove("open");
+  });
+  document.addEventListener("keydown", (e) => e.key === "Escape" && dd.classList.remove("open"));
+}
+
+async function loadNotifPanel() {
+  const list = $("#notifList");
+  if (!list) return;
+  try {
+    const { notifications } = await api("/api/notifications?limit=15");
+    if (!notifications.length) {
+      list.innerHTML = '<div class="notif-empty">No notifications yet.</div>';
+      return;
+    }
+    list.innerHTML = notifications
+      .map(
+        (n) => `
+        <a class="notif-item${n.read ? "" : " unread"}" href="${esc(n.link || "/marketplace.html")}" data-notif-id="${esc(n.id)}">
+          <span class="notif-item-title">${esc(n.title)}</span>
+          ${n.body ? `<span class="notif-item-body">${esc(n.body)}</span>` : ""}
+        </a>`
+      )
+      .join("");
+    list.querySelectorAll(".notif-item").forEach((el) =>
+      el.addEventListener("click", () => {
+        const id = el.dataset.notifId;
+        if (id) api("/api/notifications/read", { method: "POST", body: { id } }).catch(() => {});
+        updateNotifBadge();
+      })
+    );
+    const markAll = $("#notifMarkAll");
+    if (markAll) {
+      markAll.addEventListener("click", (e) => {
+        e.stopPropagation();
+        markAll.disabled = true;
+        api("/api/notifications/read", { method: "POST" })
+          .catch(() => {})
+          .finally(() => {
+            markAll.disabled = false;
+            updateNotifBadge();
+            loadNotifPanel();
+          });
+      });
+    }
+  } catch {
+    list.innerHTML = '<div class="notif-empty">Could not load notifications.</div>';
+  }
+}
+
+function updateNotifBadge() {
+  const badge = $("#notifBadge");
+  if (!badge) return;
+  api("/api/notifications?limit=1")
+    .then(({ unread }) => {
+      badge.classList.toggle("hidden", !unread);
+      badge.textContent = unread > 99 ? "99+" : String(unread);
+    })
+    .catch(() => {});
 }
 
 let marketplaceListings = [];
@@ -1506,15 +1594,19 @@ function initNotifications() {
       notifications.forEach((n) => {
         if (__notifSeen[n.id]) return;
         __notifSeen[n.id] = true;
-        if (n.type === "listing_ready") {
+        if (n.type === "listing_ready" || n.type === "order_progress") {
           showNotifToast(n);
-          api("/api/notifications/read", { method: "POST", body: { id: n.id } }).catch(() => {});
+          if (n.type === "listing_ready") {
+            api("/api/notifications/read", { method: "POST", body: { id: n.id } }).catch(() => {});
+          }
         }
       });
     } catch (e) {}
   };
   poll();
   setInterval(poll, 45000);
+  updateNotifBadge();
+  setInterval(updateNotifBadge, 45000);
 }
 
 function showNotifToast(n) {

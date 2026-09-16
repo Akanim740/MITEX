@@ -235,6 +235,22 @@ document.querySelectorAll("[data-app-filter]").forEach((chip) =>
   })
 );
 
+document.querySelectorAll("[data-order-filter]").forEach((chip) =>
+  chip.addEventListener("click", () => {
+    document.querySelectorAll("[data-order-filter]").forEach((c) => c.classList.remove("active"));
+    chip.classList.add("active");
+    loadOrders();
+  })
+);
+
+$("#orderSearch").addEventListener("input", debounce(() => loadOrders(), 350));
+
+$("#exportOrders").addEventListener("click", () => {
+  const q = $("#orderSearch").value.trim();
+  const status = currentOrderFilter();
+  fetchOrdersCsv({ status, q });
+});
+
 async function loadOverview() {
   const grid = $("#statsGrid");
   grid.innerHTML = window.MITEXUi ? window.MITEXUi.skeleton(3) : '<p class="empty-state">Loading stats...</p>';
@@ -891,6 +907,47 @@ function currentFilter() {
   return activeChip ? activeChip.dataset.appFilter : "";
 }
 
+function currentOrderFilter() {
+  const activeChip = document.querySelector("[data-order-filter].active");
+  return activeChip ? activeChip.dataset.orderFilter : "";
+}
+
+function debounce(fn, ms) {
+  let t = null;
+  return (...args) => {
+    clearTimeout(t);
+    t = setTimeout(() => fn(...args), ms);
+  };
+}
+
+async function fetchOrdersCsv({ status = "", q = "" } = {}) {
+  const params = new URLSearchParams();
+  if (status) params.set("status", status);
+  if (q) params.set("q", q);
+  const url = `/api/payments/orders/export${params.toString() ? `?${params}` : ""}`;
+  const path = location.pathname.startsWith("/dashboard") ? "" : "/dashboard";
+  try {
+    const token = localStorage.getItem("mitex_token");
+    const resp = await fetch(`${path}${url}`, { headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) } });
+    if (!resp.ok) {
+      let msg = "Export failed";
+      try { msg = (await resp.json()).error || msg; } catch {}
+      toastError(msg, "Export failed");
+      return;
+    }
+    const blob = await resp.blob();
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = `mitex-orders-${new Date().toISOString().slice(0, 10)}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+  } catch (err) {
+    toastError(err.message, "Export failed");
+  }
+}
+
 let salaryStaffCache = [];
 
 async function loadSalaries() {
@@ -996,11 +1053,16 @@ $("#salaryForm").addEventListener("submit", async (e) => {
 
 async function loadOrders() {
   const body = $("#ordersBody");
+  const q = ($("#orderSearch").value || "").trim();
+  const status = currentOrderFilter();
   body.innerHTML = window.MITEXUi ? window.MITEXUi.skelRows(4, 9) : '<tr><td colspan="9" class="empty-state">Loading...</td></tr>';
   try {
-    const rows = await API.get("/api/payments/orders");
+    const params = new URLSearchParams();
+    if (status) params.set("status", status);
+    if (q) params.set("q", q);
+    const rows = await API.get(`/api/payments/orders${params.toString() ? `?${params}` : ""}`);
     if (!rows.length) {
-      body.innerHTML = '<tr><td colspan="9" class="empty-state">No orders yet.</td></tr>';
+      body.innerHTML = `<tr><td colspan="9" class="empty-state">${q || status ? "No orders match your filter." : "No orders yet."}</td></tr>`;
       return;
     }
     body.innerHTML = rows

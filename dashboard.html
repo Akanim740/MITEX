@@ -309,7 +309,20 @@
       <section id="view-orders" class="view hidden">
         <div class="view-head">
           <h2>Orders</h2>
+          <button class="btn btn-ghost btn-sm" id="exportOrders" type="button">Export CSV</button>
           <button class="btn btn-ghost btn-sm" id="refreshOrders" type="button">Refresh</button>
+        </div>
+        <div class="orders-controls">
+          <div class="app-filters" style="margin:0 0 12px;">
+            <button class="chip active" data-order-filter="" type="button">All</button>
+            <button class="chip" data-order-filter="pending" type="button">Pending</button>
+            <button class="chip" data-order-filter="paid" type="button">Paid</button>
+            <button class="chip" data-order-filter="failed" type="button">Failed</button>
+            <button class="chip" data-order-filter="refunded" type="button">Refunded</button>
+          </div>
+          <div style="display:flex;gap:8px;align-items:center;margin-bottom:12px;" class="order-search-row">
+            <input type="search" id="orderSearch" placeholder="Search reference, item, buyer, brief..." style="max-width:360px;flex:1;" />
+          </div>
         </div>
         <div class="table-wrap">
           <table>

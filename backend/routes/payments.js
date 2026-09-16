@@ -3,7 +3,8 @@ const router = express.Router();
 
 const { requireAuth, requireRole, requireAuthFlexible } = require("../middleware/auth");
 const { randomToken } = require("../utils/tokens");
-const { sendMail, receiptEmail } = require("../utils/mailer");
+const { sendMail, receiptEmail, fulfillmentEmail, newOrderAdminEmail } = require("../utils/mailer");
+const { notifyUser } = require("../utils/notify");
 const paystack = require("../utils/paystack");
 const cardbox = require("../utils/cardbox");
 
@@ -78,6 +79,21 @@ async function settleOrder(store, order) {
       subject: `MITEX receipt - ${order.title} (${order.reference})`,
       text: receiptEmail(order).text,
     }).catch((e) => console.error("receipt email failed:", e.message));
+  });
+  // Notify admin of new sale
+  setImmediate(async () => {
+    try {
+      const admins = await store.users.listByRole("admin");
+      const admin = Array.isArray(admins) ? admins[0] : null;
+      if (admin) {
+        await notifyUser(store, { userId: admin.id, type: "new_order", title: "New order received", body: `${order.title} — ${order.reference}`, link: "/dashboard.html#view-orders" });
+      }
+      if (admin && admin.email) {
+        sendMail({ to: admin.email, subject: `MITEX sale: ${order.title}`, text: newOrderAdminEmail(order).text }).catch(() => {});
+      }
+    } catch (e) {
+      console.error("admin order notification failed:", e.message);
+    }
   });
 }
 
@@ -539,10 +555,70 @@ router.get("/orders/mine", requireAuth, async (req, res) => {
   }
 });
 
-// GET /api/payments/orders - staff list all orders
+// GET /api/payments/orders - staff list all orders (?status= & ?q=)
 router.get("/orders", requireAuth, requireRole("admin", "editor"), async (req, res) => {
   try {
-    res.json(await req.store.orders.listAll(req.query.status));
+    let rows = await req.store.orders.listAll(req.query.status);
+    const q = String(req.query.q || "").trim().toLowerCase();
+    if (q) {
+      rows = rows.filter(
+        (r) =>
+          (r.reference || "").toLowerCase().includes(q) ||
+          (r.title || "").toLowerCase().includes(q) ||
+          (r.email || "").toLowerCase().includes(q) ||
+          (r.name || "").toLowerCase().includes(q) ||
+          (r.notes || "").toLowerCase().includes(q)
+      );
+    }
+    res.json(rows);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// GET /api/payments/orders/export - staff export orders to CSV (respects ?status= & ?q=)
+router.get("/orders/export", requireAuth, requireRole("admin", "editor"), async (req, res) => {
+  try {
+    let rows = await req.store.orders.listAll(req.query.status);
+    const q = String(req.query.q || "").trim().toLowerCase();
+    if (q) {
+      rows = rows.filter(
+        (r) =>
+          (r.reference || "").toLowerCase().includes(q) ||
+          (r.title || "").toLowerCase().includes(q) ||
+          (r.email || "").toLowerCase().includes(q) ||
+          (r.name || "").toLowerCase().includes(q) ||
+          (r.notes || "").toLowerCase().includes(q)
+      );
+    }
+    const header = ["reference", "title", "buyer_email", "buyer_name", "amount", "currency", "status", "fulfillment_status", "notes", "created_at", "paid_at"];
+    const csvEscape = (v) => {
+      if (v === null || v === undefined) return "";
+      const s = String(v);
+      return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+    };
+    const lines = [header.join(",")];
+    for (const r of rows) {
+      lines.push(
+        [
+          csvEscape(r.reference),
+          csvEscape(r.title),
+          csvEscape(r.email),
+          csvEscape(r.name),
+          csvEscape(r.amount),
+          csvEscape(r.currency || "NGN"),
+          csvEscape(r.status),
+          csvEscape(r.fulfillment_status || ""),
+          csvEscape(r.notes),
+          csvEscape(r.created_at),
+          csvEscape(r.paid_at),
+        ].join(",")
+      );
+    }
+    res.setHeader("Content-Type", "text/csv; charset=utf-8");
+    res.setHeader("Content-Disposition", `attachment; filename="mitex-orders-${new Date().toISOString().slice(0, 10)}.csv"`);
+    res.send(lines.join("\n"));
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "Internal server error" });
@@ -564,7 +640,27 @@ router.patch("/orders/:reference/fulfillment", requireAuth, requireRole("admin",
     if (order.listing_id || order.status !== "paid") {
       return res.status(409).json({ error: "Build progress only applies to paid package orders" });
     }
-    await store.orders.setFulfillment(order.reference, next);
+    const previous = (order.fulfillment_status || "pending").toLowerCase();
+    if (previous !== next) {
+      await store.orders.setFulfillment(order.reference, next);
+      // Notify the buyer about the progress update (non-blocking).
+      setImmediate(async () => {
+        try {
+          const buyer = await store.users.findById(order.user_id);
+          const buyerName = buyer ? buyer.name : order.email;
+          await notifyUser(store, {
+            userId: order.user_id,
+            type: "order_progress",
+            title: `Update on "${order.title}"`,
+            body: `Your build is now: ${next.replace("_", " ")}`,
+            link: order.listing_id ? "/marketplace.html" : "/account.html#orders-panel",
+          });
+          sendMail({ to: order.email, subject: `MITEX update: ${order.title}`, text: fulfillmentEmail({ name: buyerName }, order, next).text }).catch((e) => console.error("fulfillment email failed:", e.message));
+        } catch (e) {
+          console.error("fulfillment notification failed:", e.message);
+        }
+      });
+    }
     const fresh = await store.orders.findByReference(order.reference);
     res.json({ message: "Fulfillment status updated", reference: order.reference, fulfillmentStatus: fresh.fulfillment_status || next });
   } catch (err) {
