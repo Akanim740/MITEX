@@ -1,4 +1,4 @@
-const VERSION = "mitex-v10";
+const VERSION = "mitex-v11";
 const CACHE = VERSION + "-cache";
 
 const CORE_ASSETS = [
@@ -24,6 +24,9 @@ const CORE_ASSETS = [
   "/styles.css",
   "/3d.css",
   "/3d.js",
+  "/hero-scene.css",
+  "/hero-video.js",
+  "/video/dev-scene-poster.jpg",
   "/script.js",
   "/auth.css",
   "/auth.js",
