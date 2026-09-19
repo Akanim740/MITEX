@@ -1548,6 +1548,7 @@ ul {
     top: 0;
     right: 0;
     height: 100vh;
+    height: 100dvh;
     width: min(320px, 78vw);
     flex-direction: column;
     justify-content: center;
@@ -1573,6 +1574,11 @@ ul {
     display: flex;
     position: relative;
     z-index: 101;
+    min-width: 44px;
+    min-height: 44px;
+    align-items: center;
+    justify-content: center;
+    padding: 8px;
   }
 
   .btn-nav {
@@ -1586,6 +1592,10 @@ ul {
   .mobile-only {
     display: block;
   }
+
+  .menu-open {
+    overflow: hidden;
+  }
 }
 
 @media (max-width: 560px) {
@@ -1594,7 +1604,7 @@ ul {
   }
 
   .hero {
-    padding: 130px 0 60px;
+    padding: 104px 0 60px;
   }
 
   .stats {
@@ -1768,6 +1778,7 @@ ul {
   font-size: 0.85rem;
   cursor: pointer;
   text-decoration: underline;
+  padding: 10px 14px;
 }
 
 .gate-skip:hover {

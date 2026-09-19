@@ -63,18 +63,26 @@ function escHtml(str) {
   });
 })();
 
+const closeMenu = () => {
+  navLinks.classList.remove("open");
+  hamburger.classList.remove("active");
+  hamburger.setAttribute("aria-expanded", "false");
+  document.body.classList.remove("menu-open");
+};
+
 hamburger.addEventListener("click", () => {
   const isOpen = navLinks.classList.toggle("open");
   hamburger.classList.toggle("active", isOpen);
   hamburger.setAttribute("aria-expanded", String(isOpen));
+  document.body.classList.toggle("menu-open", isOpen);
+});
+
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape" && navLinks.classList.contains("open")) closeMenu();
 });
 
 navLinks.querySelectorAll("a").forEach((link) => {
-  link.addEventListener("click", () => {
-    navLinks.classList.remove("open");
-    hamburger.classList.remove("active");
-    hamburger.setAttribute("aria-expanded", "false");
-  });
+  link.addEventListener("click", closeMenu);
 });
 
 window.addEventListener("scroll", () => {

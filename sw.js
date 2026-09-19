@@ -1,4 +1,4 @@
-const VERSION = "mitex-v10";
+const VERSION = "mitex-v11";
 const CACHE = VERSION + "-cache";
 
 const CORE_ASSETS = [
@@ -101,18 +101,15 @@ self.addEventListener("fetch", (event) => {
   }
 
   event.respondWith(
-    caches.match(req).then((hit) => {
-      const network = fetch(req)
-        .then((res) => {
-          if (res.ok) {
-            const copy = res.clone();
-            caches.open(CACHE).then((cache) => cache.put(req, copy));
-          }
-          return res;
-        })
-        .catch(() => hit);
-      return hit || network;
-    })
+    fetch(req)
+      .then((res) => {
+        if (res.ok) {
+          const copy = res.clone();
+          caches.open(CACHE).then((cache) => cache.put(req, copy));
+        }
+        return res;
+      })
+      .catch(() => caches.match(req).then((hit) => hit || new Response("", { status: 503 })))
   );
 });
 
