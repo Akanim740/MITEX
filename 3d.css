@@ -71,6 +71,23 @@
   transform: perspective(1200px) rotateX(calc(1.2deg + var(--tilt-x, 0deg))) rotateY(calc(var(--lv-skew, 0deg) + var(--tilt-y, 0deg))) translateY(var(--tilt-lift, 0px));
 }
 
+/* ---- Scroll 3D reveals (desktop, fine pointer only via .fx-3d) ---- */
+.fx-3d .reveal:not(.package-card) {
+  opacity: 0;
+  transform: perspective(1100px) translateY(38px) rotateX(14deg);
+  transition: opacity 0.7s ease, transform 0.65s cubic-bezier(0.22, 0.61, 0.36, 1);
+}
+
+.fx-3d .reveal.visible:not(.package-card):not(.tilting) {
+  opacity: 1;
+  transform: perspective(1100px) translateY(0) rotateX(0deg);
+}
+
+.fx-3d .card:not(.package-card):hover,
+.fx-3d .card:not(.package-card):focus-visible {
+  transform: perspective(1100px) translateY(-6px) rotateX(0deg);
+}
+
 /* ---- Guards ---- */
 @media (max-width: 1024px), (pointer: coarse) {
   #mitex-3d {
@@ -81,6 +98,15 @@
 @media (prefers-reduced-motion: reduce) {
   #mitex-3d {
     display: none;
+  }
+
+  .fx-3d .reveal,
+  .fx-3d .card:hover {
+    transform: none;
+  }
+
+  .fx-3d .reveal {
+    opacity: 1;
   }
 
   .browser-stage {

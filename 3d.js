@@ -249,8 +249,10 @@
 
       var floatY = Math.sin(t * 0.8) * 0.1;
       group.position.y = -0.15 + floatY * 0.4;
-      group.rotation.y = Math.sin(t * 0.24) * 0.1 + cursor.x * 0.06 + (1 - scrollK) * 0.05;
-      group.rotation.x = 0.02 + cursor.y * 0.03 + scrollK * 0.06;
+      group.position.z = scrollK * 1.5;
+      group.scale.setScalar(1 - scrollK * 0.1);
+      group.rotation.y = Math.sin(t * 0.24) * 0.1 + cursor.x * 0.06 + (1 - scrollK) * 0.05 - scrollK * 0.22;
+      group.rotation.x = 0.02 + cursor.y * 0.03 + scrollK * 0.12;
 
       if (rings[0]) rings[0].rotation.z += 0.0016;
       if (rings[1]) rings[1].rotation.z -= 0.0009;
@@ -267,8 +269,8 @@
       glow.material.opacity = 0.1 + Math.sin(t * 0.9 + 1) * 0.03;
 
       var browFloat = -6 - Math.sin(t * 0.8) * 5;
-      var browRX = -cursor.y * 2.6 + scrollK * 2.2;
-      var browRY = cursor.x * 3.4;
+      var browRX = -cursor.y * 2.6 + scrollK * 8;
+      var browRY = cursor.x * 3.4 + scrollK * 5;
       stageEl.style.transform =
         "translateY(" + browFloat.toFixed(2) + "px) rotateX(" + browRX.toFixed(2) + "deg) rotateY(" + browRY.toFixed(2) + "deg)";
       var liftAmt = -browFloat / 12;
