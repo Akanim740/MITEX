@@ -534,6 +534,10 @@ textarea {
   align-items: start;
 }
 
+.account-grid > * {
+  min-width: 0;
+}
+
 .panel {
   background: var(--card);
   border: 1px solid var(--card-border);
@@ -742,6 +746,7 @@ textarea {
 .form-actions {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 14px;
   margin-top: 4px;
 }
