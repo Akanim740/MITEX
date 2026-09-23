@@ -437,6 +437,9 @@ function initReset() {
       msgEl.textContent = data.message;
       if (data.devResetUrl) {
         msgEl.innerHTML = `${esc(data.message)}<br /><strong>Developer mode:</strong> open this link to reset: <a style="color:#fbbf24" href="${esc(data.devResetUrl)}">Reset link</a>`;
+      } else if (data.emailDown) {
+        msgEl.className = "error";
+        msgEl.innerHTML = `${esc(data.message)}<br />Email delivery is not configured on this server yet, so no email was actually sent. Please contact the site admin for your reset link.`;
       }
     } catch (err) {
       msgEl.className = "error";

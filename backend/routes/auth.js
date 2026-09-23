@@ -439,15 +439,22 @@ router.post("/forgot-password", async (req, res) => {
       });
 
       const mail = resetEmail(user, rawReset);
-      const result = await sendMail({ to: user.email, subject: mail.subject, text: mail.text });
+      const result = await sendMail({ to: user.email, subject: mail.subject, text: mail.text, html: mail.html });
 
+      // emailDown is global server state (not account state), so it is safe
+      // to return for every request: it lets the UI be honest when SMTP is
+      // off without leaking whether this address exists.
       return res.json({
         message: "If that email exists, a reset link has been sent.",
+        ...(result.dev ? { emailDown: true } : {}),
         ...(result.dev && process.env.NODE_ENV !== "production" ? { devToken: rawReset, devResetUrl: mail.url } : {}),
       });
     }
 
-    res.json({ message: "If that email exists, a reset link has been sent." });
+    res.json({
+      message: "If that email exists, a reset link has been sent.",
+      ...(!smtpConfigured() ? { emailDown: true } : {}),
+    });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "Internal server error" });

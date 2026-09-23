@@ -72,6 +72,7 @@
               <button type="button" data-view="subscribers" data-admin-only>Subscribers</button>
               <button type="button" data-view="employees" data-admin-only>Employees</button>
               <button type="button" data-view="applications" data-admin-only>Applications</button>
+              <button type="button" id="mailboxNavBtn" data-view="mailbox">Email Outbox</button>
               <button type="button" data-view="salaries">Salaries</button>
             </div>
           </div>
@@ -340,6 +341,23 @@
           <button class="btn btn-ghost btn-sm" id="refreshSubs" type="button">Refresh</button>
         </div>
         <ul id="subsList" class="subs-list"></ul>
+      </section>
+
+      <section id="view-mailbox" class="view hidden">
+        <div class="view-head">
+          <h2>Email Outbox</h2>
+          <button class="btn btn-ghost btn-sm" id="refreshMailbox" type="button">Refresh</button>
+        </div>
+        <p id="mailOutboxStatus" class="muted" style="margin-bottom:10px;">Checking email system...</p>
+        <p class="muted" style="margin-bottom:14px;">Every message MITEX tried to send is captured here. While the email system is offline, copy the link from any message (password resets, verification codes, hire links) and share it manually.</p>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>Created</th><th>To</th><th>Subject</th><th>Status</th><th></th></tr>
+            </thead>
+            <tbody id="mailboxBody"></tbody>
+          </table>
+        </div>
       </section>
 
     </main>

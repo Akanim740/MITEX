@@ -1,4 +1,4 @@
-const VERSION = "mitex-v12";
+const VERSION = "mitex-v13";
 const CACHE = VERSION + "-cache";
 
 const CORE_ASSETS = [

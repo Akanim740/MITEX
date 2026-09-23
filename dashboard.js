@@ -109,6 +109,10 @@ function showApp(user) {
   $("#userEmailLabel").textContent = user.email;
   $("#userRoleLabel").textContent = user.role;
 
+  // The Email Outbox contains reset/verification links: admins only.
+  const mailboxNav = $("#mailboxNavBtn");
+  if (mailboxNav) mailboxNav.classList.toggle("hidden", user.role !== "admin");
+
   const staffUser = user.role === "staff";
   document.querySelectorAll("[data-admin-only]").forEach((el) => el.classList.toggle("hidden", staffUser));
 }
@@ -195,6 +199,7 @@ const loaders = {
   employees: loadEmployees,
   applications: loadApplications,
   salaries: loadSalaries,
+  mailbox: loadMailbox,
 };
 
 let currentView = null;
@@ -225,6 +230,7 @@ $("#refreshOrders").addEventListener("click", loadOrders);
 $("#refreshSubs").addEventListener("click", loadSubscribers);
 $("#refreshEmployees").addEventListener("click", loadEmployees);
 $("#refreshApplications").addEventListener("click", loadApplications);
+$("#refreshMailbox").addEventListener("click", loadMailbox);
 $("#refreshSalaries").addEventListener("click", loadSalaries);
 
 document.querySelectorAll("[data-app-filter]").forEach((chip) =>
@@ -747,22 +753,98 @@ async function loadEmployees() {
   }
 }
 
+// Render what the server actually sees for SMTP config (used by Applications
+// and the Email Outbox so both spots give the same guidance).
+function renderMailStatus(el, ms) {
+  if (ms.configured && ms.library_loaded) {
+    el.innerHTML = `<span style="color:var(--green);">Email system: connected (${ms.host_value}, ${esc(ms.user_value)})</span>`;
+  } else if (ms.configured && !ms.library_loaded) {
+    el.innerHTML = `<span style="color:var(--red);">Settings are correct, but the email library is missing on the server. Trigger a fresh deploy in Render (Manual Deploy &rarr; Deploy latest commit) so it installs properly.</span>`;
+  } else {
+    const missing = [];
+    if (!ms.host_set) missing.push("SMTP_HOST");
+    if (!ms.user_set) missing.push("SMTP_USER");
+    if (!ms.pass_set) missing.push("SMTP_PASS (needed for actual sending)");
+    el.innerHTML = `<span style="color:var(--red);">Email not configured - server is missing: ${missing.join(", ")}. Set them in Render &rarr; Environment, save, wait for live.</span>`;
+  }
+}
+
+async function loadMailbox() {
+  const statusEl = $("#mailOutboxStatus");
+  if (statusEl) {
+    try {
+      renderMailStatus(statusEl, await API.get("/api/auth/mail-status"));
+    } catch {
+      statusEl.textContent = "";
+    }
+  }
+  const body = $("#mailboxBody");
+  body.innerHTML = window.MITEXUi ? window.MITEXUi.skelRows(4, 5) : '<tr><td colspan="5" class="empty-state">Loading...</td></tr>';
+  try {
+    const box = await API.get("/api/admin/mailbox");
+    const rows = box.mails || [];
+    if (!rows.length) {
+      body.innerHTML = '<tr><td colspan="5" class="empty-state">No emails captured yet. They appear here as soon as the site tries to send one (verify, reset, receipt, hire...).</td></tr>';
+      return;
+    }
+    const statusPill = (m) =>
+      m.sent
+        ? '<span class="badge available">Sent</span>'
+        : m.dev
+          ? '<span class="badge pending" title="SMTP is not configured on the server. This message was only stored here, not delivered.">Not delivered (SMTP off)</span>'
+          : '<span class="badge failed" title="SMTP is configured but the send failed. Check the Render logs for the exact error.">Send failed</span>';
+    body.innerHTML = rows
+      .map((m) => {
+        const hasLink = /https?:\/\//.test(m.text || "");
+        return `
+        <tr>
+          <td class="muted">${fmtDate(m.ts)}<br /><span style="font-size:11px;">${new Date(m.ts).toLocaleTimeString("en-NG", { hour: "2-digit", minute: "2-digit" })}</span></td>
+          <td>${esc(m.to)}</td>
+          <td>${esc(m.subject)}</td>
+          <td>${statusPill(m)}</td>
+          <td>
+            <div class="row-actions">
+              ${hasLink ? `<button class="icon-btn" data-mcopy="${m.id}">Copy link</button>` : ""}
+              <button class="icon-btn" data-mview="${m.id}">View</button>
+            </div>
+          </td>
+        </tr>`;
+      })
+      .join("");
+
+    body.querySelectorAll("[data-mcopy]").forEach((btn) =>
+      btn.addEventListener("click", async () => {
+        const m = rows.find((x) => String(x.id) === btn.dataset.mcopy);
+        const url = ((m && m.text) || "").match(/https?:\/\/\S+/);
+        if (!url) return;
+        try {
+          await navigator.clipboard.writeText(url[0]);
+          toastSuccess("Link copied to clipboard", "Copied");
+        } catch {
+          alert(url[0]);
+        }
+      })
+    );
+
+    body.querySelectorAll("[data-mview]").forEach((btn) =>
+      btn.addEventListener("click", () => {
+        const m = rows.find((x) => String(x.id) === btn.dataset.mview);
+        if (!m) return;
+        alert(
+          `To: ${m.to}\nSubject: ${m.subject}\nCreated: ${m.ts}\nStatus: ${m.sent ? "sent" : m.dev ? "not delivered (SMTP off)" : "send failed"}\n\n${m.text}`
+        );
+      })
+    );
+  } catch (err) {
+    body.innerHTML = `<tr><td colspan="5" class="empty-state">${esc(err.message)}</td></tr>`;
+  }
+}
+
 async function loadApplications(status) {
   const mailBox = $("#mailStatus");
   if (mailBox) {
     try {
-      const ms = await API.get("/api/auth/mail-status");
-      if (ms.configured && ms.library_loaded) {
-        mailBox.innerHTML = `<span style="color:var(--green);">Email system: connected (${ms.host_value}, ${esc(ms.user_value)})</span>`;
-      } else if (ms.configured && !ms.library_loaded) {
-        mailBox.innerHTML = `<span style="color:var(--red);">Settings are correct, but the email library is missing on the server. Trigger a fresh deploy in Render (Manual Deploy &rarr; Deploy latest commit) so it installs properly.</span>`;
-      } else {
-        const missing = [];
-        if (!ms.host_set) missing.push("SMTP_HOST");
-        if (!ms.user_set) missing.push("SMTP_USER");
-        if (!ms.pass_set) missing.push("SMTP_PASS (needed for actual sending)");
-        mailBox.innerHTML = `<span style="color:var(--red);">Email not configured - server is missing: ${missing.join(", ")}. Set them in Render &rarr; Environment, save, wait for live.</span>`;
-      }
+      renderMailStatus(mailBox, await API.get("/api/auth/mail-status"));
     } catch {
       mailBox.textContent = "";
     }

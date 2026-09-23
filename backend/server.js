@@ -7,6 +7,7 @@ const cookieParser = require("cookie-parser");
 const path = require("path");
 
 const { getStore } = require("./db");
+const { smtpConfigured } = require("./utils/mailer");
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -18,6 +19,13 @@ app.disable("x-powered-by");
 if (process.env.NODE_ENV === "production" && (!process.env.JWT_ACCESS_SECRET || process.env.JWT_ACCESS_SECRET.length < 32)) {
   console.error("FATAL: set a strong JWT_ACCESS_SECRET (32+ random chars) in production");
   process.exit(1);
+}
+
+// Loud warning: without SMTP_* env vars every email (verifications, password
+// resets, receipts) is only logged to the admin Email Outbox, never delivered.
+if (process.env.NODE_ENV === "production" && !smtpConfigured()) {
+  console.warn("[mailer] WARNING: SMTP is NOT configured (set SMTP_HOST / SMTP_USER / SMTP_PASS in Render -> Environment).");
+  console.warn("[mailer] Emails are being captured in the admin Email Outbox but are NOT being delivered.");
 }
 
 let store;
