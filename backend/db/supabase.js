@@ -398,6 +398,30 @@ const orders = {
     const { data } = await supabase.from("orders").select("*").eq("id", id).maybeSingle();
     return data || null;
   },
+  async markPaidIfPending(reference, paidAt) {
+    const { error } = await supabase.from("orders").update({ status: "paid", paid_at: paidAt }).eq("reference", reference).eq("status", "pending");
+    return !error;
+  },
+  // Atomic-ish settle: claim the listing first (conditional single-statement
+  // UPDATE), then mark the order paid only if we won the listing. If the
+  // listing is gone, the pending order is failed instead of paid.
+  async settlePaid(reference, paidAt, listingId) {
+    if (listingId !== null && listingId !== undefined) {
+      const { error: lerr } = await supabase.from("listings").update({ status: "sold" }).eq("id", listingId).eq("status", "available");
+      if (!lerr) {
+        const { error } = await supabase.from("orders").update({ status: "paid", paid_at: paidAt }).eq("reference", reference).eq("status", "pending");
+        if (error) {
+          await supabase.from("listings").update({ status: "available" }).eq("id", listingId).eq("status", "sold");
+          return { paid: false, listingSold: false, skippedSold: false };
+        }
+        return { paid: true, listingSold: true, skippedSold: false };
+      }
+      await supabase.from("orders").update({ status: "failed" }).eq("reference", reference).eq("status", "pending");
+      return { paid: false, listingSold: false, skippedSold: true };
+    }
+    const { error } = await supabase.from("orders").update({ status: "paid", paid_at: paidAt }).eq("reference", reference).eq("status", "pending");
+    return { paid: !error, listingSold: null, skippedSold: false };
+  },
   async markPaid(reference, paidAt) {
     const { error } = await supabase.from("orders").update({ status: "paid", paid_at: paidAt }).eq("reference", reference);
     return !error;

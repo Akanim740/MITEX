@@ -296,6 +296,29 @@ const orders = {
     const d = await col("orders").doc(String(id)).get();
     return d.exists ? { ...d.data(), id: d.id } : null;
   },
+  async markPaidIfPending(reference, paidAt) {
+    const row = await this.findByReference(reference);
+    if (!row || row.status !== "pending") return false;
+    await col("orders").doc(row.id).update({ status: "paid", paid_at: paidAt });
+    return true;
+  },
+  // Best-effort conditional settle (Firestore has no atomic cross-doc UPDATE).
+  // The listing is only claimed if still "available"; otherwise the pending
+  // order is failed instead of paid.
+  async settlePaid(reference, paidAt, listingId) {
+    const row = await this.findByReference(reference);
+    if (!row || row.status !== "pending") return { paid: false, listingSold: false, skippedSold: false };
+    if (listingId !== null && listingId !== undefined) {
+      const ld = await col("listings").doc(String(listingId)).get();
+      if (!ld.exists || ld.data().status !== "available") {
+        await col("orders").doc(row.id).update({ status: "failed" });
+        return { paid: false, listingSold: false, skippedSold: true };
+      }
+      await col("listings").doc(String(listingId)).update({ status: "sold" });
+    }
+    await col("orders").doc(row.id).update({ status: "paid", paid_at: paidAt });
+    return { paid: true, listingSold: listingId !== null && listingId !== undefined ? true : null, skippedSold: false };
+  },
   async markPaid(reference, paidAt) {
     const row = await this.findByReference(reference);
     if (!row) return false;

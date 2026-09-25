@@ -276,6 +276,26 @@ const orders = {
       return null;
     }
   },
+  async markPaidIfPending(reference, paidAt) {
+    return (await db.collection("orders").updateOne({ reference, status: "pending" }, { $set: { status: "paid", paid_at: paidAt } })).modifiedCount > 0;
+  },
+  async settlePaid(reference, paidAt, listingId) {
+    if (listingId !== null && listingId !== undefined) {
+      const l = await db.collection("listings").updateOne({ _id: oid(listingId), status: "available" }, { $set: { status: "sold" } });
+      if (l.modifiedCount > 0) {
+        const o = await db.collection("orders").updateOne({ reference, status: "pending" }, { $set: { status: "paid", paid_at: paidAt } });
+        if (o.modifiedCount === 0) {
+          await db.collection("listings").updateOne({ _id: oid(listingId), status: "sold" }, { $set: { status: "available" } });
+          return { paid: false, listingSold: false, skippedSold: false };
+        }
+        return { paid: true, listingSold: true, skippedSold: false };
+      }
+      await db.collection("orders").updateOne({ reference, status: "pending" }, { $set: { status: "failed" } });
+      return { paid: false, listingSold: false, skippedSold: true };
+    }
+    const o = await db.collection("orders").updateOne({ reference, status: "pending" }, { $set: { status: "paid", paid_at: paidAt } });
+    return { paid: o.modifiedCount > 0, listingSold: null, skippedSold: false };
+  },
   async markPaid(reference, paidAt) {
     return (await db.collection("orders").updateOne({ reference }, { $set: { status: "paid", paid_at: paidAt } })).modifiedCount > 0;
   },

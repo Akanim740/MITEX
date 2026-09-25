@@ -1,15 +1,21 @@
 const jwt = require("jsonwebtoken");
+const crypto = require("crypto");
 const { sha256 } = require("../utils/tokens");
 
 if (process.env.NODE_ENV === "production" && (!process.env.JWT_ACCESS_SECRET || process.env.JWT_ACCESS_SECRET.length < 32)) {
   console.error("FATAL: set a strong JWT_ACCESS_SECRET (32+ random chars) in production — refusing to use insecure defaults");
   process.exit(1);
 }
-const JWT_ACCESS_SECRET = process.env.JWT_ACCESS_SECRET || process.env.JWT_SECRET || "mitex-dev-secret-change-me";
+// Never fall back to a known string. Outside production a per-boot random
+// secret keeps local dev working without shipping a hardcoded default key.
+if (!process.env.JWT_ACCESS_SECRET) {
+  console.warn("[auth] JWT_ACCESS_SECRET not set - using a random per-boot secret (restart signs you out). Set JWT_ACCESS_SECRET in production.");
+}
+const JWT_ACCESS_SECRET = process.env.JWT_ACCESS_SECRET || crypto.randomBytes(32).toString("hex");
 const ACCESS_TTL = process.env.ACCESS_TTL || "15m";
 
 function signAccessToken(user) {
-  return jwt.sign({ sub: String(user.id), role: user.role }, JWT_ACCESS_SECRET, { expiresIn: ACCESS_TTL });
+  return jwt.sign({ sub: String(user.id), role: user.role }, JWT_ACCESS_SECRET, { expiresIn: ACCESS_TTL, algorithm: "HS256" });
 }
 
 async function requireAuth(req, res, next) {
@@ -22,7 +28,7 @@ async function requireAuth(req, res, next) {
 
   let payload;
   try {
-    payload = jwt.verify(token, JWT_ACCESS_SECRET);
+    payload = jwt.verify(token, JWT_ACCESS_SECRET, { algorithms: ["HS256"] });
   } catch (err) {
     return res.status(401).json({ error: "Invalid or expired token" });
   }
@@ -50,7 +56,7 @@ async function optionalAuth(req, _res, next) {
   const token = header.startsWith("Bearer ") ? header.slice(7) : null;
   if (!token) return next();
   try {
-    const payload = jwt.verify(token, JWT_ACCESS_SECRET);
+    const payload = jwt.verify(token, JWT_ACCESS_SECRET, { algorithms: ["HS256"] });
     const store = req.store;
     if (store) {
       const user = await store.users.findById(payload.sub);

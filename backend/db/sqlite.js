@@ -574,6 +574,38 @@ const orders = {
   async getById(id) {
     return db.prepare("SELECT * FROM orders WHERE id = ?").get(id) || null;
   },
+  async markPaidIfPending(reference, paidAt) {
+    return db.prepare("UPDATE orders SET status = 'paid', paid_at = ? WHERE reference = ? AND status = 'pending'").run(paidAt, reference).changes > 0;
+  },
+  // Atomically transition a pending order to paid and, for listings, mark the
+  // listing sold in the same transaction. Returns { paid, listingSold, skippedSold }.
+  // skippedSold=true means the listing was already gone, so the order is failed
+  // instead of paid (prevents charging two buyers for one asset).
+  async settlePaid(reference, paidAt, listingId) {
+    db.exec("BEGIN IMMEDIATE");
+    try {
+      let result;
+      if (listingId !== null && listingId !== undefined) {
+        const listing = db.prepare("SELECT status FROM listings WHERE id = ?").get(listingId);
+        if (!listing || listing.status !== "available") {
+          db.prepare("UPDATE orders SET status = 'failed' WHERE reference = ? AND status = 'pending'").run(reference);
+          result = { paid: false, listingSold: false, skippedSold: true };
+        } else {
+          const paid = db.prepare("UPDATE orders SET status = 'paid', paid_at = ? WHERE reference = ? AND status = 'pending'").run(paidAt, reference).changes > 0;
+          const listingSold = paid ? db.prepare("UPDATE listings SET status = 'sold' WHERE id = ? AND status = 'available'").run(listingId).changes > 0 : false;
+          result = { paid, listingSold, skippedSold: false };
+        }
+      } else {
+        const paid = db.prepare("UPDATE orders SET status = 'paid', paid_at = ? WHERE reference = ? AND status = 'pending'").run(paidAt, reference).changes > 0;
+        result = { paid, listingSold: null, skippedSold: false };
+      }
+      db.exec("COMMIT");
+      return result;
+    } catch (e) {
+      db.exec("ROLLBACK");
+      throw e;
+    }
+  },
   async markPaid(reference, paidAt) {
     return db.prepare("UPDATE orders SET status = 'paid', paid_at = ? WHERE reference = ?").run(paidAt, reference).changes > 0;
   },

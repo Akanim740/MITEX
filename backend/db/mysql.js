@@ -568,6 +568,27 @@ const orders = {
     const [rows] = await pool.query("SELECT * FROM orders WHERE id = ?", [id]);
     return rows[0] || null;
   },
+  async markPaidIfPending(reference, paidAt) {
+    const [res] = await pool.query("UPDATE orders SET status = 'paid', paid_at = ? WHERE reference = ? AND status = 'pending'", [paidAt, reference]);
+    return Number(res.affectedRows) > 0;
+  },
+  async settlePaid(reference, paidAt, listingId) {
+    if (listingId !== null && listingId !== undefined) {
+      const [lres] = await pool.query("UPDATE listings SET status = 'sold' WHERE id = ? AND status = 'available'", [listingId]);
+      if (Number(lres.affectedRows) > 0) {
+        const [ores] = await pool.query("UPDATE orders SET status = 'paid', paid_at = ? WHERE reference = ? AND status = 'pending'", [paidAt, reference]);
+        if (Number(ores.affectedRows) === 0) {
+          await pool.query("UPDATE listings SET status = 'available' WHERE id = ? AND status = 'sold'", [listingId]);
+          return { paid: false, listingSold: false, skippedSold: false };
+        }
+        return { paid: true, listingSold: true, skippedSold: false };
+      }
+      await pool.query("UPDATE orders SET status = 'failed' WHERE reference = ? AND status = 'pending'", [reference]);
+      return { paid: false, listingSold: false, skippedSold: true };
+    }
+    const [res] = await pool.query("UPDATE orders SET status = 'paid', paid_at = ? WHERE reference = ? AND status = 'pending'", [paidAt, reference]);
+    return { paid: Number(res.affectedRows) > 0, listingSold: null, skippedSold: false };
+  },
   async markPaid(reference, paidAt) {
     const [res] = await pool.query("UPDATE orders SET status = 'paid', paid_at = ? WHERE reference = ?", [paidAt, reference]);
     return res.affectedRows > 0;

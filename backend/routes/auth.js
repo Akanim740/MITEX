@@ -232,7 +232,7 @@ router.post("/logout", async (req, res) => {
     if (resolved) {
       await store.sessions.revoke(resolved.session.id);
     }
-    res.clearCookie(REFRESH_COOKIE, { path: "/api/auth" });
+    res.clearCookie(REFRESH_COOKIE);
     res.json({ message: "Logged out" });
   } catch (err) {
     console.error(err);
@@ -327,9 +327,6 @@ router.post("/verify-otp", async (req, res) => {
       // Keep the response generic so attackers cannot enumerate accounts.
       return res.status(400).json({ error: "Incorrect or expired code. Check your email and try again." });
     }
-    if (user.email_verified) {
-      return res.json({ message: "Email is already verified", already_verified: true });
-    }
 
     // Brute-force guard: 5 wrong attempts, then lock for 15 minutes.
     const now = Date.now();
@@ -374,12 +371,10 @@ router.post("/resend-otp", async (req, res) => {
 
     const user = await store.users.findByEmail(email);
 
-    // Never reveal whether an account exists.
-    if (!user) {
+    // Never reveal whether an account exists - verified accounts simply get
+    // the same neutral message (no stale code is re-sent to them).
+    if (!user || user.email_verified) {
       return res.json({ message: "If an account exists for that email, a new code has been sent." });
-    }
-    if (user.email_verified) {
-      return res.json({ message: "Email is already verified" });
     }
 
     const now = Date.now();
@@ -508,7 +503,7 @@ router.get("/dashboard", requireAuth, requireRole("admin", "editor"), async (req
 });
 
 // GET /api/auth/mail-status - admin diagnostic: what does the server actually see?
-router.get("/mail-status", requireAuth, requireRole("admin", "editor"), async (req, res) => {
+router.get("/mail-status", requireAuth, requireRole("admin"), async (req, res) => {
   res.json({
     host_set: Boolean(process.env.SMTP_HOST),
     port_set: Boolean(process.env.SMTP_PORT),
@@ -537,6 +532,13 @@ router.post("/onboard", async (req, res) => {
     const app = await store.applications.getByHireToken(token);
     if (!app || !app.staff_user_id) {
       return res.status(400).json({ error: "This onboarding link is invalid or has already been used" });
+    }
+    // Hire links must expire so a leaked invite can't be used months later.
+    if (app.created_at) {
+      const ageMs = Date.now() - Date.parse(app.created_at);
+      if (Number.isFinite(ageMs) && ageMs > 30 * 24 * 60 * 60 * 1000) {
+        return res.status(400).json({ error: "This onboarding link has expired. Ask the admin to re-send it." });
+      }
     }
 
     await store.users.updatePassword(app.staff_user_id, await bcrypt.hash(password, 12));

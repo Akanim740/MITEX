@@ -1506,6 +1506,9 @@ async function buyListing(listingId, btn) {
       return;
     }
     toastError(err.message);
+    if (err.code === "VERIFY_REQUIRED") {
+      setTimeout(() => { location.href = "/account.html"; }, 2500);
+    }
     if (btn) setLoading(btn, false, t("buy_now"));
   }
 }
@@ -1532,6 +1535,9 @@ async function buyListingOneTap(listingId, btn) {
       return;
     }
     toastError(err.message);
+    if (err.code === "VERIFY_REQUIRED") {
+      setTimeout(() => { location.href = "/account.html"; }, 2500);
+    }
     if (btn) setLoading(btn, false, "Buy Now");
   }
 }

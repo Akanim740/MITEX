@@ -9,7 +9,21 @@ const paystack = require("../utils/paystack");
 const cardbox = require("../utils/cardbox");
 
 function newReference() {
-  return `MITEX-${Date.now()}-${randomToken(4).toUpperCase()}`;
+  return `MITEX-${Date.now()}-${randomToken(6).toUpperCase()}`;
+}
+
+// Buyers must verify their email before spending money. Verification is the
+// account's access control for purchases (login stays open so users can
+// resend the code and complete verification).
+function requireVerified(req, res, next) {
+  if (!req.user) return res.status(401).json({ error: "Authentication required" });
+  if (!Number(req.user.email_verified)) {
+    return res.status(403).json({
+      code: "VERIFY_REQUIRED",
+      error: "Please verify your email before checking out - enter the 6-digit code from your inbox (or use 'Resend code' in My Account).",
+    });
+  }
+  next();
 }
 
 function findPackage(packageStore, key) {
@@ -33,25 +47,35 @@ async function captureCard(store, buyer, authorization, customer) {
 }
 
 async function settleOrder(store, order) {
-  if (order.status === "paid") return;
-  // Double-sell guard: re-check listing availability under an optimistic lock.
-  // If the listing is already sold (another buyer raced), mark this order
-  // failed instead of silently charging two people for the same asset.
-  if (order.listing_id) {
-    const listing = await store.listings.get(order.listing_id);
-    if (listing && String(listing.status) === "sold") {
-      console.warn(`[payments] settleOrder race: listing ${order.listing_id} already sold; failing order ${order.reference}`);
-      await store.orders.markFailed(order.reference);
-      return { raceSold: true };
-    }
+  // Atomically claim the listing + mark the order paid (per-driver). This is
+  // the double-sell / double-settle guard: only one transaction can win.
+  const result = await store.orders.settlePaid(order.reference, new Date().toISOString(), order.listing_id || null);
+
+  if (!result || !result.paid) {
+    // Already paid by a concurrent webhook/verify, or skipped because the
+    // listing was just sold to another buyer (skippedSold → order now failed).
+    return { ok: false, alreadyPaid: true, raceSold: Boolean(result && result.skippedSold) };
   }
 
-  await store.orders.markPaid(order.reference, new Date().toISOString());
+  if (order.listing_id && result.listingSold === false) {
+    // Non-transactional DB only: the order was charged but the listing was
+    // taken by another order in between. Refund the buyer and flag for admin.
+    const ref = order.reference;
+    console.error(`[payments] settle race: paid order ${ref} could not claim listing ${order.listing_id} - refunding buyer`);
+    setImmediate(async () => {
+      try {
+        if (paystack.isConfigured()) {
+          await paystack.refundTransaction(ref, order.amount);
+        }
+        await store.orders.updateStatus(ref, "refunded");
+      } catch (e) {
+        console.error(`[payments] race refund failed for ${ref} - left as paid for admin review:`, e.message);
+      }
+    });
+    return { ok: false, raceSold: true };
+  }
+
   if (order.listing_id) {
-    const listing = await store.listings.get(order.listing_id);
-    if (listing && String(listing.status) === "available") {
-      await store.listings.update(order.listing_id, { status: "sold" });
-    }
     // Clear any waiting buyers now that the listing is purchased.
     try {
       const waiting = await store.buyIntents.listWaitingByListing(order.listing_id);
@@ -95,10 +119,11 @@ async function settleOrder(store, order) {
       console.error("admin order notification failed:", e.message);
     }
   });
+  return { ok: true };
 }
 
 // POST /api/payments/initialize - start checkout for a listing
-router.post("/initialize", requireAuth, async (req, res) => {
+router.post("/initialize", requireAuth, requireVerified, async (req, res) => {
   try {
     const store = req.store;
     const { listingId } = req.body;
@@ -144,14 +169,14 @@ router.post("/initialize", requireAuth, async (req, res) => {
     });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: err.message || "Internal server error" });
+    res.status(500).json({ error: "Could not start checkout. Please try again." });
   }
 });
 
 // POST /api/payments/package-checkout - start checkout for a website package.
 // Unlike marketplace listings, packages are built to order, so there is no
 // delivery_url to check - the order simply records the package the customer picked.
-router.post("/package-checkout", requireAuth, async (req, res) => {
+router.post("/package-checkout", requireAuth, requireVerified, async (req, res) => {
   try {
     const store = req.store;
     const { packageKey, notes } = req.body;
@@ -193,12 +218,12 @@ router.post("/package-checkout", requireAuth, async (req, res) => {
     });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: err.message || "Internal server error" });
+    res.status(500).json({ error: "Could not start package checkout. Please try again." });
   }
 });
 
 // POST /api/payments/one-tap - charge a previously saved card (tokenized at signup)
-router.post("/one-tap", requireAuth, async (req, res) => {
+router.post("/one-tap", requireAuth, requireVerified, async (req, res) => {
   try {
     const store = req.store;
     const { listingId } = req.body;
@@ -246,9 +271,10 @@ router.post("/one-tap", requireAuth, async (req, res) => {
     });
 
     if (saved.demo || !paystack.isConfigured()) {
-      // Production guard: if Paystack is somehow not configured in production,
-      // do NOT allow a demo settle to silently bypass real payment.
-      if (process.env.NODE_ENV === "production" && !saved.demo) {
+      // Production guard: never demo-settle a real purchase. A leftover demo
+      // flag must not grant a free purchase, and an unconfigured gateway must
+      // not be silently bypassed.
+      if (process.env.NODE_ENV === "production") {
         await store.orders.markFailed(order.reference);
         return res.status(500).json({ error: "Payment gateway not configured. Please try again later." });
       }
@@ -273,14 +299,14 @@ router.post("/one-tap", requireAuth, async (req, res) => {
     return res.status(402).json({ error: "Your saved card could not be charged. Please retry with the full checkout." });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: err.message || "Internal server error" });
+    res.status(500).json({ error: "One-tap checkout failed. Please try again." });
   }
 });
 
 // POST /api/payments/buy-intent - buyer confirms intent on a not-ready listing
 // HARD-BLOCKS payment until worker sets delivery_url; dedupes per buyer+listing
 // and notifies the assigned worker once per confirmation.
-router.post("/buy-intent", requireAuth, async (req, res) => {
+router.post("/buy-intent", requireAuth, requireVerified, async (req, res) => {
   try {
     const store = req.store;
     const { listingId } = req.body;
@@ -346,7 +372,7 @@ router.post("/buy-intent", requireAuth, async (req, res) => {
     });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: err.message || "Internal server error" });
+    res.status(500).json({ error: "Could not save your spot. Please try again." });
   }
 });
 
@@ -376,7 +402,7 @@ router.get("/verify/:reference", requireAuth, async (req, res) => {
     res.json({ status: fresh.status, order: fresh });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: err.message || "Internal server error" });
+    res.status(500).json({ error: "Could not verify payment status. Please try again." });
   }
 });
 
@@ -409,7 +435,7 @@ router.post("/demo-pay/:reference", requireAuth, async (req, res) => {
 // The 30-min expiry marks abandoned orders failed, so a retry must be possible without
 // creating a fresh order. Paystack rejects a reused reference, so we rotate the order
 // to a NEW reference before re-initializing (same listing/package, same amount).
-router.post("/resume/:reference", requireAuth, async (req, res) => {
+router.post("/resume/:reference", requireAuth, requireVerified, async (req, res) => {
   try {
     const store = req.store;
     const order = await store.orders.findByReference(req.params.reference);
@@ -463,7 +489,7 @@ router.post("/resume/:reference", requireAuth, async (req, res) => {
     });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: err.message || "Internal server error" });
+    res.status(500).json({ error: "Could not resume checkout. Please try again." });
   }
 });
 
@@ -475,11 +501,17 @@ router.post("/webhook", express.raw({ type: "*/*" }), async (req, res) => {
     }
 
     const signature = req.headers["x-paystack-signature"];
-    if (!paystack.verifyWebhookSignature(req.rawBody, signature)) {
+    // Custom raw-body capture only runs for JSON content-types; fall back to
+    // the buffered body (or a re-serialization) so signature checks always work.
+    const raw = req.rawBody || (Buffer.isBuffer(req.body) ? req.body : Buffer.from(JSON.stringify(req.body || ""), "utf8"));
+    if (!raw.length) {
+      return res.status(400).json({ error: "Missing request body" });
+    }
+    if (!paystack.verifyWebhookSignature(raw, signature)) {
       return res.status(401).json({ error: "Invalid signature" });
     }
 
-    const event = JSON.parse(req.rawBody.toString("utf8"));
+    const event = JSON.parse(raw.toString("utf8"));
     const store = req.store;
 
     if (event.event === "charge.success" && event.data && event.data.reference) {
@@ -489,11 +521,11 @@ router.post("/webhook", express.raw({ type: "*/*" }), async (req, res) => {
       // Verify amount (kobo) and currency before settling — prevents forged
       // or replayed webhooks from marking an order paid without valid funds.
       const expectedKobo = Math.round(order.amount * 100);
-      if (event.data.amount && event.data.amount < expectedKobo) {
+      if (!Number.isFinite(event.data.amount) || event.data.amount < expectedKobo) {
         console.warn(`[payments] webhook amount mismatch: expected≥${expectedKobo}, got ${event.data.amount}`);
         res.sendStatus(200); return;
       }
-      if (event.data.currency && String(event.data.currency).toUpperCase() !== "NGN") {
+      if (!event.data.currency || String(event.data.currency).toUpperCase() !== "NGN") {
         console.warn(`[payments] webhook currency mismatch: expected NGN, got ${event.data.currency}`);
         res.sendStatus(200); return;
       }
@@ -669,13 +701,14 @@ router.patch("/orders/:reference/fulfillment", requireAuth, requireRole("admin",
   }
 });
 
-// POST /api/payments/refund/:reference - admin refunds an order
+// POST /api/payments/refund/:reference - admin refunds a paid order
 router.post("/refund/:reference", requireAuth, requireRole("admin"), async (req, res) => {
   try {
     const store = req.store;
     const order = await store.orders.findByReference(req.params.reference);
     if (!order) return res.status(404).json({ error: "Order not found" });
     if (order.status === "refunded") return res.status(409).json({ error: "Already refunded" });
+    if (order.status !== "paid") return res.status(409).json({ error: "Only paid orders can be refunded" });
 
     // Push the money back through Paystack first (production). Demo-mode orders
     // were never really charged, so we only flip the local status.

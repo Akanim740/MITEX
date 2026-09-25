@@ -32,9 +32,11 @@ try {
   $reg = Invoke-RestMethod "$base/api/auth/register" -Method Post -ContentType "application/json" -Body $regBody
   Check "customer registered" ($reg.devToken -or $reg.devOtp)
 
-  $otp = $reg.devOtp
-  if ($otp) {
-    try { Invoke-RestMethod "$base/api/auth/verify-otp" -Method Post -ContentType "application/json" -Body (@{ email = $email; code = $otp } | ConvertTo-Json) | Out-Null } catch {}
+  # Verify the account (checkout now requires a verified email).
+  if ($reg.devToken) {
+    try { Invoke-RestMethod "$base/api/auth/verify-email?token=$($reg.devToken)" | Out-Null } catch {}
+  } elseif ($reg.devOtp) {
+    try { Invoke-RestMethod "$base/api/auth/verify-otp" -Method Post -ContentType "application/json" -Body (@{ email = $email; otp = $reg.devOtp } | ConvertTo-Json) | Out-Null } catch {}
   }
   $login = Invoke-RestMethod "$base/api/auth/login" -Method Post -ContentType "application/json" -Body (@{ email = $email; password = "ResumePass123" } | ConvertTo-Json)
   Check "customer login" ([bool]$login.accessToken)

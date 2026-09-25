@@ -42,7 +42,26 @@ app.use((req, res, next) => {
 const BLOCKED_PATH = /^\/(\.git|\.env|backend|node_modules|scripts|deliveries)(\/|$)|\.(sql|db|md|log|ps1|lock|jar|war)$|^\/package(-lock)?\.json$|^\/render\.ya?ml$/i;
 app.use((req, res, next) => {
   try {
-    const decoded = decodeURIComponent(req.path);
+    // decodeURIComponent turns %2e/%2f/%5c back into their literal chars.
+    // Loop (bounded) so double-encoded "%255c" attacks collapse too, then
+    // normalize backslashes to slashes: on Windows "\" is also a path
+    // separator, so raw backslashes could otherwise bypass the blocklist.
+    let decoded = req.path;
+    for (let i = 0; i < 3; i++) {
+      if (!decoded.includes("%")) break;
+      let d;
+      try {
+        d = decodeURIComponent(decoded);
+      } catch {
+        break;
+      }
+      if (d === decoded) break;
+      decoded = d;
+    }
+    // Normalize backslashes to slashes (Windows path separator), then collapse
+    // repeated slashes: "%5cbackend" decodes to "\backend", which after the
+    // backslash swap becomes "//backend" and would otherwise skip the blocklist.
+    decoded = decoded.replace(/\\/g, "/").replace(/\/{2,}/g, "/");
     if (BLOCKED_PATH.test(decoded)) return res.status(404).json({ error: "Not found" });
   } catch {}
   next();
@@ -53,7 +72,7 @@ app.use(
     contentSecurityPolicy: {
       directives: {
         defaultSrc: ["'self'"],
-        scriptSrc: ["'self'", "'unsafe-inline'", "https://www.googletagmanager.com", "https://www.google-analytics.com"],
+        scriptSrc: ["'self'"],
         styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
         fontSrc: ["'self'", "https://fonts.gstatic.com"],
         imgSrc: ["'self'", "data:", "https:"],
@@ -112,6 +131,18 @@ app.use(
 );
 app.use(express.urlencoded({ extended: false }));
 
+// Redact secrets/tokens before persisting any response body to the audit log
+// (access tokens, refresh tokens and dev-only one-time codes are never stored).
+const AUDIT_REDACT = new Set(["accessToken", "refreshToken", "devToken", "devOtp"]);
+function redactAuditBody(body) {
+  if (typeof body !== "object" || body === null || Array.isArray(body)) return body;
+  const out = { ...body };
+  for (const key of AUDIT_REDACT) {
+    if (key in out) out[key] = "redacted";
+  }
+  return out;
+}
+
 // Audit trail: log API mutations (actions + response summary, never request bodies)
 app.use("/api", (req, res, next) => {
   if (!["POST", "PUT", "PATCH", "DELETE"].includes(req.method)) return next();
@@ -121,11 +152,12 @@ app.use("/api", (req, res, next) => {
     original(body);
     setImmediate(async () => {
       try {
+        const safeBody = redactAuditBody(body);
         await store.audit.log({
           userId: req.user ? req.user.id : null,
           email: req.user ? req.user.email : null,
           action,
-          detail: typeof body === "string" ? body.slice(0, 200) : JSON.stringify(body).slice(0, 200),
+          detail: typeof safeBody === "string" ? safeBody.slice(0, 200) : JSON.stringify(safeBody).slice(0, 200),
           ip: req.ip,
         });
       } catch {}
