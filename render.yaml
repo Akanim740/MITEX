@@ -11,6 +11,9 @@ services:
     envVars:
       - key: NODE_ENV
         value: production
+      # Trust one hop so the rate limiters see real client IPs behind Render's edge.
+      - key: TRUST_PROXY
+        value: "1"
       # Public URL of the deployed site (Render fills this in automatically)
       - key: APP_URL
         value: https://mitex.onrender.com

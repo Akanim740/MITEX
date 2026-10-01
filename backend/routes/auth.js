@@ -22,10 +22,29 @@ const OTP_RESEND_COOLDOWN_MS = 60 * 1000;
 const otpAttempts = new Map(); // email -> { count, lockedUntil }
 const otpLastSent = new Map(); // email -> timestamp
 
+const OTP_MAP_MAX = 20000;
+
+// Lazy pruning so a flood of distinct probed emails cannot grow these Maps
+// without bound. Entries with an expired lock and stale cooldown timestamps
+// are dropped once the Map exceeds its cap.
+function pruneOtpMaps() {
+  const now = Date.now();
+  if (otpAttempts.size > OTP_MAP_MAX) {
+    for (const [email, entry] of otpAttempts) {
+      if (!entry.lockedUntil || entry.lockedUntil < now) otpAttempts.delete(email);
+    }
+  }
+  if (otpLastSent.size > OTP_MAP_MAX) {
+    for (const [email, ts] of otpLastSent) {
+      if (now - ts > OTP_TTL_MIN * 60 * 1000) otpLastSent.delete(email);
+    }
+  }
+}
+
 function setRefreshCookie(res, rawToken) {
   res.cookie(REFRESH_COOKIE, rawToken, {
     httpOnly: true,
-    sameSite: "lax",
+    sameSite: "strict",
     secure: process.env.NODE_ENV === "production",
     maxAge: REFRESH_DAYS * 24 * 60 * 60 * 1000,
     path: "/",
@@ -312,6 +331,7 @@ router.post("/resend-verification", requireAuth, async (req, res) => {
 // POST /api/auth/verify-otp - verify the account with the emailed 6-digit code
 router.post("/verify-otp", async (req, res) => {
   try {
+    pruneOtpMaps();
     const store = req.store;
     const email = String(req.body.email || "").trim().toLowerCase();
     const otp = String(req.body.otp || "").trim();
@@ -366,6 +386,7 @@ router.post("/verify-otp", async (req, res) => {
 // POST /api/auth/resend-otp - send a new code by email (rate-limited)
 router.post("/resend-otp", async (req, res) => {
   try {
+    pruneOtpMaps();
     const store = req.store;
     const email = String(req.body.email || "").trim().toLowerCase();
 
@@ -675,7 +696,9 @@ router.patch("/staff/:id", requireAuth, requireRole("admin"), async (req, res) =
     }
     if (req.body.phone !== undefined) patch.phone = String(req.body.phone || "").trim() || null;
     if (req.body.title !== undefined) patch.bio = String(req.body.title || "").trim().slice(0, 120) || null;
-    if (req.body.active !== undefined) patch.active = req.body.active ? 1 : 0;
+    if (req.body.active !== undefined) {
+      patch.active = req.body.active === true || req.body.active === 1 || req.body.active === "1" ? 1 : 0;
+    }
     if (req.body.dob !== undefined) {
       const dobCheck = validateDob(req.body.dob);
       if (!dobCheck.ok) return res.status(400).json({ error: dobCheck.error });
@@ -697,6 +720,8 @@ router.patch("/staff/:id", requireAuth, requireRole("admin"), async (req, res) =
         return res.status(400).json({ error: "New password must be at least 8 characters and include letters and numbers" });
       }
       await store.users.updatePassword(user.id, await bcrypt.hash(pw, 12));
+      // Invalidate every existing session so a password reset is a real reset.
+      await store.sessions.revokeAllForUser(user.id);
     }
 
     const patchKeys = Object.keys(patch).filter((k) => k !== "password_hash_placeholder");

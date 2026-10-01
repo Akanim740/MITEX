@@ -51,6 +51,7 @@ router.post("/", async (req, res) => {
 // GET /api/enquiries - staff list (newest first), optional ?status=new
 router.get("/", requireAuth, requireRole("admin", "editor"), async (req, res) => {
   try {
+    if (Array.isArray(req.query.status)) return res.status(400).json({ error: "Invalid status filter" });
     const rows = await req.store.enquiries.list(req.query.status);
     res.json(rows);
   } catch (err) {

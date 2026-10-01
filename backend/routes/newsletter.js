@@ -1,12 +1,20 @@
 const express = require("express");
+const rateLimit = require("express-rate-limit");
 const router = express.Router();
 
 const { requireAuth, requireRole } = require("../middleware/auth");
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
+// Public subscribe endpoint: stop list-stuffing and mail-bombing via a raw loop.
+const subscribeLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  message: { error: "Too many attempts, please try again later" },
+});
+
 // POST /api/newsletter - public subscribe
-router.post("/", async (req, res) => {
+router.post("/", subscribeLimiter, async (req, res) => {
   try {
     const store = req.store;
     const email = String(req.body.email || "").trim().toLowerCase();
@@ -37,7 +45,7 @@ router.delete("/:email", requireAuth, async (req, res) => {
   try {
     const target = String(req.params.email || "").trim().toLowerCase();
     const isOwner = String(req.user.email || "").trim().toLowerCase() === target;
-    const isAdmin = ["admin", "editor"].includes(req.user.role);
+    const isAdmin = req.user.role === "admin";
     if (!isOwner && !isAdmin) {
       return res.status(403).json({ error: "You can only unsubscribe your own email" });
     }

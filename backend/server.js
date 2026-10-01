@@ -12,7 +12,10 @@ const { smtpConfigured } = require("./utils/mailer");
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-app.set("trust proxy", 1);
+// Trust the proxy hop only when explicitly enabled (or on Render, where
+// X-Forwarded-For is set by the platform edge). Keeping this off by default
+// prevents a client spoofing X-Forwarded-For to bypass the rate limiters.
+app.set("trust proxy", Number(process.env.TRUST_PROXY ?? (process.env.NODE_ENV === "production" ? 1 : 0)));
 app.disable("x-powered-by");
 
 // Boot guard: refuse insecure defaults in production
@@ -197,7 +200,8 @@ app.get("/api/health", async (req, res) => {
 
 app.get("/api/audit", require("./middleware/auth").requireAuth, require("./middleware/auth").requireRole("admin"), async (req, res) => {
   try {
-    res.json(await store.audit.list(Number(req.query.limit) || 100));
+    const limit = Math.max(1, Math.min(Number(req.query.limit) || 100, 500));
+    res.json(await store.audit.list(limit));
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "Internal server error" });

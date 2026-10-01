@@ -1,4 +1,5 @@
 const express = require("express");
+const rateLimit = require("express-rate-limit");
 const router = express.Router();
 
 const {
@@ -10,6 +11,15 @@ const {
   analyze,
   generateDescription,
 } = require("../utils/site-audit");
+
+// Every analyze endpoint performs a server-side outbound fetch of an arbitrary
+// URL. Cap it so a scraper cannot use this box as an open fetch proxy.
+const analyzeLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 240,
+  message: { error: "Too many requests, please try again later" },
+});
+router.use(analyzeLimiter);
 
 // Strip listing fields off so nothing sensitive leaks in tool output.
 function excerpt(text, n = 400) {

@@ -55,8 +55,17 @@ router.post("/", requireAuth, requireRole("admin"), async (req, res) => {
 router.get("/", requireAuth, requireRole("admin"), async (req, res) => {
   try {
     const { staffId, period } = req.query;
+    if (Array.isArray(staffId) || Array.isArray(period)) {
+      return res.status(400).json({ error: "Invalid filter" });
+    }
+    if (period !== undefined && !validPeriod(period)) {
+      return res.status(400).json({ error: "Period must be in YYYY-MM format (e.g. 2026-08)" });
+    }
+    if (staffId !== undefined && (String(staffId).length > 64 || !String(staffId).trim())) {
+      return res.status(400).json({ error: "Invalid staff filter" });
+    }
     const rows = staffId
-      ? await req.store.salaries.listForStaff(staffId)
+      ? await req.store.salaries.listForStaff(String(staffId))
       : await req.store.salaries.listAll(period);
     const total = period ? await req.store.salaries.totalForPeriod(period) : null;
     res.json({ payments: rows, totalForPeriod: total });

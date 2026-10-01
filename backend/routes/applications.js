@@ -21,6 +21,9 @@ const publicLimiter = rateLimit({
   message: { error: "Too many submissions, please try again later" },
 });
 
+// Private test/hire links never ride in API responses in production.
+const DEV_MODE = process.env.NODE_ENV !== "production";
+
 function safeApp(app) {
   if (!app) return app;
   const { test_token, hire_token, payment_enc, ...rest } = app;
@@ -209,6 +212,7 @@ router.get("/:id/payment-details", requireAuth, requireRole("admin"), async (req
 // GET /api/applications - admin lists all applications
 router.get("/", requireAuth, requireRole("admin"), async (req, res) => {
   try {
+    if (Array.isArray(req.query.status)) return res.status(400).json({ error: "Invalid status filter" });
     const rows = await req.store.applications.list(req.query.status);
     // Admin-only extras: WhatsApp share link (uses the private token, never stored client-side)
     const enriched = (rows || []).map((r) => ({
@@ -249,14 +253,13 @@ router.post("/:id/send-test", requireAuth, requireRole("admin"), async (req, res
       console.error("send-test mail failed:", mailErr.message);
       return res.json({
         message: `Test saved, but the email failed to send (${mailErr.message}). Share this link manually.`,
-        devLink: mail.url,
-        devNote: "Email delivery problem - check your SMTP settings in Render",
+        ...(DEV_MODE ? { devLink: mail.url, devNote: "Email delivery problem - check your SMTP settings in Render" } : {}),
       });
     }
 
     res.json({
       message: `Test sent to ${app.email}`,
-      ...(result.dev ? { devLink: mail.url, devNote: "SMTP not configured - share this link manually" } : {}),
+      ...(DEV_MODE && result.dev ? { devLink: mail.url, devNote: "SMTP not configured - share this link manually" } : {}),
     });
   } catch (err) {
     console.error(err);
@@ -316,7 +319,9 @@ router.post("/:id/pass", requireAuth, requireRole("admin"), async (req, res) => 
         dob: app.dob,
         nin_bvn: app.nin_bvn,
       });
-    } else if (user.role !== "staff") {
+    } else if (user.role === "customer") {
+      // Only promote genuine customer accounts; never silently downgrade an
+      // existing admin/editor whose email happens to match an application.
       await store.users.update(user.id, { role: "staff", active: 1 });
     }
 
@@ -344,18 +349,17 @@ router.post("/:id/pass", requireAuth, requireRole("admin"), async (req, res) => 
       console.error("pass mail failed:", mailErr.message);
       return res.json({
         message: `${app.name} passed and their staff account is ready.${assignedListing ? ` Assigned work: ${assignedListing}.` : ""} Email failed to send (${mailErr.message}) - share this link manually.`,
-        devLink: mail.url,
-        devNote: "Email delivery problem - check your SMTP settings in Render",
+        ...(DEV_MODE ? { devLink: mail.url, devNote: "Email delivery problem - check your SMTP settings in Render" } : {}),
       });
     }
 
     res.json({
       message: `${app.name} passed. Onboarding link emailed.${assignedListing ? ` They were automatically assigned: ${assignedListing}.` : " No free listings to assign right now."}`,
-      ...(result.dev ? { devLink: mail.url, devNote: "SMTP not configured - share this link manually" } : {}),
+      ...(DEV_MODE && result.dev ? { devLink: mail.url, devNote: "SMTP not configured - share this link manually" } : {}),
     });
   } catch (err) {
     console.error("pass failed:", err);
-    res.status(500).json({ error: "Internal server error", detail: String(err.message || err) });
+    res.status(500).json({ error: "Internal server error" });
   }
 });
 

@@ -58,9 +58,7 @@ function toastSuccess(message, title) {
 }
 
 function esc(str) {
-  const div = document.createElement("div");
-  div.textContent = String(str ?? "");
-  return div.innerHTML;
+  return String(str ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 }
 
 function naira(value) {
@@ -557,8 +555,8 @@ async function loadPackages() {
           <td>${r.position ?? "-"}</td>
           <td>
             <div class="row-actions">
-              <button class="icon-btn" data-pkg-edit="${r.key}">Edit</button>
-              <button class="icon-btn delete" data-pkg-del="${r.key}">Delete</button>
+              <button class="icon-btn" data-pkg-edit="${esc(r.key)}">Edit</button>
+              <button class="icon-btn delete" data-pkg-del="${esc(r.key)}">Delete</button>
             </div>
           </td>
         </tr>`

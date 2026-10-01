@@ -8,7 +8,7 @@ router.get("/", requireAuth, async (req, res) => {
     if (req.store.features && !req.store.features.notifications) {
       return res.json({ notifications: [], unread: 0, unavailable: true });
     }
-    const limit = Math.min(Number(req.query.limit) || 50, 200);
+    const limit = Math.max(1, Math.min(Number(req.query.limit) || 50, 200));
     let items = [];
     let unread = 0;
     try {

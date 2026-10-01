@@ -688,8 +688,12 @@ const notifications = {
     return snap.size;
   },
   async markRead(userId, id) {
-    if (id) await col("notifications").doc(String(id)).update({ read: true });
-    else {
+    if (id) {
+      const doc = await col("notifications").doc(String(id)).get();
+      if (doc.exists && String(doc.data().user_id) === String(userId)) {
+        await doc.ref.update({ read: true });
+      }
+    } else {
       const snap = await col("notifications").where("user_id", "==", String(userId)).where("read", "==", false).get();
       const ps = snap.docs.map((d) => d.ref.update({ read: true }));
       await Promise.all(ps);

@@ -1,5 +1,6 @@
 const express = require("express");
 const bcrypt = require("bcryptjs");
+const rateLimit = require("express-rate-limit");
 const router = express.Router();
 
 const { requireAuth, requireRole } = require("../middleware/auth");
@@ -7,6 +8,13 @@ const { validateDob, validateNin, validateNinFile, encNin, decNin } = require(".
 const cardbox = require("../utils/cardbox");
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+// Password-change re-authentication is a password oracle: keep brute force slow.
+const passwordLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  message: { error: "Too many attempts, please try again later" },
+});
 
 function publicProfile(user) {
   if (!user) return null;
@@ -127,7 +135,7 @@ router.put("/me", requireAuth, async (req, res) => {
 });
 
 // POST /api/users/me/password - change own password
-router.post("/me/password", requireAuth, async (req, res) => {
+router.post("/me/password", requireAuth, passwordLimiter, async (req, res) => {
   try {
     const store = req.store;
     const currentPassword = String(req.body.currentPassword || "");
@@ -199,8 +207,7 @@ router.delete("/me", requireAuth, async (req, res) => {
 
     await store.users.update(req.user.id, { active: 0 });
     await store.sessions.revokeAllForUser(req.user.id);
-    res.clearCookie("mitex_refresh", { httpOnly: true, sameSite: "strict", secure: process.env.NODE_ENV === "production", path: "/api/auth" });
-    res.clearCookie("token", { httpOnly: true, sameSite: "strict", secure: process.env.NODE_ENV === "production" });
+    res.clearCookie("mitex_refresh", { httpOnly: true, sameSite: "strict", secure: process.env.NODE_ENV === "production", path: "/" });
     res.json({ message: "Account deactivated" });
   } catch (err) {
     console.error(err);

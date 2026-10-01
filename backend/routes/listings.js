@@ -37,8 +37,20 @@ function validateListing(body, partial = false) {
     if (body.status === "sold") out._requiresAdmin = true;
     out.status = body.status;
   }
-  // URL fields must be http(s) or empty to prevent data: / javascript: / file:// XSS.
-  const safeUrl = (v) => { const s = String(v || "").trim().slice(0, 500); return s && /^https?:\/\//i.test(s) ? s : s ? null : null; };
+  // URL fields must be real http(s) URLs to prevent data:/javascript:/file:
+  // XSS and quote-smuggling into HTML attributes. Rejects credentials too.
+  const safeUrl = (v) => {
+    const s = String(v || "").trim().slice(0, 500);
+    if (!s) return null;
+    try {
+      const u = new URL(s);
+      if (!["http:", "https:"].includes(u.protocol)) return null;
+      if (u.username || u.password) return null;
+      return s;
+    } catch {
+      return null;
+    }
+  };
   if (body.thumbnail !== undefined) {
     const t = safeUrl(body.thumbnail);
     if (body.thumbnail && !t) errors.push("Thumbnail URL must start with http:// or https://");
@@ -100,7 +112,7 @@ async function attachEmployee(store, row, req) {
     if (u && u.role === "staff" && Number(u.active)) {
       return {
         ...row,
-        employee: { id: u.id, name: u.name, phone: u.phone || null, title: u.bio || null },
+        employee: { id: u.id, name: u.name, title: u.bio || null },
       };
     }
   } catch {}

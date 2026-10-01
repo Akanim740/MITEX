@@ -590,6 +590,7 @@ router.get("/orders/mine", requireAuth, async (req, res) => {
 // GET /api/payments/orders - staff list all orders (?status= & ?q=)
 router.get("/orders", requireAuth, requireRole("admin", "editor"), async (req, res) => {
   try {
+    if (Array.isArray(req.query.status)) return res.status(400).json({ error: "Invalid status filter" });
     let rows = await req.store.orders.listAll(req.query.status);
     const q = String(req.query.q || "").trim().toLowerCase();
     if (q) {
@@ -612,6 +613,7 @@ router.get("/orders", requireAuth, requireRole("admin", "editor"), async (req, r
 // GET /api/payments/orders/export - staff export orders to CSV (respects ?status= & ?q=)
 router.get("/orders/export", requireAuth, requireRole("admin", "editor"), async (req, res) => {
   try {
+    if (Array.isArray(req.query.status)) return res.status(400).json({ error: "Invalid status filter" });
     let rows = await req.store.orders.listAll(req.query.status);
     const q = String(req.query.q || "").trim().toLowerCase();
     if (q) {
