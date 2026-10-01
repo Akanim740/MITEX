@@ -1,7 +1,17 @@
 # Secrets - never commit
 .env
 backend/.env
+.env.*
+!.env.example
 *.env.local
+
+# Credentials & key material
+*.pem
+*.p8
+*.pfx
+*.key
+service-account*.json
+firebase-keys*.json
 
 # Dependencies
 node_modules/

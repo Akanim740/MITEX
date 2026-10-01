@@ -13,9 +13,17 @@ if (!process.env.JWT_ACCESS_SECRET) {
 }
 const JWT_ACCESS_SECRET = process.env.JWT_ACCESS_SECRET || crypto.randomBytes(32).toString("hex");
 const ACCESS_TTL = process.env.ACCESS_TTL || "15m";
+// Fixed claims so a token minted elsewhere (or downgraded) is never accepted.
+const JWT_ISSUER = "mitex-api";
+const JWT_AUDIENCE = "mitex-app";
 
 function signAccessToken(user) {
-  return jwt.sign({ sub: String(user.id), role: user.role }, JWT_ACCESS_SECRET, { expiresIn: ACCESS_TTL, algorithm: "HS256" });
+  return jwt.sign({ sub: String(user.id), role: user.role }, JWT_ACCESS_SECRET, {
+    expiresIn: ACCESS_TTL,
+    algorithm: "HS256",
+    issuer: JWT_ISSUER,
+    audience: JWT_AUDIENCE,
+  });
 }
 
 async function requireAuth(req, res, next) {
@@ -28,7 +36,7 @@ async function requireAuth(req, res, next) {
 
   let payload;
   try {
-    payload = jwt.verify(token, JWT_ACCESS_SECRET, { algorithms: ["HS256"] });
+    payload = jwt.verify(token, JWT_ACCESS_SECRET, { algorithms: ["HS256"], issuer: JWT_ISSUER, audience: JWT_AUDIENCE });
   } catch (err) {
     return res.status(401).json({ error: "Invalid or expired token" });
   }
@@ -56,7 +64,7 @@ async function optionalAuth(req, _res, next) {
   const token = header.startsWith("Bearer ") ? header.slice(7) : null;
   if (!token) return next();
   try {
-    const payload = jwt.verify(token, JWT_ACCESS_SECRET, { algorithms: ["HS256"] });
+    const payload = jwt.verify(token, JWT_ACCESS_SECRET, { algorithms: ["HS256"], issuer: JWT_ISSUER, audience: JWT_AUDIENCE });
     const store = req.store;
     if (store) {
       const user = await store.users.findById(payload.sub);

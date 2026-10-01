@@ -1,0 +1,3 @@
+Contact: https://github.com/Akanim740/MITEX/issues
+Preferred-Languages: en
+Policy: https://github.com/Akanim740/MITEX/blob/main/README.md

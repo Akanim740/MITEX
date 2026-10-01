@@ -31,7 +31,9 @@ try {
   $reg = Invoke-RestMethod "$base/api/auth/register" -Method Post -ContentType "application/json" -Body (@{ name = "Notif Buyer"; email = $email; password = "NotifPass123"; dob = "1995-06-15" } | ConvertTo-Json)
   Check "buyer registered" ($reg.devToken -or $reg.devOtp)
   if ($reg.devOtp) {
-    try { Invoke-RestMethod "$base/api/auth/verify-otp" -Method Post -ContentType "application/json" -Body (@{ email = $email; code = $reg.devOtp } | ConvertTo-Json) | Out-Null } catch {}
+    # The API expects "otp" (not "code") - a wrong key silently skipped
+    # verification and later failed checkout with VERIFY_REQUIRED.
+    try { Invoke-RestMethod "$base/api/auth/verify-otp" -Method Post -ContentType "application/json" -Body (@{ email = $email; otp = $reg.devOtp } | ConvertTo-Json) | Out-Null } catch {}
   }
   $cl = Invoke-RestMethod "$base/api/auth/login" -Method Post -ContentType "application/json" -Body (@{ email = $email; password = "NotifPass123" } | ConvertTo-Json)
   $custHdr = @{ Authorization = "Bearer $($cl.accessToken)"; "Content-Type" = "application/json" }

@@ -17,28 +17,73 @@ const OTP_TTL_MIN = 10;
 const OTP_MAX_ATTEMPTS = 5;
 const OTP_LOCK_MIN = 15;
 const OTP_RESEND_COOLDOWN_MS = 60 * 1000;
+// Per-account credential lockout (beyond the per-IP limiter). Rotating IPs
+// cannot beat it, but a shared kiosk won't be bricked because a neighbour
+// mistyped a password.
+const LOGIN_MAX_ATTEMPTS = Number(process.env.LOGIN_MAX_ATTEMPTS || 5);
+const LOGIN_LOCK_MIN = Number(process.env.LOGIN_LOCK_MIN || 15);
+const LOGIN_LOCK_MS = Math.max(1, LOGIN_LOCK_MIN * 60 * 1000);
+const RESET_COOLDOWN_MS = 60 * 1000;
 
-// In-memory OTP guardrails (single-instance prod server keeps this reliable).
+// In-memory auth guardrails (single-instance prod server keeps this reliable).
 const otpAttempts = new Map(); // email -> { count, lockedUntil }
 const otpLastSent = new Map(); // email -> timestamp
+const loginFailures = new Map(); // email -> { count, lockedUntil }
+const resetLastSent = new Map(); // email -> timestamp
 
 const OTP_MAP_MAX = 20000;
 
-// Lazy pruning so a flood of distinct probed emails cannot grow these Maps
+// Constant-time dummy hash so a failed login for an unknown account costs the
+// same as for a real one (blocks timing-based account enumeration).
+const DUMMY_PASSWORD_HASH = bcrypt.hashSync("mitex-timing-equalizer-dummy-password", 12);
+
+// Lazy pruning so a flood of distinct probed emails cannot grow the Maps
 // without bound. Entries with an expired lock and stale cooldown timestamps
-// are dropped once the Map exceeds its cap.
-function pruneOtpMaps() {
+// are dropped once a Map exceeds its cap.
+function pruneAuthMaps() {
   const now = Date.now();
   if (otpAttempts.size > OTP_MAP_MAX) {
     for (const [email, entry] of otpAttempts) {
       if (!entry.lockedUntil || entry.lockedUntil < now) otpAttempts.delete(email);
     }
   }
-  if (otpLastSent.size > OTP_MAP_MAX) {
-    for (const [email, ts] of otpLastSent) {
-      if (now - ts > OTP_TTL_MIN * 60 * 1000) otpLastSent.delete(email);
+  for (const map of [otpLastSent, loginFailures, resetLastSent]) {
+    if (map.size > OTP_MAP_MAX) {
+      for (const [key, value] of map) {
+        if (typeof value === "number" && now - value > OTP_TTL_MIN * 60 * 1000) map.delete(key);
+        else if (value && ((!value.lockedUntil && !value.count) || value.lockedUntil < now)) map.delete(key);
+      }
     }
   }
+}
+
+// Defense-in-depth against cross-site request forgery: fetch()/forms from a
+// browser always send an Origin header for state-changing requests. When one
+// is present it must match our host; cookie-authenticated mutations (refresh,
+// logout) are otherwise refused. Non-browser clients that send no Origin are
+// unaffected. (SameSite=strict cookies are the primary control; this is the belt
+// and braces.)
+function sameOriginGuard(req, res, next) {
+  const origin = req.headers.origin;
+  if (!origin) return next();
+  try {
+    if (new URL(origin).host === req.get("host")) return next();
+  } catch {
+    return res.status(403).json({ error: "Cross-origin request blocked" });
+  }
+  return res.status(403).json({ error: "Cross-origin request blocked" });
+}
+
+function recordLoginFailure(email) {
+  const now = Date.now();
+  const cur = loginFailures.get(email) || { count: 0, lockedUntil: 0 };
+  const count = cur.count + 1;
+  const lockedUntil = count >= LOGIN_MAX_ATTEMPTS ? now + LOGIN_LOCK_MS : 0;
+  loginFailures.set(email, { count, lockedUntil });
+  if (lockedUntil) {
+    return { locked: true, minutes: Math.ceil((lockedUntil - now) / 60000) };
+  }
+  return { locked: false };
 }
 
 function setRefreshCookie(res, rawToken) {
@@ -181,6 +226,7 @@ router.post("/register", async (req, res) => {
 // POST /api/auth/login
 router.post("/login", async (req, res) => {
   try {
+    pruneAuthMaps();
     const store = req.store;
     const email = String(req.body.email || "").trim().toLowerCase();
     const password = String(req.body.password || "");
@@ -189,16 +235,35 @@ router.post("/login", async (req, res) => {
       return res.status(400).json({ error: "Email and password are required" });
     }
 
+    // Locked? (independent of whether the account exists - no enumeration)
+    const now = Date.now();
+    const attempt = loginFailures.get(email);
+    if (attempt && attempt.lockedUntil > now) {
+      const minsLeft = Math.ceil((attempt.lockedUntil - now) / 60000);
+      return res.status(429).json({ error: `Too many failed sign-in attempts. Try again in ${minsLeft} minute(s).` });
+    }
+
     const user = await store.users.findByEmail(email);
-    if (!user || !(await bcrypt.compare(password, user.password_hash))) {
+    // Compare against a real bcrypt hash even when the account does not exist
+    // so unknown and known emails answer in the same time (no timing oracle).
+    const okPassword = await bcrypt.compare(password, user ? user.password_hash : DUMMY_PASSWORD_HASH);
+
+    if (!user || !okPassword) {
+      const fail = recordLoginFailure(email);
+      if (fail.locked) {
+        return res.status(429).json({ error: `Too many failed sign-in attempts. Try again in ${fail.minutes} minute(s).` });
+      }
       return res.status(401).json({ error: "Invalid credentials" });
     }
+
     const deactivated = user.active === 0 || user.active === false || String(user.active) === "0";
     if (deactivated) {
       return res.status(403).json({
         error: user.role === "staff" ? "This employee account has been deactivated. Contact the admin." : "This account has been deactivated. Contact support to reactivate it.",
       });
     }
+
+    loginFailures.delete(email);
 
     const { accessToken } = await issueSession(store, res, user);
     res.json({
@@ -214,7 +279,7 @@ router.post("/login", async (req, res) => {
 });
 
 // POST /api/auth/refresh - rotate session, new access token
-router.post("/refresh", async (req, res) => {
+router.post("/refresh", sameOriginGuard, async (req, res) => {
   try {
     const store = req.store;
     const resolved = await resolveRefreshSession(req);
@@ -244,7 +309,7 @@ router.post("/refresh", async (req, res) => {
 });
 
 // POST /api/auth/logout - revoke current session
-router.post("/logout", async (req, res) => {
+router.post("/logout", sameOriginGuard, async (req, res) => {
   try {
     const store = req.store;
     const resolved = await resolveRefreshSession(req);
@@ -331,7 +396,7 @@ router.post("/resend-verification", requireAuth, async (req, res) => {
 // POST /api/auth/verify-otp - verify the account with the emailed 6-digit code
 router.post("/verify-otp", async (req, res) => {
   try {
-    pruneOtpMaps();
+    pruneAuthMaps();
     const store = req.store;
     const email = String(req.body.email || "").trim().toLowerCase();
     const otp = String(req.body.otp || "").trim();
@@ -386,7 +451,7 @@ router.post("/verify-otp", async (req, res) => {
 // POST /api/auth/resend-otp - send a new code by email (rate-limited)
 router.post("/resend-otp", async (req, res) => {
   try {
-    pruneOtpMaps();
+    pruneAuthMaps();
     const store = req.store;
     const email = String(req.body.email || "").trim().toLowerCase();
 
@@ -436,10 +501,20 @@ router.post("/resend-otp", async (req, res) => {
 // POST /api/auth/forgot-password
 router.post("/forgot-password", async (req, res) => {
   try {
+    pruneAuthMaps();
     const store = req.store;
     const email = String(req.body.email || "").trim().toLowerCase();
     if (!EMAIL_RE.test(email)) {
       return res.status(400).json({ error: "Invalid email address" });
+    }
+
+    // Cooldown per address: stop an attacker from using this endpoint to bomb
+    // a victim's inbox (and to churn reset tokens) via rotating IPs. The
+    // response stays identical whether or not the address exists.
+    const lastSent = resetLastSent.get(email) || 0;
+    const waitMs = RESET_COOLDOWN_MS - (Date.now() - lastSent);
+    if (waitMs > 0) {
+      return res.json({ message: "If that email exists, a reset link has been sent." });
     }
 
     const user = await store.users.findByEmail(email);
@@ -456,6 +531,7 @@ router.post("/forgot-password", async (req, res) => {
 
       const mail = resetEmail(user, rawReset);
       const result = await sendMail({ to: user.email, subject: mail.subject, text: mail.text, html: mail.html });
+      resetLastSent.set(email, Date.now());
 
       // emailDown is global server state (not account state), so it is safe
       // to return for every request: it lets the UI be honest when SMTP is

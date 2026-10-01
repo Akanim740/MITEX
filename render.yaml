@@ -48,6 +48,12 @@ services:
         value: 15m
       - key: REFRESH_TTL_DAYS
         value: "7"
+      # Per-account sign-in lockout, on top of the per-IP rate limiter:
+      # 5 wrong passwords locks that email for 15 minutes.
+      - key: LOGIN_MAX_ATTEMPTS
+        value: "5"
+      - key: LOGIN_LOCK_MIN
+        value: "15"
       # ===== Biometric login =====
       # Must match your site's exact domain. Change to your custom domain
       # after connecting it, e.g. mitex.store

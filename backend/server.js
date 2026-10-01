@@ -81,14 +81,35 @@ app.use(
         imgSrc: ["'self'", "data:", "https:"],
         connectSrc: ["'self'", "https://www.google-analytics.com"],
         frameSrc: ["'none'"],
+        frameAncestors: ["'self'"],
         objectSrc: ["'none'"],
+        baseUri: ["'self'"],
+        formAction: ["'self'"],
       },
     },
     crossOriginEmbedderPolicy: false,
+    // Isolate this origin: no cross-origin windows/workers should be able to
+    // observe it (popup-forks a fresh top-level browsing context) and no
+    // cross-origin site may load our static assets as raw subresources.
+    crossOriginOpenerPolicy: { policy: "same-origin" },
+    crossOriginResourcePolicy: { policy: "same-origin" },
+    // Deny powerful browser features site-wide. helmet ships no
+    // Permissions-Policy middleware (the option above is ignored), and MITEX
+    // uses none of these: no camera, mic, location, payments API or USB.
+    permissionPolicy: undefined,
     hsts: { maxAge: 15552000, includeSubDomains: true },
     referrerPolicy: { policy: "strict-origin-when-cross-origin" },
   })
 );
+
+// Permissions-Policy sent explicitly (helmet 7 has no middleware for it).
+app.use((_req, res, next) => {
+  res.setHeader(
+    "Permissions-Policy",
+    "accelerometer=(), autoplay=(), camera=(), display-capture=(), encrypted-media=(), fullscreen=(), geolocation=(), gyroscope=(), magnetometer=(), microphone=(), midi=(), payment=(), usb=()"
+  );
+  next();
+});
 
 // Same-origin site needs no cross-origin API access; lock CORS unless explicitly opened
 const corsOrigins = String(process.env.CORS_ORIGIN || "")
@@ -132,7 +153,7 @@ app.use(
     },
   })
 );
-app.use(express.urlencoded({ extended: false }));
+app.use(express.urlencoded({ extended: false, limit: "20kb" }));
 
 // Redact secrets/tokens before persisting any response body to the audit log
 // (access tokens, refresh tokens and dev-only one-time codes are never stored).
@@ -171,6 +192,22 @@ app.use("/api", (req, res, next) => {
 
 app.use(express.static(path.join(__dirname, "..")));
 
+// API responses carry private data (profiles, orders, PII) - never let a
+// shared browser cache or a misconfigured proxy store them.
+app.use("/api", (req, res, next) => {
+  res.setHeader("Cache-Control", "no-store");
+  next();
+});
+
+// RFC 9116 security contact. Served explicitly (the static router ignores
+// dotfiles) so anyone finding a gap can report it.
+app.get("/.well-known/security.txt", (_req, res) => {
+  const fs = require("fs");
+  const file = path.join(__dirname, "..", ".well-known", "security.txt");
+  if (!fs.existsSync(file)) return res.status(404).end();
+  res.type("text/plain").sendFile(file);
+});
+
 app.use("/api/auth", authLimiter, require("./routes/auth"));
 app.use("/api/users", require("./routes/users"));
 app.use("/api/enquiries", enquiryLimiter, require("./routes/enquiries"));
@@ -185,12 +222,22 @@ app.use("/api/notifications", require("./routes/notifications"));
 app.use("/api/push", require("./routes/push"));
 app.use("/api/admin", require("./routes/admin"));
 
-app.get("/api/health", async (req, res) => {
+app.get("/api/health", require("./middleware/auth").optionalAuth, async (req, res) => {
   try {
     let mailer = null;
     try {
       const s = await mailboxStats();
-      mailer = { configured: smtpConfigured(), queued: s.queued, pending: s.queued + s.sending, sent: s.sent, failed: s.failed, lastSentAt: s.lastSentAt, lastError: s.lastError };
+      // lastError can contain SMTP host/user details - only admins see it.
+      const isAdmin = req.user && req.user.role === "admin";
+      mailer = {
+        configured: smtpConfigured(),
+        queued: s.queued,
+        pending: s.queued + s.sending,
+        sent: s.sent,
+        failed: s.failed,
+        lastSentAt: s.lastSentAt,
+        ...(isAdmin ? { lastError: s.lastError } : {}),
+      };
     } catch {}
     res.json({
       status: "ok",
