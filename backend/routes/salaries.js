@@ -34,7 +34,7 @@ router.post("/", requireAuth, requireRole("admin"), async (req, res) => {
     let devLink = null;
     try {
       const mail = salaryEmail(staff, payment);
-      const result = await sendMail({ to: staff.email, subject: mail.subject, text: mail.text });
+      const result = await sendMail({ to: staff.email, subject: mail.subject, text: mail.text, html: mail.html });
       if (result.dev) devLink = null;
     } catch (mailErr) {
       console.error("salary email failed:", mailErr.message);

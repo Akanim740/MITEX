@@ -248,7 +248,7 @@ router.post("/:id/send-test", requireAuth, requireRole("admin"), async (req, res
     const mail = testEmail(app, token, instructions);
     let result;
     try {
-      result = await sendMail({ to: app.email, subject: mail.subject, text: mail.text });
+      result = await sendMail({ to: app.email, subject: mail.subject, text: mail.text, html: mail.html });
     } catch (mailErr) {
       console.error("send-test mail failed:", mailErr.message);
       return res.json({
@@ -344,7 +344,7 @@ router.post("/:id/pass", requireAuth, requireRole("admin"), async (req, res) => 
     const mail = hireEmail(app, hireToken);
     let result;
     try {
-      result = await sendMail({ to: app.email, subject: mail.subject, text: mail.text });
+      result = await sendMail({ to: app.email, subject: mail.subject, text: mail.text, html: mail.html });
     } catch (mailErr) {
       console.error("pass mail failed:", mailErr.message);
       return res.json({
@@ -382,7 +382,7 @@ async function autoDispatchSweep(store) {
       await store.applications.setTest(app.id, { testToken: token, instructions });
 
       const mail = testEmail({ ...app }, token, instructions);
-      sendMail({ to: app.email, subject: mail.subject, text: mail.text }).catch((mailErr) =>
+      sendMail({ to: app.email, subject: mail.subject, text: mail.text, html: mail.html }).catch((mailErr) =>
         console.error(`auto-dispatch mail failed for ${app.email}: ${mailErr.message}`)
       );
       dispatched += 1;
@@ -421,7 +421,7 @@ router.post("/:id/resend-hire", requireAuth, requireRole("admin"), async (req, r
     const mail = hireEmail(app, hireToken);
     let result;
     try {
-      result = await sendMail({ to: app.email, subject: mail.subject, text: mail.text });
+      result = await sendMail({ to: app.email, subject: mail.subject, text: mail.text, html: mail.html });
     } catch (mailErr) {
       console.error("resend-hire mail failed:", mailErr.message);
       return res.json({

@@ -102,6 +102,7 @@ async function settleOrder(store, order) {
       to: order.email,
       subject: `MITEX receipt - ${order.title} (${order.reference})`,
       text: receiptEmail(order).text,
+      html: receiptEmail(order).html,
     }).catch((e) => console.error("receipt email failed:", e.message));
   });
   // Notify admin of new sale
@@ -113,7 +114,8 @@ async function settleOrder(store, order) {
         await notifyUser(store, { userId: admin.id, type: "new_order", title: "New order received", body: `${order.title} — ${order.reference}`, link: "/dashboard.html#view-orders" });
       }
       if (admin && admin.email) {
-        sendMail({ to: admin.email, subject: `MITEX sale: ${order.title}`, text: newOrderAdminEmail(order).text }).catch(() => {});
+        const adminMail = newOrderAdminEmail(order);
+        sendMail({ to: admin.email, subject: adminMail.subject, text: adminMail.text, html: adminMail.html }).catch(() => {});
       }
     } catch (e) {
       console.error("admin order notification failed:", e.message);
@@ -357,7 +359,7 @@ router.post("/buy-intent", requireAuth, requireVerified, async (req, res) => {
           });
           const { sendMail, buyerWaitingEmail } = require("../utils/mailer");
           const mail = buyerWaitingEmail(worker, listing);
-          await sendMail({ to: worker.email, subject: mail.subject, text: mail.text });
+          await sendMail({ to: worker.email, subject: mail.subject, text: mail.text, html: mail.html });
         } catch (e) {
           console.error("buyer-waiting notification failed:", e.message);
         }
@@ -689,7 +691,8 @@ router.patch("/orders/:reference/fulfillment", requireAuth, requireRole("admin",
             body: `Your build is now: ${next.replace("_", " ")}`,
             link: order.listing_id ? "/marketplace.html" : "/account.html#orders-panel",
           });
-          sendMail({ to: order.email, subject: `MITEX update: ${order.title}`, text: fulfillmentEmail({ name: buyerName }, order, next).text }).catch((e) => console.error("fulfillment email failed:", e.message));
+          const updMail = fulfillmentEmail({ name: buyerName }, order, next);
+          sendMail({ to: order.email, subject: updMail.subject, text: updMail.text, html: updMail.html }).catch((e) => console.error("fulfillment email failed:", e.message));
         } catch (e) {
           console.error("fulfillment notification failed:", e.message);
         }

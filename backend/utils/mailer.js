@@ -1,28 +1,94 @@
 const APP_URL = process.env.APP_URL || "http://localhost:3000";
 
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
 const smtpConfigured = () => Boolean(process.env.SMTP_HOST && process.env.SMTP_USER);
 
-// In-memory mailbox: lets an admin review/forward emails while SMTP is not
-// configured (verification links, receipts, hire links). Not persisted.
-const mailbox = [];
+// ===== Transactional send queue =====
+// Every email is recorded as a row with a status
+//   queued -> sending -> sent | failed  (or "dropped" when SMTP is unset)
+// and retried by a background worker with exponential backoff. The row lives in
+// the persistent store (store.emailSends on sqlite/supabase); without one the
+// in-memory mailbox below keeps working exactly as before, so nothing breaks
+// while SMTP is unconfigured or on a DB client without the table.
+
 const MAILBOX_MAX = 500;
-let mailboxSequence = 0;
-function pushMailbox({ to, subject, text, html, dev, sent }) {
-  if (mailbox.length >= MAILBOX_MAX) mailbox.shift();
-  mailbox.push({
-    id: ++mailboxSequence,
-    ts: new Date().toISOString(),
-    to,
-    subject,
-    text: String(text || "").slice(0, 6000),
-    html: String(html || "").slice(0, 20000),
-    dev: Boolean(dev),
-    sent: Boolean(sent),
-  });
+const MAX_ATTEMPTS = Number(process.env.MAIL_MAX_ATTEMPTS || 5);
+const RETRY_WORKER_MS = Number(process.env.MAIL_RETRY_MS || 60 * 1000);
+// Seconds between retries: 1m, 5m, 15m, 1h, 4h.
+const RETRY_BACKOFF_S = [60, 300, 900, 3600, 14400];
+
+let attachedStore = null;
+function attachOutbox(store) {
+  attachedStore = store;
 }
-function listMailbox() {
-  return mailbox.slice().reverse();
+function outbox() {
+  if (attachedStore && attachedStore.emailSends) return attachedStore.emailSends;
+  return memoryStore;
 }
+
+// In-memory fallback implementing the same interface as store.emailSends.
+const memoryStore = {
+  _rows: [],
+  _seq: 0,
+  async enqueue({ to, subject, kind, text, html }) {
+    const now = new Date().toISOString();
+    const row = {
+      id: ++this._seq,
+      to,
+      subject,
+      kind: kind || null,
+      text: String(text || ""),
+      html: html || null,
+      status: "queued",
+      attempts: 0,
+      next_retry_at: null,
+      message_id: null,
+      last_error: null,
+      dev: false,
+      created_at: now,
+      updated_at: now,
+    };
+    this._rows.push(row);
+    if (this._rows.length > MAILBOX_MAX) this._rows.shift();
+    return { ...row };
+  },
+  async markStatus(id, patch) {
+    const r = this._rows.find((x) => x.id === id);
+    if (!r) return null;
+    for (const k of ["status", "attempts", "next_retry_at", "message_id", "last_error"]) {
+      if (patch[k] !== undefined) r[k] = patch[k];
+    }
+    r.updated_at = new Date().toISOString();
+    return { ...r };
+  },
+  async listOutbox(limit = 100) {
+    return this._rows.slice().reverse().slice(0, Math.max(1, limit));
+  },
+  async pendingDue(now) {
+    const cutoff = now instanceof Date ? now : new Date(now);
+    return this._rows
+      .filter((r) => r.status === "queued" && (!r.next_retry_at || new Date(r.next_retry_at) <= cutoff))
+      .slice(0, 50);
+  },
+  async stats() {
+    const by = (s) => this._rows.filter((r) => r.status === s).length;
+    const fin = this._rows.filter((r) => r.status === "sent" || r.status === "failed");
+    const last = fin[fin.length - 1];
+    return {
+      total: this._rows.length,
+      queued: by("queued"),
+      sending: by("sending"),
+      sent: by("sent"),
+      failed: by("failed"),
+      dropped: by("dropped"),
+      lastAttemptAt: last ? last.updated_at : null,
+      lastSentAt: last && last.status === "sent" ? last.updated_at : null,
+      lastError: last && last.status === "failed" ? last.last_error : null,
+    };
+  },
+  async prune() {},
+};
 
 function libraryLoaded() {
   try {
@@ -30,6 +96,161 @@ function libraryLoaded() {
     return true;
   } catch {
     return false;
+  }
+}
+
+// One pooled transporter shared by every send (keeps SMTP connections warm).
+let transporter = null;
+function getTransporter() {
+  if (transporter) return transporter;
+  const nodemailer = require("nodemailer");
+  transporter = nodemailer.createTransport({
+    host: process.env.SMTP_HOST,
+    port: Number(process.env.SMTP_PORT || 587),
+    secure: process.env.SMTP_SECURE === "true",
+    pool: true,
+    maxConnections: Number(process.env.SMTP_MAX_CONNECTIONS || 5),
+    maxMessages: 100,
+    // A dead SMTP must never hold a request hostage (register, checkout).
+    connectionTimeout: Number(process.env.SMTP_CONNECT_TIMEOUT_MS || 15000),
+    greetingTimeout: Number(process.env.SMTP_GREETING_TIMEOUT_MS || 15000),
+    socketTimeout: Number(process.env.SMTP_SOCKET_TIMEOUT_MS || 30000),
+    auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS },
+    family: 4,
+  });
+  return transporter;
+}
+
+// Deliver one queued row through the pooled transport and record the outcome.
+async function attemptRow(row) {
+  const msg = {
+    from: process.env.SMTP_FROM || "MITEX <no-reply@mitex.store>",
+    to: row.to,
+    subject: row.subject,
+    text: row.text,
+  };
+  if (row.html) msg.html = row.html;
+  try {
+    const info = await getTransporter().sendMail(msg);
+    await outbox().markStatus(row.id, {
+      status: "sent",
+      attempts: row.attempts + 1,
+      message_id: info && info.messageId ? String(info.messageId) : null,
+      next_retry_at: null,
+      last_error: null,
+    });
+    return { ok: true, id: row.id, messageId: info && info.messageId };
+  } catch (err) {
+    const attempts = row.attempts + 1;
+    const message = String((err && err.message) || err || "unknown SMTP error").slice(0, 500);
+    if (attempts >= MAX_ATTEMPTS) {
+      await outbox().markStatus(row.id, { status: "failed", attempts, next_retry_at: null, last_error: message });
+      return { ok: false, id: row.id, error: message, status: "failed" };
+    }
+    const delayS = RETRY_BACKOFF_S[Math.min(attempts - 1, RETRY_BACKOFF_S.length - 1)];
+    const nextRetry = new Date(Date.now() + delayS * 1000).toISOString();
+    await outbox().markStatus(row.id, { status: "queued", attempts, next_retry_at: nextRetry, last_error: message });
+    return { ok: false, id: row.id, error: message, status: "queued" };
+  }
+}
+
+// Claim and retry every due queued row, then sweep old finished rows.
+async function sweepQueue() {
+  const store = outbox();
+  if (!smtpConfigured() || !store || typeof store.pendingDue !== "function") return;
+  const due = await store.pendingDue(new Date());
+  for (const row of due) {
+    try {
+      await attemptRow(row);
+    } catch {}
+  }
+  try {
+    if (store.prune) await store.prune();
+  } catch {}
+}
+
+// Background worker: a quick first pass shortly after boot, then on an interval.
+let workerTimer = null;
+function startMailWorker() {
+  if (workerTimer) return workerTimer;
+  const tick = () => sweepQueue().catch(() => {});
+  const first = setTimeout(tick, Number(process.env.MAIL_RETRY_START_MS || 5000));
+  if (first.unref) first.unref();
+  workerTimer = setInterval(tick, RETRY_WORKER_MS);
+  if (workerTimer.unref) workerTimer.unref();
+  return workerTimer;
+}
+
+// Enqueue + immediately attempt. No SMTP -> recorded as "dropped" (dev mode).
+async function sendMail({ to, subject, text, html, kind } = {}) {
+  const email = String(to || "").trim().toLowerCase();
+  const cleanSubject = String(subject || "").trim().slice(0, 200);
+  if (!email || !EMAIL_RE.test(email) || !cleanSubject) {
+    // Never break the surrounding flow (registration, OTP, checkout).
+    console.error("[mailer] refusing malformed send:", { email, subject });
+    return { dev: false, sent: false, skipped: true };
+  }
+
+  let row;
+  try {
+    row = await outbox().enqueue({ to: email, subject: cleanSubject, kind: kind || null, text, html });
+  } catch (err) {
+    console.error("[mailer] outbox enqueue failed:", err.message);
+    return { dev: false, sent: false, skipped: true };
+  }
+
+  if (!smtpConfigured()) {
+    await outbox().markStatus(row.id, { status: "dropped" });
+    console.warn(`\n[mailer:dev] SMTP not configured. Email captured in outbox (dropped).`);
+    console.warn(`[mailer:dev] To: ${email}`);
+    console.warn(`[mailer:dev] Subject: ${cleanSubject}`);
+    console.warn(`${text}\n`);
+    return { dev: true, id: row.id, status: "dropped" };
+  }
+
+  const res = await attemptRow({ ...row, to: email });
+  return {
+    dev: false,
+    sent: res.ok,
+    id: row.id,
+    status: res.ok ? "sent" : res.status,
+    messageId: res.messageId || null,
+    error: res.error || null,
+  };
+}
+
+// Admin view of the outbox (newest first). Keeps the legacy fields the UI uses.
+async function listMailbox(limit = 100) {
+  try {
+    const rows = await outbox().listOutbox(limit);
+    return rows.map((r) => ({
+      id: r.id,
+      ts: r.created_at,
+      to: r.to,
+      subject: r.subject,
+      kind: r.kind || null,
+      text: r.text,
+      html: r.html,
+      dev: Boolean(r.dev),
+      sent: r.status === "sent",
+      status: r.status,
+      attempts: r.attempts,
+      next_retry_at: r.next_retry_at,
+      message_id: r.message_id,
+      last_error: r.last_error,
+    }));
+  } catch (err) {
+    console.error("[mailer] listMailbox failed:", err.message);
+    return [];
+  }
+}
+
+async function mailboxStats() {
+  try {
+    return await outbox().stats();
+  } catch (err) {
+    console.error("[mailer] mailboxStats failed:", err.message);
+    return { total: 0, queued: 0, sending: 0, sent: 0, failed: 0, dropped: 0, lastSentAt: null, lastError: null };
   }
 }
 
@@ -44,53 +265,6 @@ function emailWrap(body) {
 
 function emailBtn(href, label) {
   return `<a href="${href}" style="display:inline-block;background:#fbbf24;color:#070b14;font-weight:700;font-size:14px;padding:12px 28px;border-radius:8px;text-decoration:none;margin-top:12px;">${label}</a>`;
-}
-
-async function sendMail({ to, subject, text, html }) {
-  if (!smtpConfigured()) {
-    console.warn(`\n[mailer:dev] SMTP not configured. Email not really sent.`);
-    console.warn(`[mailer:dev] To: ${to}`);
-    console.warn(`[mailer:dev] Subject: ${subject}`);
-    console.warn(`${text}\n`);
-    pushMailbox({ to, subject, text, html, dev: true, sent: false });
-    return { dev: true };
-  }
-
-  let nodemailer;
-  try {
-    nodemailer = require("nodemailer");
-  } catch {
-    console.warn("[mailer:dev] SMTP configured but nodemailer is not installed (npm install nodemailer). Logging instead.");
-    console.warn(`${text}`);
-    pushMailbox({ to, subject, text, html, dev: true, sent: false });
-    return { dev: true };
-  }
-
-  const transporter = nodemailer.createTransport({
-    host: process.env.SMTP_HOST,
-    port: Number(process.env.SMTP_PORT || 587),
-    secure: process.env.SMTP_SECURE === "true",
-    auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS },
-    family: 4,
-  });
-
-  const msg = { from: process.env.SMTP_FROM || "MITEX <no-reply@mitex.store>", to, subject, text };
-  if (html) msg.html = html;
-
-  let sent = false;
-  try {
-    await transporter.sendMail(msg);
-    sent = true;
-  } catch (err) {
-    // SMTP failures must never break the surrounding flow (registration,
-    // password reset, OTP resend). Log the real reason for the admin and keep
-    // going - the mailbox record still captures the intended message.
-    console.error("[mailer:smtp] send failed:", err.message);
-    console.error(`[mailer:smtp] To: ${to} | Subject: ${subject}`);
-  } finally {
-    pushMailbox({ to, subject, text, html, dev: false, sent });
-  }
-  return { dev: false, sent };
 }
 
 function verificationEmail(user, rawToken) {
@@ -230,4 +404,4 @@ function newOrderAdminEmail(order) {
   };
 }
 
-module.exports = { sendMail, verificationEmail, otpEmail, resetEmail, testEmail, hireEmail, receiptEmail, salaryEmail, deliveryEmail, enquiryReply, refundEmail, buyerWaitingEmail, listingReadyEmail, fulfillmentEmail, newOrderAdminEmail, smtpConfigured, libraryLoaded, APP_URL, listMailbox };
+module.exports = { sendMail, verificationEmail, otpEmail, resetEmail, testEmail, hireEmail, receiptEmail, salaryEmail, deliveryEmail, enquiryReply, refundEmail, buyerWaitingEmail, listingReadyEmail, fulfillmentEmail, newOrderAdminEmail, smtpConfigured, libraryLoaded, APP_URL, listMailbox, mailboxStats, attachOutbox, startMailWorker, sweepQueue };

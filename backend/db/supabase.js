@@ -46,8 +46,8 @@ async function init() {
   // site stays up until the not-ready-delivery migration is applied. Their
   // availability is exposed as api.features so routes can degrade gracefully
   // (no 500s) instead of throwing on the missing relation.
-  const featureTableKeys = { buy_intents: "buyIntents", notifications: "notifications", push_subscriptions: "pushSubscriptions" };
-  const features = { buyIntents: true, notifications: true, pushSubscriptions: true };
+  const featureTableKeys = { buy_intents: "buyIntents", notifications: "notifications", push_subscriptions: "pushSubscriptions", email_sends: "emailSends" };
+  const features = { buyIntents: true, notifications: true, pushSubscriptions: true, emailSends: true };
   for (const table of Object.keys(featureTableKeys)) {
     const { error } = await supabase.from(table).select("id").limit(1);
     if (error && isMissingRelation(error)) {
@@ -57,6 +57,9 @@ async function init() {
   }
 
   api.features = features;
+  // Persisted outbox needs the email_sends table; without it the mailer falls
+  // back to its in-memory mailbox (same behaviour as today).
+  if (!features.emailSends) api.emailSends = null;
 
   // Marketplace upgrade columns (listings.demo_url/protected/asset_type). Core
   // select("*") already succeeds once the table exists, but writes to columns
@@ -831,6 +834,104 @@ const notifications = {
   },
 };
 
+// Normalize a row into the mailer's DB-agnostic shape (to/text/html aliases).
+function mailRow(row) {
+  if (!row) return row;
+  return {
+    id: row.id,
+    to: row.to_addr,
+    subject: row.subject,
+    kind: row.kind || null,
+    text: row.body || "",
+    html: row.html_body || null,
+    status: row.status,
+    attempts: row.attempts,
+    next_retry_at: row.next_retry_at || null,
+    message_id: row.message_id || null,
+    last_error: row.last_error || null,
+    dev: Boolean(row.dev),
+    created_at: row.created_at,
+    updated_at: row.updated_at || null,
+  };
+}
+
+const MAIL_RETENTION_MS = 30 * 24 * 60 * 60 * 1000;
+const MAIL_FINISHED = ["sent", "failed", "dropped"];
+
+const emailSends = {
+  async enqueue({ to, subject, kind, text, html }) {
+    const { data, error } = await supabase
+      .from("email_sends")
+      .insert({
+        to_addr: String(to),
+        subject: String(subject),
+        kind: kind || null,
+        body: String(text || ""),
+        html_body: html || null,
+        status: "queued",
+        attempts: 0,
+        created_at: nowISO(),
+      })
+      .select()
+      .single();
+    if (error) throw error;
+    return mailRow(data);
+  },
+  async markStatus(id, patch) {
+    const set = { updated_at: nowISO() };
+    const allowed = ["status", "attempts", "next_retry_at", "message_id", "last_error"];
+    for (const k of allowed) if (patch[k] !== undefined) set[k] = patch[k];
+    const { data, error } = await supabase.from("email_sends").update(set).eq("id", id).select().single();
+    if (error) throw error;
+    return mailRow(data);
+  },
+  async listOutbox(limit = 100) {
+    const n = Math.max(1, Math.min(Math.round(limit) || 100, 1000));
+    const { data, error } = await supabase.from("email_sends").select("*").order("created_at", { ascending: false }).limit(n);
+    if (error) throw error;
+    return (data || []).map(mailRow);
+  },
+  async pendingDue(now) {
+    const cutoff = now instanceof Date ? now.toISOString() : now;
+    const { data, error } = await supabase
+      .from("email_sends")
+      .select("*")
+      .eq("status", "queued")
+      .or(`next_retry_at.is.null,next_retry_at.lte.${cutoff}`)
+      .order("id", { ascending: true })
+      .limit(50);
+    if (error) throw error;
+    return (data || []).map(mailRow);
+  },
+  async stats() {
+    const one = async (field) => {
+      const { count } = await supabase.from("email_sends").select("id", { count: "exact", head: true }).eq("status", field);
+      return count || 0;
+    };
+    const lastFin = async () => {
+      const { data } = await supabase.from("email_sends").select("updated_at,last_error,status").in("status", MAIL_FINISHED).order("updated_at", { ascending: false }).limit(1);
+      return data && data[0] ? data[0] : null;
+    };
+    const { count } = await supabase.from("email_sends").select("id", { count: "exact", head: true });
+    const fin = await lastFin();
+    return {
+      total: count || 0,
+      queued: await one("queued"),
+      sending: await one("sending"),
+      sent: await one("sent"),
+      failed: await one("failed"),
+      dropped: await one("dropped"),
+      lastAttemptAt: fin ? fin.updated_at : null,
+      lastSentAt: fin && fin.status === "sent" ? fin.updated_at : null,
+      lastError: fin && fin.status === "failed" ? fin.last_error : null,
+    };
+  },
+  async prune() {
+    const cutoff = new Date(Date.now() - MAIL_RETENTION_MS).toISOString();
+    await supabase.from("email_sends").delete().lt("created_at", cutoff).in("status", MAIL_FINISHED);
+  },
+};
+
 const api = {
   name: "supabase",
   users,
@@ -848,6 +949,7 @@ const api = {
   buyIntents,
   pushSubs,
   notifications,
+  emailSends,
   _publicUser: toPublic,
 };
 

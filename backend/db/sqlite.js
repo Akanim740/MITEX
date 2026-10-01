@@ -189,6 +189,25 @@ CREATE TABLE IF NOT EXISTS orders (
     created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
   );
 
+  CREATE TABLE IF NOT EXISTS email_sends (
+    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    to_addr       TEXT NOT NULL,
+    subject       TEXT NOT NULL,
+    kind          TEXT,
+    body          TEXT,
+    html_body     TEXT,
+    status        TEXT NOT NULL DEFAULT 'queued' CHECK (status IN ('queued','sending','sent','failed','dropped')),
+    attempts      INTEGER NOT NULL DEFAULT 0,
+    next_retry_at TEXT,
+    message_id    TEXT,
+    last_error    TEXT,
+    dev           INTEGER NOT NULL DEFAULT 0,
+    created_at    TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+    updated_at    TEXT
+  );
+
+  CREATE INDEX IF NOT EXISTS email_sends_status_idx ON email_sends(status, next_retry_at);
+
   CREATE TABLE IF NOT EXISTS packages (
     id         INTEGER PRIMARY KEY AUTOINCREMENT,
     pkg_key    TEXT NOT NULL UNIQUE,
@@ -898,6 +917,90 @@ const notifications = {
   },
 };
 
+// Normalize a row into the mailer's DB-agnostic shape (to/text/html aliases).
+function mailRow(row) {
+  if (!row) return row;
+  return {
+    id: row.id,
+    to: row.to_addr,
+    subject: row.subject,
+    kind: row.kind || null,
+    text: row.body || "",
+    html: row.html_body || null,
+    status: row.status,
+    attempts: row.attempts,
+    next_retry_at: row.next_retry_at || null,
+    message_id: row.message_id || null,
+    last_error: row.last_error || null,
+    dev: Boolean(row.dev),
+    created_at: row.created_at,
+    updated_at: row.updated_at || null,
+  };
+}
+
+const MAIL_RETENTION_MS = 30 * 24 * 60 * 60 * 1000;
+
+const emailSends = {
+  async enqueue({ to, subject, kind, text, html }) {
+    const res = db
+      .prepare("INSERT INTO email_sends (to_addr, subject, kind, body, html_body, status, attempts) VALUES (?, ?, ?, ?, ?, 'queued', 0)")
+      .run(String(to), String(subject), kind || null, String(text || ""), html || null);
+    return mailRow(db.prepare("SELECT * FROM email_sends WHERE id = ?").get(res.lastInsertRowid));
+  },
+  async markStatus(id, patch) {
+    const allowed = ["status", "attempts", "next_retry_at", "message_id", "last_error"];
+    const sets = [];
+    const vals = [];
+    for (const k of allowed) {
+      if (patch[k] === undefined) continue;
+      sets.push(`${k} = ?`);
+      vals.push(patch[k]);
+    }
+    if (!sets.length) return null;
+    sets.push("updated_at = ?");
+    vals.push(nowISO(), id);
+    db.prepare(`UPDATE email_sends SET ${sets.join(", ")} WHERE id = ?`).run(...vals);
+    return mailRow(db.prepare("SELECT * FROM email_sends WHERE id = ?").get(id));
+  },
+  async listOutbox(limit = 100) {
+    return db
+      .prepare("SELECT * FROM email_sends ORDER BY created_at DESC, id DESC LIMIT ?")
+      .all(Math.max(1, Math.min(Math.round(limit) || 100, 1000)))
+      .map(mailRow);
+  },
+  async pendingDue(now) {
+    const cutoff = now instanceof Date ? now.toISOString() : now;
+    return db
+      .prepare("SELECT * FROM email_sends WHERE status = 'queued' AND (next_retry_at IS NULL OR next_retry_at <= ?) ORDER BY id ASC LIMIT 50")
+      .all(cutoff)
+      .map(mailRow);
+  },
+  async stats() {
+    const by = (s) => db.prepare("SELECT COUNT(*) AS n FROM email_sends WHERE status = ?").get(s).n;
+    const lastActive = db
+      .prepare("SELECT status, updated_at, last_error FROM email_sends WHERE status IN ('sent','failed','queued') ORDER BY updated_at DESC, id DESC LIMIT 1")
+      .get();
+    const lastSent = db
+      .prepare("SELECT updated_at AS v FROM email_sends WHERE status = 'sent' ORDER BY updated_at DESC, id DESC LIMIT 1")
+      .get();
+    return {
+      total: db.prepare("SELECT COUNT(*) AS n FROM email_sends").get().n,
+      queued: by("queued"),
+      sending: by("sending"),
+      sent: by("sent"),
+      failed: by("failed"),
+      dropped: by("dropped"),
+      lastAttemptAt: lastActive ? lastActive.updated_at : null,
+      lastSentAt: lastSent ? lastSent.v : null,
+      lastError: lastActive && lastActive.status === "failed" ? lastActive.last_error : null,
+    };
+  },
+  async prune() {
+    const cutoff = new Date(Date.now() - MAIL_RETENTION_MS).toISOString();
+    db.prepare("DELETE FROM email_sends WHERE created_at < ? AND status IN ('sent','failed','dropped')").run(cutoff);
+  },
+};
+
 module.exports = {
   name: "sqlite",
   file: DB_FILE,
@@ -916,5 +1019,6 @@ module.exports = {
   buyIntents,
   pushSubs,
   notifications,
+  emailSends,
   _publicUser: stripSecret,
 };

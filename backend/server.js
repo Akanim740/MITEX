@@ -7,7 +7,7 @@ const cookieParser = require("cookie-parser");
 const path = require("path");
 
 const { getStore } = require("./db");
-const { smtpConfigured } = require("./utils/mailer");
+const { smtpConfigured, attachOutbox, startMailWorker, mailboxStats } = require("./utils/mailer");
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -187,10 +187,16 @@ app.use("/api/admin", require("./routes/admin"));
 
 app.get("/api/health", async (req, res) => {
   try {
+    let mailer = null;
+    try {
+      const s = await mailboxStats();
+      mailer = { configured: smtpConfigured(), queued: s.queued, pending: s.queued + s.sending, sent: s.sent, failed: s.failed, lastSentAt: s.lastSentAt, lastError: s.lastError };
+    } catch {}
     res.json({
       status: "ok",
       database: store ? store.name : "connecting",
       service: "MITEX API",
+      smtp: mailer,
       timestamp: new Date().toISOString(),
     });
   } catch (err) {
@@ -224,6 +230,10 @@ app.use((err, req, res, _next) => {
 getStore()
   .then(async (resolved) => {
     store = resolved;
+    // Persist the email send queue in the store (sqlite/supabase) and start the
+    // retry worker. Falls back to the in-memory mailbox on other DB clients.
+    attachOutbox(store);
+    startMailWorker();
     if (process.env.SEED_ON_BOOT === "true") {
       try {
         await require("./scripts/seed").runSeed();
