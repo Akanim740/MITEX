@@ -715,23 +715,44 @@ ul {
 
 .stat {
   text-align: center;
-  padding: 26px 12px;
+  padding: 26px 18px;
   border: 1px solid var(--card-border);
   border-radius: var(--radius);
   background: var(--card);
 }
 
-.stat-number {
-  display: block;
-  font-family: var(--font-head);
-  font-size: 2rem;
-  font-weight: 800;
+.stat-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 46px;
+  height: 46px;
+  border-radius: 13px;
+  background: rgba(251, 191, 36, 0.12);
+  border: 1px solid rgba(251, 191, 36, 0.32);
   color: var(--gold);
+  margin-bottom: 14px;
+}
+
+.stat-icon svg {
+  width: 22px;
+  height: 22px;
 }
 
 .stat-label {
-  font-size: 0.85rem;
+  display: block;
+  font-family: var(--font-head);
+  font-size: 1.02rem;
+  font-weight: 700;
+  color: var(--text);
+  margin-bottom: 6px;
+}
+
+.stat-note {
+  display: block;
+  font-size: 0.82rem;
   color: var(--muted);
+  line-height: 1.6;
 }
 
 .marquee-section {
@@ -1137,37 +1158,6 @@ ul {
   padding: 5px 12px;
 }
 
-.case-metric {
-  font-family: var(--font-head);
-  font-size: 2.2rem;
-  font-weight: 800;
-  line-height: 1;
-  background: linear-gradient(90deg, var(--violet), #c084fc);
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
-}
-
-.case-metric-num {
-  background: linear-gradient(90deg, var(--violet), #c084fc);
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
-}
-
-.case-metric small {
-  display: block;
-  font-family: var(--font-body);
-  font-size: 0.72rem;
-  font-weight: 600;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--muted);
-  background: none;
-  -webkit-text-fill-color: var(--muted);
-  margin-top: 5px;
-}
-
 .case-card h3 {
   font-family: var(--font-head);
   font-size: 1.15rem;
@@ -1180,19 +1170,88 @@ ul {
   line-height: 1.7;
 }
 
-.case-quote {
-  margin-top: auto;
-  padding-top: 14px;
-  border-top: 1px solid var(--card-border);
-  color: var(--text) !important;
-  font-size: 0.95rem !important;
-  font-style: italic;
+.chip.demo-chip {
+  display: inline-block;
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #93c5fd;
+  background: rgba(59, 130, 246, 0.14);
+  border: 1px solid rgba(59, 130, 246, 0.38);
+  border-radius: 999px;
+  padding: 5px 12px;
+  white-space: nowrap;
 }
 
-.case-quote::before {
-  content: "\201C";
+.case-industry,
+.case-tech {
+  font-size: 0.84rem !important;
+  line-height: 1.65;
+}
+
+.case-industry {
+  color: var(--muted) !important;
+}
+
+.case-tech {
+  margin-top: auto;
+  padding-top: 12px;
+  border-top: 1px solid var(--card-border);
+}
+
+.case-tech strong,
+.case-industry strong {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.case-cta {
+  margin-top: 14px;
+  text-align: center;
+}
+
+.case-honesty {
+  margin-top: 28px;
+  padding: 28px clamp(20px, 4vw, 36px);
+}
+
+.case-honesty h3 {
+  font-family: var(--font-head);
+  font-size: 1.15rem;
+  font-weight: 700;
+  margin-bottom: 10px;
+}
+
+.case-honesty p {
+  color: var(--muted);
+  font-size: 0.95rem;
+  line-height: 1.75;
+  max-width: 68ch;
+}
+
+.case-honesty a {
   color: var(--gold);
-  font-size: 1.4rem;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.trust-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  background: rgba(139, 92, 246, 0.12);
+  border: 1px solid rgba(139, 92, 246, 0.3);
+  color: #c084fc;
+  margin-bottom: 14px;
+}
+
+.trust-icon svg {
+  width: 22px;
+  height: 22px;
 }
 
 .testi-card {
@@ -1208,33 +1267,17 @@ ul {
   border-color: rgba(251, 191, 36, 0.45);
 }
 
-.testi-card .stars {
-  color: var(--gold);
-  letter-spacing: 3px;
+.testi-card h3 {
+  font-family: var(--font-head);
   font-size: 1.05rem;
+  font-weight: 700;
+  margin-bottom: 8px;
 }
 
 .testi-card p {
   color: var(--muted);
-  font-size: 0.95rem;
-  flex-grow: 1;
-}
-
-.testi-who {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  padding-top: 14px;
-  border-top: 1px dashed var(--card-border);
-}
-
-.testi-who strong {
-  color: var(--text);
-}
-
-.testi-who span {
-  color: var(--muted);
-  font-size: 0.82rem;
+  font-size: 0.93rem;
+  line-height: 1.7;
 }
 
 .contact {
@@ -1618,8 +1661,8 @@ ul {
     gap: 14px;
   }
 
-  .stat-number {
-    font-size: 1.6rem;
+  .stat-note {
+    font-size: 0.78rem;
   }
 
   .hero-actions .btn {

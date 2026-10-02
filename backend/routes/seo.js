@@ -373,6 +373,20 @@ function serveStaticHtml(req, res, next) {
 
 router.get("/*.html", serveStaticHtml);
 
+// "/" is what crawlers and visitors actually request, and it does not match the
+// *.html pattern above, so express.static would serve index.html verbatim with
+// an unresolved __ORIGIN__ token (broken canonical, og:url and sitemap link).
+// Read the same file through the origin substitution instead.
+router.get("/", (req, res, next) => {
+  fs.readFile(path.join(publicRoot, "index.html"), "utf8", (err, html) => {
+    if (err) return next();
+    res
+      .type("html")
+      .set("Cache-Control", "public, max-age=300")
+      .send(html.split(ORIGIN_TOKEN).join(seo.origin()));
+  });
+});
+
 module.exports = router;
 module.exports.serveStaticHtml = serveStaticHtml;
 module.exports.ORIGIN_TOKEN = ORIGIN_TOKEN;

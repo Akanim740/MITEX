@@ -1,6 +1,24 @@
 const $ = (sel) => document.querySelector(sel);
 const page = document.body.dataset.page;
 
+// Single source for the WhatsApp deep link. Hardcoding the number inline was
+// how a placeholder number (2348000000000) survived on a live page.
+const MITEX_WA_NUMBER = "2347011633770";
+const mitexWa = (text) =>
+  `https://wa.me/${MITEX_WA_NUMBER}${text ? `?text=${encodeURIComponent(text)}` : ""}`;
+
+// Shares a canonical listing URL. Server-rendered listing pages exist now, so
+// pointing at the old ?q= search view would share a page that is not the item.
+function listingShareUrl(l) {
+  const slug = String(l.title || "")
+    .toLowerCase()
+    .normalize("NFKD")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 60);
+  return `${location.origin}/listing/${encodeURIComponent(l.id)}${slug ? `-${slug}` : ""}`;
+}
+
 function toastError(message, title) {
   if (typeof showToast === "function") showToast(message, "error", title ? { title } : {});
   else if (message) alert(message);
@@ -819,7 +837,7 @@ function orderDetailCard(o, pkg, isPackage) {
           <li><strong>After payment:</strong> ${support} included.</li>
           <li><strong>Build updates:</strong> follow the progress bar next to this order.</li>
         </ul>
-        <p class="muted" style="font-size:.85rem;">Need a change or a quick reply? Message us on <a href="https://wa.me/2347011633770?text=${encodeURIComponent("Hello MITEX, I'd like an update on my order " + o.reference + ".")}" target="_blank" rel="noopener" style="color:var(--gold,#fbbf24);">WhatsApp +234 701 163 3770</a> or reply to your receipt email.</p>
+        <p class="muted" style="font-size:.85rem;">Need a change or a quick reply? Message us on <a href="${mitexWa("Hello MITEX, I'd like an update on my order " + o.reference + ".")}" target="_blank" rel="noopener" style="color:var(--gold,#fbbf24);">WhatsApp +234 701 163 3770</a> or reply to your receipt email.</p>
       </div>`;
   }
 
@@ -1100,7 +1118,7 @@ async function renderPackages(pkgs) {
         .join("");
       const cta = p.price
         ? `<button class="btn btn-primary btn-full" data-order="${esc(p.key)}">Order Now</button>`
-        : `<a class="btn btn-ghost btn-full" href="https://wa.me/2347011633770?text=${encodeURIComponent("Hello MITEX, I'd like a custom website quote please.")}" target="_blank" rel="noopener">Request a Quote</a>`;
+        : `<a class="btn btn-ghost btn-full" href="${mitexWa("Hello MITEX, I'd like a custom website quote please.")}" target="_blank" rel="noopener">Request a Quote</a>`;
       return `
         <article class="pkg-card${featured}">
           ${popular}
@@ -1144,7 +1162,7 @@ async function orderPackage(packageKey, btn) {
     location.href = data.authorization_url;
   } catch (err) {
     if (err.code === "CUSTOM_QUOTE") {
-      location.href = "https://wa.me/2347011633770?text=" + encodeURIComponent("Hello MITEX, I'd like a custom website quote please.");
+      location.href = mitexWa("Hello MITEX, I'd like a custom website quote please.");
       if (btn) setLoading(btn, false, "Order Now");
       return;
     }
@@ -1176,12 +1194,13 @@ async function initMarketStats() {
 }
 
 function shareListing(l) {
-  const url = `${location.origin}/marketplace.html?q=${encodeURIComponent(l.title)}`;
+  const url = listingShareUrl(l);
   const text = `${l.title} — ${l.status === "available" ? (l.deliveryReady ? "Buy it now" : "Almost ready — save your spot") : "Sold on MITEX"}: ${naira(Number(l.price))}`;
   if (navigator.share) {
     navigator.share({ title: l.title, text, url }).catch(() => {});
   } else {
-    window.open(`https://wa.me/?text=${encodeURIComponent(`${text}\n${url}`)}`, "_blank", "noopener");
+    // wa.me needs an explicit recipient; omitting it opens a chat to nobody.
+    window.open(mitexWa(`${text}\n${url}`), "_blank", "noopener");
   }
 }
 

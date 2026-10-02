@@ -101,34 +101,9 @@ const revealObserver = new IntersectionObserver(
 
 document.querySelectorAll(".reveal").forEach((el) => revealObserver.observe(el));
 
-const counterObserver = new IntersectionObserver(
-  (entries) => {
-    entries.forEach((entry) => {
-      if (!entry.isIntersecting) return;
-      animateCounter(entry.target);
-      counterObserver.unobserve(entry.target);
-    });
-  },
-  { threshold: 0.5 }
-);
-
-document.querySelectorAll(".stat-number, .case-metric-num").forEach((el) => counterObserver.observe(el));
-
-function animateCounter(el) {
-  const target = Number(el.dataset.count) || 0;
-  const suffix = el.dataset.suffix || "";
-  const duration = 1600;
-  const start = performance.now();
-
-  function tick(now) {
-    const progress = Math.min((now - start) / duration, 1);
-    const eased = 1 - Math.pow(1 - progress, 3);
-    el.textContent = Math.round(eased * target) + suffix;
-    if (progress < 1) requestAnimationFrame(tick);
-  }
-
-  requestAnimationFrame(tick);
-}
+// The counter animation that drove .stat-number / .case-metric-num was removed.
+// Those elements held hardcoded metrics that were never verified against the
+// database, so the numbers animated from 0 to an invented figure.
 
 const sections = document.querySelectorAll("main section[id]");
 const navAnchors = document.querySelectorAll(".nav-links a");
