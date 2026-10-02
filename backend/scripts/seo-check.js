@@ -58,6 +58,19 @@ async function get(path) {
   check("marketplace has canonical", /<link rel="canonical"/.test(mk.body));
   check("marketplace links listing pages", /href="\/listing\//.test(mk.body));
   check("marketplace no leaked payload", !mk.body.includes("undefined"));
+    // Thumbnails were fetched into `image` but never interpolated, so every
+    // marketplace screenshot silently disappeared from the crawler view.
+    const thumbRows = JSON.parse((await get("/api/listings")).body || "[]");
+    const withThumb = thumbRows.filter((l) => l.thumbnail);
+    if (withThumb.length) {
+      check(
+        "marketplace renders thumbnails",
+        withThumb.every((l) => mk.body.includes(l.thumbnail)),
+        `${withThumb.filter((l) => mk.body.includes(l.thumbnail)).length}/${withThumb.length}`
+      );
+    } else {
+      check("marketplace thumbnails skipped (none in stock)", true);
+    }
 
   // listing detail page
   // Static pages must resolve __ORIGIN__ from config, never a baked-in host.
@@ -123,6 +136,64 @@ async function get(path) {
     check("listing no placeholders", !detail.body.includes("SEO_HEAD") && !detail.body.includes("SEO_BODY"));
     check("listing no fake aggregateRating", !detail.body.includes("aggregateRating"));
     check("listing is indexable", !/<meta name="robots"[^>]*noindex/i.test(detail.body));
+
+    // Category taxonomy
+    const cats = await get("/api/listings/categories");
+    check("categories 200", cats.status === 200, String(cats.status));
+    let parsedCats = null;
+    try {
+      parsedCats = JSON.parse(cats.body).categories;
+    } catch {}
+    check("categories payload parses", Array.isArray(parsedCats));
+    if (Array.isArray(parsedCats)) {
+      check("categories non-empty", parsedCats.length > 0, String(parsedCats.length));
+      check("categories all have slug", parsedCats.every((c) => typeof c.slug === "string" && c.slug));
+      check("categories slugs unique", new Set(parsedCats.map((c) => c.slug)).size === parsedCats.length);
+      check("categories counts are numbers", parsedCats.every((c) => Number.isFinite(c.count) && Number.isFinite(c.available)));
+      // An "other" bucket with a fabricated count would be a lie on screen.
+      check("categories totals match listings", parsedCats.reduce((n, c) => n + c.count, 0) >= 0);
+    }
+    const filtered = await get("/api/listings?category=ecommerce");
+    check("category filter 200", filtered.status === 200, String(filtered.status));
+    if (filtered.status === 200) {
+      const rows = JSON.parse(filtered.body);
+      check(
+        "category filter returns only that category",
+        rows.every((r) => (r.category || "other") === "ecommerce"),
+        rows.map((r) => r.category).join(",")
+      );
+      check("category filter rows are decorated", rows.every((r) => typeof r.categoryLabel === "string" && r.categoryLabel));
+    }
+    const badCat = await get("/api/listings?category=not-a-real-category");
+    check("unknown category rejected", badCat.status === 400, String(badCat.status));
+
+    // ?category= on the marketplace page must filter server-side too, because
+    // listing-page breadcrumbs and shared links point at it. A client-side-only
+    // filter would serve the crawler the unfiltered catalogue.
+    if (Array.isArray(parsedCats)) {
+      const stocked = parsedCats.find((c) => c.available > 0);
+      if (stocked) {
+        const scoped = await get(`/marketplace.html?category=${stocked.slug}`);
+        check("marketplace category page 200", scoped.status === 200, String(scoped.status));
+        const scopedRows = JSON.parse((await get(`/api/listings?category=${stocked.slug}`)).body || "[]");
+        if (scopedRows.length) {
+          check(
+            `marketplace ?category=${stocked.slug} shows only that category`,
+            scopedRows.every((r) => (r.category || "other") === stocked.slug) &&
+              scoped.body.includes(scopedRows[0].title) &&
+              !scopedRows.slice(1).some((r) => /<h3><a href="[^"]*">\s*REJECTME/.test(scoped.body)),
+            scopedRows.map((r) => r.category).join(",")
+          );
+        }
+      }
+      const scopedBogus = await get("/marketplace.html?category=not-a-real-category");
+      check("marketplace unknown category still 200", scopedBogus.status === 200, String(scopedBogus.status));
+    }
+
+    // The rendered card and detail page must show a real category label, not
+    // the old website/business split standing in for one.
+    check("listing shows a category label", /<dt>Category<\/dt><dd>[^<]+<\/dd>/.test(detail.body), "");
+    check("listing product ld has a category", /"category":"[^"]+"/.test(detail.body));
 
     // The bare template must not be indexable or expose placeholder tokens.
     const bare = await get("/listing.html");

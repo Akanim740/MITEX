@@ -11,6 +11,7 @@ const fs = require("fs");
 
 const seo = require("../utils/seo");
 const { assetTypeOf, protectedOf } = require("../utils/listing-metrics");
+const { categoryOf, categoryLabel, normalizeCategory } = require("../utils/categories");
 
 const router = express.Router();
 
@@ -88,6 +89,8 @@ async function publicListings(store) {
     ...row,
     assetType: assetTypeOf(row),
     protected: protectedOf(row),
+    category: categoryOf(row),
+    categoryLabel: categoryLabel(categoryOf(row)),
   }));
 }
 
@@ -146,7 +149,8 @@ function nairaMarkup(value) {
 function renderCard(listing) {
   const chips = [
     listing.level ? `<span class="chip gold">Level ${seo.esc(listing.level)}</span>` : "",
-    `<span class="chip">${listing.assetType === "business" ? "Digital Business" : "Website"}</span>`,
+    `<span class="chip">${seo.esc(listing.categoryLabel || categoryLabel(listing.category))}</span>`,
+    listing.assetType === "business" ? `<span class="chip">Digital Business</span>` : "",
     `<span class="chip">${seo.esc(listing.status === "available" ? "Available" : "Sold")}</span>`,
     listing.protected === false ? "" : `<span class="chip shield">Protected</span>`,
     typeof listing.score === "number" ? `<span class="chip score">${seo.esc(listing.score)}/100</span>` : "",
@@ -167,6 +171,7 @@ function renderCard(listing) {
     ? `<a href="${seo.esc(seo.listingPath(listing))}" tabindex="-1" aria-hidden="true"><img src="${seo.esc(listing.thumbnail)}" alt="" width="640" height="400" loading="lazy" decoding="async" style="width:100%;height:auto;border-radius:12px;margin-bottom:14px;" /></a>`
     : "";
   return `        <article class="listing-card">
+          ${image}
           <div class="chips" style="justify-content:flex-start;">
             ${chips}
           </div>
@@ -184,7 +189,18 @@ router.get("/marketplace.html", async (req, res, next) => {
     const layout = await fs.promises.readFile(marketplaceLayoutPath, "utf8");
     // Placeholder in marketplace.html: <div class="listing-grid" id="listingsGrid"><!--SSR_LISTINGS--></div>
     if (!layout.includes("<!--SSR_LISTINGS-->")) return next();
-    const listings = await publicListings(req.store);
+
+    const all = await publicListings(req.store);
+
+    // Honour ?category= server-side. The category chips are a client-side
+    // filter, so without this a crawler landing on a category URL (from the
+    // listing-page breadcrumb, a shared link, or a search engine) would be
+    // served the unfiltered first page and the breadcrumb would point at
+    // nothing. An unknown slug falls through to the full catalogue rather than
+    // 400-ing a public browse page.
+    const wanted = req.query.category ? normalizeCategory(req.query.category) : null;
+    const listings = wanted ? all.filter((l) => l.category === wanted) : all;
+
     const { websiteScore, sellerTrust } = require("../utils/listing-metrics");
     const page = listings.slice(0, MARKET_PAGE_SIZE).map((listing) => {
       const score = websiteScore(listing);
@@ -239,6 +255,8 @@ function renderListing(layout, listing) {
   const price = seo.nairaPlain(listing.price);
   const image = listing.thumbnail || DEFAULT_OG;
   const available = String(listing.status) === "available";
+  const category = categoryOf(listing);
+  const categoryName = listing.categoryLabel || categoryLabel(category);
   const tech = String(listing.tech_stack || "")
     .split(",")
     .map((t) => t.trim())
@@ -251,15 +269,18 @@ function renderListing(layout, listing) {
       seo.breadcrumbLd([
         { name: "Home", url: seo.abs("/") },
         { name: "Marketplace", url: seo.abs("/marketplace.html") },
+        { name: categoryName, url: `${seo.abs("/marketplace.html")}?category=${encodeURIComponent(category)}` },
         { name: listing.title, url: seo.listingUrl(listing) },
       ])
     )}\n  </script>`,
   ].join("\n");
 
   const facts = [
+    ["Category", categoryName],
     ["Asset type", listing.assetType === "business" ? "Digital Business" : "Website"],
     ["Level", listing.level ? `Level ${listing.level}` : "Standard"],
     ["Protection", listing.protected === false ? "Buyer protection applies" : "MITEZ protected"],
+    ["Live demo", listing.demo_url ? "Available" : "Not provided for this listing"],
     ["Status", available ? "Available now" : "Sold"],
   ];
   if (typeof listing.score === "number") {
@@ -280,12 +301,27 @@ function renderListing(layout, listing) {
     `  <a class="btn btn-primary ld-cta" href="/marketplace.html?listing=${seo.esc(String(listing.id))}">${available ? "Buy this website" : "View similar websites"}</a>`,
     `</section>`,
     `<section class="ld-desc">`,
-    `  <h2>About this ${listing.assetType === "business" ? "digital business" : "website"}</h2>`,
+    `  <h2>About this ${seo.esc(categoryName.toLowerCase())} ${listing.assetType === "business" ? "digital business" : "website"}</h2>`,
     `  <p>${seo.esc(String(listing.description || "").replace(/\r\n/g, "\n").replace(/\n/g, "<br />"))}</p>`,
     `</section>`,
     tech.length
       ? `<section class="ld-tech"><h2>Built with</h2><ul>${tech.map((t) => `<li>${seo.esc(t)}</li>`).join("")}</ul></section>`
       : "",
+    // "What you receive" is derived from real listing fields so the page cannot
+    // drift into promising delivery terms MITEX does not control.
+    `<section class="ld-desc"><h2>What you receive</h2><ul>` +
+      `<li>${
+        listing.demo_url
+          ? "A live demo you can review before you buy"
+          : "The complete website source files, assets and setup instructions"
+      }</li>` +
+      `<li>${
+        listing.protected === false
+          ? "Purchase handled directly with the seller"
+          : "Protected purchase: payment is released on confirmed delivery"
+      }</li>` +
+      `<li>Support through the handover and any post-delivery fixes agreed at purchase</li>` +
+      `</ul></section>`,
     `<section class="ld-facts"><h2>Listing details</h2><dl>${facts
       .map(([k, v]) => `<dt>${seo.esc(k)}</dt><dd>${seo.esc(v)}</dd>`)
       .join("")}</dl></section>`,
@@ -328,6 +364,8 @@ router.get("/listing/:slug", async (req, res, next) => {
       ...row,
       assetType: assetTypeOf(row),
       protected: protectedOf(row),
+      category: categoryOf(row),
+      categoryLabel: categoryLabel(categoryOf(row)),
     };
     // Mirrors the decorate() enrichment in routes/listings.js for scores.
     const { websiteScore, sellerTrust } = require("../utils/listing-metrics");

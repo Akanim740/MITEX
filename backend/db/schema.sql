@@ -77,9 +77,11 @@ CREATE TABLE listings (
   demo_url     VARCHAR(800),
   protected    TINYINT(1) NOT NULL DEFAULT 1,
   asset_type   ENUM('website','business') NOT NULL DEFAULT 'website',
+  category     VARCHAR(40) NOT NULL DEFAULT 'other',
   employee_id  INT,
   created_at   VARCHAR(32) NOT NULL,
   INDEX idx_listings_status (status),
+  INDEX idx_listings_category (category),
   INDEX idx_listings_employee (employee_id)
 );
 
@@ -237,6 +239,7 @@ CREATE TABLE packages (
 --   demo_url     TEXT,
 --   protected    BOOLEAN NOT NULL DEFAULT TRUE,
 --   asset_type   TEXT NOT NULL DEFAULT 'website' CHECK (asset_type IN ('website','business')),
+--   category     TEXT NOT NULL DEFAULT 'other',
 --   employee_id  BIGINT REFERENCES users(id) ON DELETE SET NULL,
 --   created_at   TEXT NOT NULL
 -- );

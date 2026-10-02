@@ -364,6 +364,7 @@ listingForm.addEventListener("submit", async (e) => {
     deliveryUrl: $("#fDelivery") ? $("#fDelivery").value.trim() : "",
     demoUrl: $("#fDemo") ? $("#fDemo").value.trim() : "",
     assetType: $("#fAssetType") ? $("#fAssetType").value : "website",
+    category: $("#fCategory") && $("#fCategory").value ? $("#fCategory").value : "other",
     protected: $("#fProtected") && $("#fProtected").value === "0" ? false : true,
   };
   if (currentUser && currentUser.role !== "staff") {
@@ -383,6 +384,7 @@ listingForm.addEventListener("submit", async (e) => {
     toastSuccess(id ? "Listing updated." : "Listing added.", id ? "Saved" : "Added");
     resetListingForm();
     loadListings();
+    loadCategoryOptions();
   } catch (err) {
     toastError(err.message);
   }
@@ -393,6 +395,10 @@ $("#cancelEdit").addEventListener("click", resetListingForm);
 function resetListingForm() {
   listingForm.reset();
   $("#listingId").value = "";
+  // reset() returns the select to its first option, which is the placeholder,
+  // not a real value. Default to "other" so the API is never sent "" and the
+  // form does not silently save an unclassified listing.
+  if ($("#fCategory")) $("#fCategory").value = "other";
   $("#listingSubmit").textContent = "Add Listing";
   $("#cancelEdit").classList.add("hidden");
   if (currentUser && currentUser.role === "staff") {
@@ -401,6 +407,24 @@ function resetListingForm() {
     $("#fEmployee").value = "";
     $("#listingSubmit").classList.remove("hidden");
   }
+}
+
+// Populates the category select from the server-owned taxonomy rather than
+// duplicating the list in this file, which would let the two drift apart.
+async function loadCategoryOptions() {
+  const select = $("#fCategory");
+  if (!select) return;
+  try {
+    const data = await API.get("/api/listings/categories");
+    select.innerHTML = (data.categories || [])
+      .map((c) => `<option value="${c.slug}">${c.label} (${c.available} available)</option>`)
+      .join("");
+  } catch {
+    // Without the taxonomy the admin must still be able to add a listing, so
+    // fall back to a single honest option rather than an unusable select.
+    select.innerHTML = '<option value="other">Other (categories unavailable)</option>';
+  }
+  if (!select.value) select.value = "other";
 }
 
 async function loadListings() {
@@ -458,6 +482,9 @@ async function loadListings() {
         $("#fDelivery").value = row.delivery_url || "";
         if ($("#fDemo")) $("#fDemo").value = row.demo_url || "";
         if ($("#fAssetType")) $("#fAssetType").value = row.asset_type === "business" ? "business" : "website";
+        // Row may predate the category column, or hold a value this build no
+        // longer recognises; fall back to the same default the API uses.
+        if ($("#fCategory")) $("#fCategory").value = row.category || "other";
         if ($("#fProtected")) $("#fProtected").value = row.protected === false || Number(row.protected) === 0 ? "0" : "1";
         if ($("#fEmployee")) refreshEmployeeSelect(row.employee_id);
         $("#listingSubmit").classList.remove("hidden");

@@ -609,6 +609,147 @@ textarea {
   background: rgba(251, 191, 36, 0.08);
 }
 
+/* Category filter bar -------------------------------------------------- */
+
+.category-filter {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  flex-wrap: wrap;
+  justify-content: center;
+  padding-bottom: 6px;
+}
+
+.category-filter-label {
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.category-chips {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+/* Buttons, not links: they drive a client-side filter rather than navigate. */
+.cat-btn,
+.asset-btn {
+  cursor: pointer;
+  font-family: inherit;
+  background: transparent;
+  transition: color 0.2s ease, border-color 0.2s ease, background 0.2s ease;
+}
+
+.cat-btn:hover,
+.asset-btn:hover {
+  color: var(--text);
+  border-color: rgba(139, 92, 246, 0.55);
+}
+
+.cat-btn.active,
+.asset-btn.active {
+  color: var(--text);
+  border-color: rgba(139, 92, 246, 0.7);
+  background: rgba(139, 92, 246, 0.16);
+}
+
+.cat-btn:focus-visible,
+.asset-btn:focus-visible {
+  outline: 2px solid var(--gold, #fbbf24);
+  outline-offset: 2px;
+}
+
+.cat-count {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  font-size: 0.66rem;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+}
+
+.cat-btn.active .cat-count {
+  background: rgba(255, 255, 255, 0.16);
+  color: var(--text);
+}
+
+/* Listing card ---------------------------------------------------------- */
+
+.listing-card h3 a {
+  color: inherit;
+  text-decoration: none;
+}
+
+.listing-card h3 a:hover {
+  color: var(--gold, #fbbf24);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.listing-card h3 a:focus-visible {
+  outline: 2px solid var(--gold, #fbbf24);
+  outline-offset: 3px;
+  border-radius: 4px;
+}
+
+/* Decorative: the link repeats the adjacent title, so the image is marked
+   aria-hidden and taken out of the tab order in auth.js. */
+.listing-shot {
+  display: block;
+  margin-bottom: 14px;
+  border-radius: 12px;
+  overflow: hidden;
+  line-height: 0;
+}
+
+.listing-shot img {
+  width: 100%;
+  height: auto;
+  display: block;
+  transition: transform 0.35s ease;
+}
+
+.listing-card:hover .listing-shot img {
+  transform: scale(1.03);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .listing-card:hover .listing-shot img {
+    transform: none;
+  }
+}
+
+.listing-details-link {
+  display: block;
+  margin-top: 8px;
+  text-align: center;
+  font-size: 0.84rem;
+  color: var(--muted);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.listing-details-link:hover {
+  color: var(--text);
+}
+
+.listing-details-link:focus-visible {
+  outline: 2px solid var(--gold, #fbbf24);
+  outline-offset: 3px;
+  border-radius: 4px;
+}
+
+.result-count:empty {
+  display: none;
+}
+
 .order-detail > td {
   background: rgba(251, 191, 36, 0.04);
   padding: 14px 18px;

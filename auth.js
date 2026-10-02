@@ -1001,6 +1001,11 @@ let marketplacePage = 1;
 const MARKET_PAGE_SIZE = 8;
 let marketplaceCanOneTap = false;
 let marketplaceAsset = "";
+// Real industry taxonomy, fetched from /api/listings/categories. Kept separate
+// from the website/business asset split: a buyer filters by what they need
+// ("an online store"), not by the legal shape of the asset.
+let marketplaceCategories = [];
+let marketplaceCategory = "";
 
 function skeletonCards(n = 6) {
   let out = "";
@@ -1045,6 +1050,11 @@ async function initMarketplace() {
       });
     });
   }
+  // A ?category= link (search ads, breadcrumbs, shared URLs) should land on the
+  // right slice without the user re-picking the chip.
+  const wantedCategory = new URLSearchParams(location.search).get("category");
+  if (wantedCategory) marketplaceCategory = wantedCategory;
+  await initCategoryFilter(searchInput);
   initSiteLab();
   initDescGen();
   if (new URLSearchParams(location.search).get("valuator") === "1") {
@@ -1067,6 +1077,81 @@ async function initMarketplace() {
   } catch (err) {
     grid.innerHTML = `<p class="empty-market">${esc(err.message)}</p>`;
   }
+}
+
+// Renders the category chips from the server-owned taxonomy and wires them to
+// the same client-side filter the search box uses. Counts come from the API
+// (real inventory), so the numbers on the chips are never hand-maintained.
+//
+// Only categories that actually have available stock get a chip: showing twelve
+// filters where eleven are empty is noise, and it hides the ones that work.
+async function initCategoryFilter(searchInput) {
+  const holder = $("#categoryChips");
+  if (!holder) return;
+  try {
+    const data = await api("/api/listings/categories", { auth: false });
+    marketplaceCategories = data.categories || [];
+  } catch {
+    // Taxonomy unavailable: the marketplace still works on search + asset
+    // type, so degrade rather than showing an empty filter bar.
+    holder.closest(".category-filter")?.remove();
+    return;
+  }
+
+  const stocked = marketplaceCategories.filter((c) => c.available > 0);
+  // Nothing classified yet (a fresh install): hide the bar instead of implying
+  // the catalogue is organised when it is not.
+  if (!stocked.length) {
+    holder.closest(".category-filter")?.remove();
+    return;
+  }
+  // A deep-linked category that the API rejected (stale link, renamed slug)
+  // must not silently show the unfiltered catalogue as if the filter applied.
+  if (marketplaceCategory && !stocked.some((c) => c.slug === marketplaceCategory)) {
+    marketplaceCategory = "";
+  }
+
+  const chips = [{ slug: "", label: "All categories", available: stocked.reduce((n, c) => n + c.available, 0) }, ...stocked];
+
+  holder.innerHTML = chips
+    .map(
+      (c) =>
+        `<button type="button" class="chip cat-btn" data-cat="${esc(c.slug)}" aria-pressed="${c.slug === marketplaceCategory}">${esc(c.label)} <span class="cat-count">${c.available}</span></button>`
+    )
+    .join("");
+
+  holder.querySelectorAll("[data-cat]").forEach((b) => {
+    b.addEventListener("click", () => {
+      marketplaceCategory = b.dataset.cat || "";
+      marketplacePage = 1;
+      syncCategoryUrl();
+      holder.querySelectorAll("[data-cat]").forEach((x) => {
+        const on = x === b;
+        x.classList.toggle("active", on);
+        x.setAttribute("aria-pressed", String(on));
+      });
+      renderListings(searchInput ? searchInput.value : "");
+    });
+  });
+
+  // Reflect the deep-linked category as selected on first paint.
+  if (marketplaceCategory) {
+    holder.querySelectorAll("[data-cat]").forEach((x) => {
+      const on = x.dataset.cat === marketplaceCategory;
+      x.classList.toggle("active", on);
+      x.setAttribute("aria-pressed", String(on));
+    });
+  }
+  syncCategoryUrl();
+}
+
+// Keeps the address bar in step so a filtered view can be shared or
+// bookmarked. Uses replaceState so filtering does not spam browser history.
+function syncCategoryUrl() {
+  const url = new URL(location.href);
+  if (marketplaceCategory) url.searchParams.set("category", marketplaceCategory);
+  else url.searchParams.delete("category");
+  history.replaceState(null, "", url.pathname + url.search);
 }
 
 async function initPackages() {
@@ -1387,21 +1472,28 @@ function renderListings(query, page) {
   const q = (query || "").trim().toLowerCase();
   const pg = Math.max(1, page || marketplacePage);
 
-  const matches = (!q && !marketplaceAsset
+  const matches = (!q && !marketplaceAsset && !marketplaceCategory
     ? marketplaceListings
     : marketplaceListings.filter((l) =>
         (!q
           ? true
-          : [l.title, l.description, l.tech_stack, l.level != null ? `level ${l.level}` : ""]
+          : [l.title, l.description, l.tech_stack, l.categoryLabel, l.level != null ? `level ${l.level}` : ""]
               .filter(Boolean)
               .some((field) => String(field).toLowerCase().includes(q))
-        ) && (!marketplaceAsset || (l.assetType || "website") === marketplaceAsset)
+        ) &&
+        (!marketplaceAsset || (l.assetType || "website") === marketplaceAsset) &&
+        (!marketplaceCategory || (l.category || "other") === marketplaceCategory)
       ));
 
+  const filterLabel = marketplaceCategory
+    ? (marketplaceCategories.find((c) => c.slug === marketplaceCategory) || {}).label
+    : "";
   if (count) {
+    const noun = matches.length === 1 ? t("market_count_one") : t("market_count_many");
+    const scope = filterLabel ? ` in ${filterLabel}` : "";
     count.textContent = q
-      ? `${matches.length} ${matches.length === 1 ? t("market_found_one") : t("market_found_many")} "${query.trim()}"`
-      : `${matches.length} ${matches.length === 1 ? t("market_count_one") : t("market_count_many")}`;
+      ? `${matches.length} ${matches.length === 1 ? t("market_found_one") : t("market_found_many")} "${query.trim()}"${scope}`
+      : `${matches.length} ${noun}${scope}`;
   }
 
   if (!matches.length) {
@@ -1418,14 +1510,20 @@ function renderListings(query, page) {
     .map(
       (l) => `
       <article class="listing-card">
+        ${
+          l.thumbnail
+            ? `<a class="listing-shot" href="${esc(listingShareUrl(l))}" tabindex="-1" aria-hidden="true"><img src="${esc(l.thumbnail)}" alt="" width="640" height="400" loading="lazy" decoding="async" /></a>`
+            : ""
+        }
         <div class="chips" style="justify-content:flex-start;">
           ${l.level ? `<span class="chip gold">Level ${l.level}</span>` : ""}
-          <span class="chip">${l.assetType === "business" ? "Digital Business" : "Website"}</span>
+          <span class="chip">${esc(l.categoryLabel || "Other")}</span>
+          ${l.assetType === "business" ? `<span class="chip">Digital Business</span>` : ""}
           <span class="chip">${esc(l.status === "available" ? "Available" : "Sold")}</span>
           ${l.protected !== false ? `<span class="chip shield">Protected</span>` : ""}
           ${typeof l.score === "number" ? `<span class="chip score">${l.score}/100</span>` : ""}
         </div>
-        <h3>${esc(l.title)}</h3>
+        <h3><a href="${esc(listingShareUrl(l))}">${esc(l.title)}</a></h3>
         <p>${esc(l.description)}</p>
         ${l.tech_stack ? `<div class="tech-row">${l.tech_stack.split(",").map((t) => `<span class="chip">${esc(t.trim())}</span>`).join("")}</div>` : ""}
         <div class="price">${naira(l.price)}</div>
@@ -1449,9 +1547,10 @@ function renderListings(query, page) {
                <button class="btn btn-full" data-intent="${l.id}" style="margin-top:8px;">Notify me</button>`
             : l.status === "available"
             ? `<button class="btn btn-primary btn-full" data-buy="${l.id}">${t("buy_now")}</button>${marketplaceCanOneTap ? `<button class="btn btn-full" data-buyonetap="${l.id}" style="margin-top:8px;">One-tap checkout</button>` : ""}`
-            : ""
+            : `<a class="btn btn-ghost btn-full" href="${esc(listingShareUrl(l))}">View details</a>`
         }
         ${l.canDemo ? `<a class="btn btn-ghost btn-full" href="${esc(l.demoUrl)}" target="_blank" rel="noopener" style="margin-top:8px;">Try Live Demo</a>` : ""}
+        ${l.status === "available" && l.deliveryReady !== false ? `<a class="listing-details-link" href="${esc(listingShareUrl(l))}">View details</a>` : ""}
         <button type="button" class="btn-share" data-share="${l.id}" aria-label="${t("share")}">${t("share")}</button>
       </article>`
     )

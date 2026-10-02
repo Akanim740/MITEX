@@ -9,6 +9,9 @@
 // interpolation goes through esc()/jsonLd(). Never concatenate raw listing
 // text into markup.
 
+// Derives the listing's industry label for structured data and breadcrumbs.
+const { categoryOf, categoryLabel } = require("./categories");
+
 // SEO_BASE_URL wins over APP_URL so canonical URLs can be pinned to the
 // marketing domain (e.g. https://mitex.store) while APP_URL still points at
 // the deployment host that Paystack/Paystack webhooks already use.
@@ -151,7 +154,10 @@ function productLd(listing) {
     description: String(listing.description || "").slice(0, 5000),
     url,
     sku: String(listing.id),
-    category: listing.assetType === "business" ? "Digital Business" : "Website",
+    // Real industry category, not the website/business split. Keeping the
+    // taxonomy meaningful in structured data is what lets these pages compete
+    // for the queries buyers actually type.
+    category: categoryLabel(categoryOf(listing)),
     offers: {
       "@type": "Offer",
       url,

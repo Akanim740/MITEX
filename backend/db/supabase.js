@@ -65,8 +65,8 @@ async function init() {
   // select("*") already succeeds once the table exists, but writes to columns
   // the DB lacks would 500, so we detect them at boot and strip them from
   // create/update payloads until the migration adds them.
-  const listingColumns = { demoUrl: true, protected: true, assetType: true };
-  const columnProbes = { demoUrl: "demo_url", protected: "protected", assetType: "asset_type" };
+  const listingColumns = { demoUrl: true, protected: true, assetType: true, category: true };
+  const columnProbes = { demoUrl: "demo_url", protected: "protected", assetType: "asset_type", category: "category" };
   for (const key of Object.keys(columnProbes)) {
     try {
       const { error } = await supabase.from("listings").select(columnProbes[key]).limit(1);
@@ -253,10 +253,14 @@ const enquiries = {
 };
 
 const listings = {
-  async list({ includeSold = false, level } = {}) {
+  async list({ includeSold = false, level, category } = {}) {
     let query = supabase.from("listings").select("*").order("created_at", { ascending: false });
     if (!includeSold) query = query.eq("status", "available");
     if (level !== undefined && level !== null && level !== "") query = query.eq("level", Number(level));
+    const fc = api.listingColumns;
+    if (category !== undefined && category !== null && category !== "" && (!fc || fc.category)) {
+      query = query.eq("category", String(category));
+    }
     const { data } = await query;
     return data || [];
   },
@@ -281,12 +285,13 @@ const listings = {
     if (!fc || fc.demoUrl) set.demo_url = v.demo_url ?? null;
     if (!fc || fc.protected) set.protected = v.protected === undefined ? true : Boolean(v.protected);
     if (!fc || fc.assetType) set.asset_type = v.asset_type ?? "website";
+    if (!fc || fc.category) set.category = v.category ?? "other";
     const { data, error } = await supabase.from("listings").insert(set).select().single();
     if (error) throw error;
     return data;
   },
   async update(id, patch) {
-    const allowed = ["title", "description", "price", "level", "tech_stack", "status", "thumbnail", "delivery_url", "demo_url", "protected", "asset_type", "employee_id"];
+    const allowed = ["title", "description", "price", "level", "tech_stack", "status", "thumbnail", "delivery_url", "demo_url", "protected", "asset_type", "category", "employee_id"];
     const set = {};
     for (const k of allowed) if (k in patch) set[k] = patch[k] === undefined ? null : patch[k];
     const fc = api.listingColumns;
@@ -294,6 +299,7 @@ const listings = {
       if (!fc.demoUrl) delete set.demo_url;
       if (!fc.protected) delete set.protected;
       if (!fc.assetType) delete set.asset_type;
+      if (!fc.category) delete set.category;
     }
     const { data, error } = await supabase.from("listings").update(set).eq("id", id).select().single();
     if (error) throw error;

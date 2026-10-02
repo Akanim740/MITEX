@@ -78,6 +78,7 @@ db.exec(`
     demo_url     TEXT,
     protected    INTEGER NOT NULL DEFAULT 1,
     asset_type   TEXT NOT NULL DEFAULT 'website' CHECK (asset_type IN ('website','business')),
+    category     TEXT NOT NULL DEFAULT 'other',
     created_at   TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
   );
 
@@ -226,10 +227,19 @@ CREATE TABLE IF NOT EXISTS orders (
   );
 `);
 
-for (const col of ["delivery_url", "employee_id", "demo_url", "protected", "asset_type"]) {
+for (const col of ["delivery_url", "employee_id", "demo_url", "protected", "asset_type", "category"]) {
   const cols = db.prepare("PRAGMA table_info(listings)").all().map((c) => c.name);
   if (!cols.includes(col)) {
-    const type = col === "employee_id" ? "INTEGER" : col === "protected" ? "INTEGER NOT NULL DEFAULT 1" : col === "asset_type" ? "TEXT NOT NULL DEFAULT 'website'" : "TEXT";
+    const type =
+      col === "employee_id"
+        ? "INTEGER"
+        : col === "protected"
+        ? "INTEGER NOT NULL DEFAULT 1"
+        : col === "asset_type"
+        ? "TEXT NOT NULL DEFAULT 'website'"
+        : col === "category"
+        ? "TEXT NOT NULL DEFAULT 'other'"
+        : "TEXT";
     db.exec(`ALTER TABLE listings ADD COLUMN ${col} ${type}`);
   }
 }
@@ -498,7 +508,7 @@ const enquiries = {
 };
 
 const listings = {
-  async list({ includeSold = false, level } = {}) {
+  async list({ includeSold = false, level, category } = {}) {
     let sql = "SELECT * FROM listings";
     const where = [];
     const params = [];
@@ -508,6 +518,10 @@ const listings = {
     if (level !== undefined && level !== null && level !== "") {
       where.push("level = ?");
       params.push(Number(level));
+    }
+    if (category !== undefined && category !== null && category !== "") {
+      where.push("category = ?");
+      params.push(String(category));
     }
     if (where.length) sql += " WHERE " + where.join(" AND ");
     sql += " ORDER BY created_at DESC";
@@ -519,13 +533,13 @@ const listings = {
   async create(v) {
     const res = db
       .prepare(
-        "INSERT INTO listings (title, description, price, level, tech_stack, status, thumbnail, delivery_url, demo_url, protected, asset_type, employee_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+        "INSERT INTO listings (title, description, price, level, tech_stack, status, thumbnail, delivery_url, demo_url, protected, asset_type, category, employee_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
       )
-      .run(v.title, v.description, v.price, v.level ?? null, v.tech_stack ?? null, v.status ?? "available", v.thumbnail ?? null, v.delivery_url ?? v.deliveryUrl ?? null, v.demo_url ?? null, v.protected === undefined ? 1 : v.protected ? 1 : 0, v.asset_type ?? "website", v.employee_id ?? null);
+      .run(v.title, v.description, v.price, v.level ?? null, v.tech_stack ?? null, v.status ?? "available", v.thumbnail ?? null, v.delivery_url ?? v.deliveryUrl ?? null, v.demo_url ?? null, v.protected === undefined ? 1 : v.protected ? 1 : 0, v.asset_type ?? "website", v.category ?? "other", v.employee_id ?? null);
     return this.get(res.lastInsertRowid);
   },
   async update(id, patch) {
-    const allowed = ["title", "description", "price", "level", "tech_stack", "status", "thumbnail", "delivery_url", "demo_url", "protected", "asset_type", "employee_id"];
+    const allowed = ["title", "description", "price", "level", "tech_stack", "status", "thumbnail", "delivery_url", "demo_url", "protected", "asset_type", "category", "employee_id"];
     const keys = Object.keys(patch).filter((k) => allowed.includes(k) && patch[k] !== undefined && patch[k] !== "");
     if (!keys.length) return this.get(id);
     const sets = keys.map((k) => `${k} = ?`).join(", ");

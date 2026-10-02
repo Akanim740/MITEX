@@ -3,6 +3,7 @@ const router = express.Router();
 
 const { requireAuth, requireRole, optionalAuth } = require("../middleware/auth");
 const { websiteScore, sellerTrust, valuate, assetTypeOf, protectedOf } = require("../utils/listing-metrics");
+const { DEFAULT_CATEGORY, normalizeCategory, categoryOf, categoryLabel, publicCategories } = require("../utils/categories");
 
 function validateListing(body, partial = false) {
   const errors = [];
@@ -70,6 +71,19 @@ function validateListing(body, partial = false) {
     const t = String(body.assetType || "website").trim().toLowerCase();
     if (!["website", "business"].includes(t)) errors.push("assetType must be 'website' or 'business'");
     out.asset_type = t;
+  }
+  if (body.category !== undefined) {
+    const empty = body.category === null || body.category === "";
+    if (empty) {
+      out.category = DEFAULT_CATEGORY;
+    } else {
+      const c = normalizeCategory(body.category);
+      // Reject rather than coerce: silently storing "e commerce" as-is, or
+      // quietly dropping it to 'other', would both hide admin mistakes and let
+      // the taxonomy fragment.
+      if (c === null) errors.push(`category must be one of: ${publicCategories().map((x) => x.slug).join(", ")}`);
+      else out.category = c;
+    }
   }
   if (body.protected !== undefined) {
     out.protected = body.protected !== "false" && body.protected !== false && body.protected !== 0 && body.protected !== "0";
@@ -154,6 +168,7 @@ function decorate(row, counts, withValuation = false) {
   const stat = counts.get(String(row.id)) || { paid: 0, delivered: 0 };
   const done = Boolean(row.delivery_url) || String(row.status) === "sold";
   const trust = sellerTrust({ paid: stat.paid || 0, delivered: done ? Math.max(1, stat.paid || 1) : 0 });
+  const category = categoryOf(row);
   const out = {
     ...row,
     score: score.score,
@@ -166,6 +181,9 @@ function decorate(row, counts, withValuation = false) {
     protected: protectedOf(row),
     demoUrl: row.demo_url || null,
     canDemo: Boolean(row.demo_url),
+    // Derived, so clients never have to duplicate the slug->label table.
+    category,
+    categoryLabel: categoryLabel(category),
   };
   if (withValuation) out.valuation = valuate(row);
   return out;
@@ -186,14 +204,54 @@ router.get("/mine", requireAuth, requireRole("staff"), async (req, res) => {
 // GET /api/listings - public: browse premium websites for sale
 router.get("/", optionalAuth, async (req, res) => {
   try {
-    const { level, includeSold } = req.query;
+    const { level, includeSold, category } = req.query;
+    // An unrecognised category is a client bug, not a reason to silently
+    // return the whole catalogue, which would look like "no filter applied".
+    const cat = category === undefined || category === "" ? "" : normalizeCategory(category);
+    if (category !== undefined && category !== "" && cat === null) {
+      return res.status(400).json({
+        error: `Unknown category "${String(category).slice(0, 40)}". See /api/listings/categories.`,
+      });
+    }
     const rows = await req.store.listings.list({
       includeSold: includeSold === "true",
       level,
+      category: cat || undefined,
     });
     const counts = await trustCounts(req.store);
     const withStaff = await Promise.all(rows.map((row) => attachEmployee(req.store, row, req)));
     res.json(withStaff.map((row) => stripDelivery(decorate(row, counts, false), req)));
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// GET /api/listings/categories - public: the canonical taxonomy plus live counts.
+// Declared before /:id so "categories" is never parsed as a listing id.
+router.get("/categories", optionalAuth, async (req, res) => {
+  try {
+    const all = await req.store.listings.list({ includeSold: true });
+    const counts = new Map();
+    for (const row of all) {
+      const slug = categoryOf(row);
+      counts.set(slug, (counts.get(slug) || 0) + 1);
+    }
+    // Counts describe total inventory; `available` reflects what a buyer can
+    // actually purchase right now, which is the number that matters on screen.
+    const available = new Map();
+    for (const row of all) {
+      if (String(row.status) !== "available") continue;
+      const slug = categoryOf(row);
+      available.set(slug, (available.get(slug) || 0) + 1);
+    }
+    res.json({
+      categories: publicCategories().map((c) => ({
+        ...c,
+        count: counts.get(c.slug) || 0,
+        available: available.get(c.slug) || 0,
+      })),
+    });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "Internal server error" });
