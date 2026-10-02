@@ -190,6 +190,11 @@ app.use("/api", (req, res, next) => {
   next();
 });
 
+// Crawler-facing pages: robots.txt, sitemap.xml, the server-rendered
+// marketplace and per-listing detail pages. Registered before express.static
+// so these dynamic handlers take precedence over the static files.
+app.use(require("./routes/seo"));
+
 app.use(express.static(path.join(__dirname, "..")));
 
 // API responses carry private data (profiles, orders, PII) - never let a

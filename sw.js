@@ -1,4 +1,8 @@
-const VERSION = "mitex-v16";
+// Bumped to v17 for the SEO pass: page HTML is now served with canonical
+// metadata and the marketplace is server-rendered, so the precached copies
+// from v16 are stale. /listing.html is deliberately NOT precached: it is a
+// template with placeholder tokens and is only valid when rendered per request.
+const VERSION = "mitex-v17";
 const CACHE = VERSION + "-cache";
 
 const CORE_ASSETS = [

@@ -17,7 +17,13 @@ services:
       # Public URL of the deployed site (Render fills this in automatically)
       - key: APP_URL
         value: https://mitex.onrender.com
-      - key: CORS_ORIGIN
+      # Canonical origin used for <link rel="canonical">, og:url, robots.txt and
+# sitemap.xml. Set this to your real domain once you have one; leaving it unset
+# falls back to APP_URL. Point it at the host users actually visit, otherwise
+# self-canonicals point at the wrong origin and pages get dropped from search.
+- key: SEO_BASE_URL
+  sync: false
+- key: CORS_ORIGIN
         value: https://mitex.onrender.com
       # ===== Node version =====
       # Node 22+ required: @supabase/supabase-js needs native WebSocket (22+),
