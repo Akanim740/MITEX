@@ -55,11 +55,16 @@ async function get(path) {
   }
   const authHeaders = { "Content-Type": "application/json", Authorization: `Bearer ${token}` };
 
-  const lastmodFor = async (id, slug) => {
+  // Matched on the listing id, never on the slug. The slug is derived from the
+  // title (seo.listingPath), so it changes the moment the listing is retitled
+  // and looking a URL up by an old slug finds nothing -- which is a bug in the
+  // test, not in the sitemap. The id prefix is the authoritative part of the
+  // URL, so keying off it also exercises the real guarantee.
+  const lastmodFor = async (id) => {
     const sm = await get("/sitemap.xml");
     const esc = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
     const block = new RegExp(
-      `<url>[\\s\\S]*?<loc>${esc(BASE + "/listing/" + id + "-" + slug)}<\\/loc>[\\s\\S]*?</url>`
+      `<url>[\\s\\S]*?<loc>${esc(BASE + "/listing/" + id)}[^<]*<\\/loc>[\\s\\S]*?</url>`
     ).exec(sm.body);
     if (!block) return null;
     const m = /<lastmod>([^<]+)<\/lastmod>/.exec(block[0]);
@@ -85,7 +90,7 @@ async function get(path) {
   }
   const listing = (await created.json()).listing;
 
-  const first = await lastmodFor(listing.id, "zz-lastmod-probe");
+  const first = await lastmodFor(listing.id);
   check("new listing has a sitemap lastmod", Boolean(first), String(first));
 
   // Sitemap lastmod is day-precision, so a same-day edit cannot be asserted to
@@ -106,12 +111,18 @@ async function get(path) {
     `${after.created_at} -> ${after.updated_at}`
   );
 
-  const second = await lastmodFor(listing.id, "zz-lastmod-probe");
+  const second = await lastmodFor(listing.id);
   check(
     "sitemap entry present after edit",
     Boolean(second),
     `${second}`
   );
+
+  // The id prefix is authoritative precisely so a retitle cannot orphan the
+  // URL. Prove the stale-slug URL still resolves instead of 404ing, which is
+  // what stops a rename from breaking already-indexed links.
+  const stale = await get(`/listing/${listing.id}-zz-lastmod-probe`);
+  check("stale slug URL still resolves after retitle", stale.status === 200, String(stale.status));
 
   // --- cleanup: delete the probe so it does not pollute the catalogue ---
   const del = await fetch(BASE + `/api/listings/${listing.id}`, {
