@@ -549,7 +549,7 @@ async function loadProfile() {
   }
 
   if (currentUser.avatar_url) {
-    $("#bigAvatar").innerHTML = `<img src="${esc(currentUser.avatar_url)}" alt="avatar" onerror="this.remove()" />`;
+    $("#bigAvatar").innerHTML = `<img src="${esc(currentUser.avatar_url)}" alt="${esc(currentUser.name || "Profile photo")}" onerror="this.remove()" />`;
   }
 
   $("#resendBtn").addEventListener("click", resendVerification);
@@ -1942,7 +1942,7 @@ async function saveProfile(e) {
     $("#pPhone").textContent = data.user.phone || "-";
     $("#pBio").textContent = data.user.bio || "-";
     if (data.user.avatar_url) {
-      $("#bigAvatar").innerHTML = `<img src="${esc(data.user.avatar_url)}" alt="avatar" onerror="this.remove()" />`;
+      $("#bigAvatar").innerHTML = `<img src="${esc(data.user.avatar_url)}" alt="${esc(data.user.name || "Profile photo")}" onerror="this.remove()" />`;
     }
 
     msg.textContent = "Saved.";

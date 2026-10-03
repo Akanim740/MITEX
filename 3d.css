@@ -101,7 +101,8 @@
   }
 
   .fx-3d .reveal,
-  .fx-3d .card:hover {
+  .fx-3d .card:hover,
+  .fx-3d .card:not(.package-card):focus-visible {
     transform: none;
   }
 

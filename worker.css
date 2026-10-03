@@ -428,7 +428,7 @@ input:focus, textarea:focus, select:focus {
   font-family: inherit;
   font-size: 0.88rem;
 }
-.project-url:focus { border-color: var(--primary); outline: none; }
+.project-url:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(251,191,36,0.12); }
 .project-actions {
   display: flex;
   align-items: center;
