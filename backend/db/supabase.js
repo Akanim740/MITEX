@@ -65,8 +65,8 @@ async function init() {
   // select("*") already succeeds once the table exists, but writes to columns
   // the DB lacks would 500, so we detect them at boot and strip them from
   // create/update payloads until the migration adds them.
-  const listingColumns = { demoUrl: true, protected: true, assetType: true, category: true };
-  const columnProbes = { demoUrl: "demo_url", protected: "protected", assetType: "asset_type", category: "category" };
+  const listingColumns = { demoUrl: true, protected: true, assetType: true, category: true, updatedAt: true };
+  const columnProbes = { demoUrl: "demo_url", protected: "protected", assetType: "asset_type", category: "category", updatedAt: "updated_at" };
   for (const key of Object.keys(columnProbes)) {
     try {
       const { error } = await supabase.from("listings").select(columnProbes[key]).limit(1);
@@ -286,6 +286,7 @@ const listings = {
     if (!fc || fc.protected) set.protected = v.protected === undefined ? true : Boolean(v.protected);
     if (!fc || fc.assetType) set.asset_type = v.asset_type ?? "website";
     if (!fc || fc.category) set.category = v.category ?? "other";
+    if (!fc || fc.updatedAt) set.updated_at = nowISO();
     const { data, error } = await supabase.from("listings").insert(set).select().single();
     if (error) throw error;
     return data;
@@ -300,6 +301,10 @@ const listings = {
       if (!fc.protected) delete set.protected;
       if (!fc.assetType) delete set.asset_type;
       if (!fc.category) delete set.category;
+      // Stamped on every write so sitemap lastmod tracks real edits. Skipped
+      // when the column is absent; lastmodOf falls back to created_at.
+      if (fc.updatedAt) set.updated_at = nowISO();
+      else delete set.updated_at;
     }
     const { data, error } = await supabase.from("listings").update(set).eq("id", id).select().single();
     if (error) throw error;

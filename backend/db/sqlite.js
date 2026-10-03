@@ -79,7 +79,8 @@ db.exec(`
     protected    INTEGER NOT NULL DEFAULT 1,
     asset_type   TEXT NOT NULL DEFAULT 'website' CHECK (asset_type IN ('website','business')),
     category     TEXT NOT NULL DEFAULT 'other',
-    created_at   TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+    created_at   TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+    updated_at   TEXT
   );
 
   CREATE TABLE IF NOT EXISTS subscribers (
@@ -227,7 +228,7 @@ CREATE TABLE IF NOT EXISTS orders (
   );
 `);
 
-for (const col of ["delivery_url", "employee_id", "demo_url", "protected", "asset_type", "category"]) {
+for (const col of ["delivery_url", "employee_id", "demo_url", "protected", "asset_type", "category", "updated_at"]) {
   const cols = db.prepare("PRAGMA table_info(listings)").all().map((c) => c.name);
   if (!cols.includes(col)) {
     const type =
@@ -241,6 +242,18 @@ for (const col of ["delivery_url", "employee_id", "demo_url", "protected", "asse
         ? "TEXT NOT NULL DEFAULT 'other'"
         : "TEXT";
     db.exec(`ALTER TABLE listings ADD COLUMN ${col} ${type}`);
+  }
+}
+
+// Backfill listings.updated_at from created_at so a pre-existing database
+// reports a truthful lastmod instead of dropping it from the sitemap.
+// LEFT JOIN + COALESCE: only rows that have never been touched are filled in.
+{
+  const missing = db
+    .prepare("SELECT COUNT(*) AS n FROM listings WHERE updated_at IS NULL OR updated_at = ''")
+    .get().n;
+  if (missing) {
+    db.exec("UPDATE listings SET updated_at = created_at WHERE updated_at IS NULL OR updated_at = ''");
   }
 }
 
@@ -533,7 +546,7 @@ const listings = {
   async create(v) {
     const res = db
       .prepare(
-        "INSERT INTO listings (title, description, price, level, tech_stack, status, thumbnail, delivery_url, demo_url, protected, asset_type, category, employee_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+        "INSERT INTO listings (title, description, price, level, tech_stack, status, thumbnail, delivery_url, demo_url, protected, asset_type, category, employee_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now'))"
       )
       .run(v.title, v.description, v.price, v.level ?? null, v.tech_stack ?? null, v.status ?? "available", v.thumbnail ?? null, v.delivery_url ?? v.deliveryUrl ?? null, v.demo_url ?? null, v.protected === undefined ? 1 : v.protected ? 1 : 0, v.asset_type ?? "website", v.category ?? "other", v.employee_id ?? null);
     return this.get(res.lastInsertRowid);
@@ -548,7 +561,9 @@ const listings = {
       if (typeof v === "boolean") return v ? 1 : 0;
       return v === undefined ? null : v;
     });
-    db.prepare(`UPDATE listings SET ${sets} WHERE id = ?`).run(...vals, id);
+    db.prepare(
+      `UPDATE listings SET ${sets}, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id = ?`
+    ).run(...vals, id);
     return this.get(id);
   },
   async remove(id) {

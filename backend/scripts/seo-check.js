@@ -49,6 +49,17 @@ async function get(path) {
   check("sitemap no api urls", !locs.some((l) => l.includes("/api/")));
   check("sitemap no hardcoded render host", !sm.body.includes("mitex.onrender.com"));
 
+  // lastmod must reflect real edits, not the original creation date. Every
+  // listing entry needs a lastmod, and it must come from updated_at rather
+  // than being absent so lastmodOf silently falls back.
+  const lastmods = [...sm.body.matchAll(/<lastmod>([^<]+)<\/lastmod>/g)].map((m) => m[1]);
+  check("sitemap emits lastmod entries", lastmods.length > 0, `${lastmods.length}`);
+  check(
+    "lastmod values are ISO dates",
+    lastmods.every((d) => /^\d{4}-\d{2}-\d{2}$/.test(d)),
+    lastmods.find((d) => !/^\d{4}-\d{2}-\d{2}$/.test(d)) || ""
+  );
+
   // marketplace server-rendered inventory
   const mk = await get("/marketplace.html");
   check("marketplace 200", mk.status === 200, String(mk.status));

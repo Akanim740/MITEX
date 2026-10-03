@@ -63,6 +63,7 @@ async function init() {
     await addListingCol("protected", "protected TINYINT(1) NOT NULL DEFAULT 1");
     await addListingCol("asset_type", "asset_type ENUM('website','business') NOT NULL DEFAULT 'website'");
     await addListingCol("category", "category VARCHAR(40) NOT NULL DEFAULT 'other'");
+     await addListingCol("updated_at", "updated_at VARCHAR(32) NULL");
     const addUsersCol = async (col, ddl) => {
       const [r] = await pool.query(
         "SELECT COUNT(*) AS n FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'users' AND COLUMN_NAME = ?",
@@ -154,10 +155,11 @@ async function init() {
       demo_url     VARCHAR(800),
       protected    TINYINT(1) NOT NULL DEFAULT 1,
       asset_type   ENUM('website','business') NOT NULL DEFAULT 'website',
-      category     VARCHAR(40) NOT NULL DEFAULT 'other',
-      employee_id  INT NULL,
-      created_at   VARCHAR(32) NOT NULL,
-      INDEX idx_listings_status (status),
+category     VARCHAR(40) NOT NULL DEFAULT 'other',
+    employee_id  INT NULL,
+    created_at   VARCHAR(32) NOT NULL,
+    updated_at   VARCHAR(32) NULL,
+    INDEX idx_listings_status (status),
       INDEX idx_listings_category (category),
       INDEX idx_listings_employee (employee_id)
     );
@@ -490,8 +492,8 @@ const listings = {
   },
   async create(v) {
     const [res] = await pool.query(
-      "INSERT INTO listings (title, description, price, level, tech_stack, status, thumbnail, delivery_url, demo_url, protected, asset_type, category, employee_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-      [v.title, v.description, v.price, v.level ?? null, v.tech_stack ?? null, v.status ?? "available", v.thumbnail ?? null, v.delivery_url ?? v.deliveryUrl ?? null, v.demo_url ?? null, v.protected === undefined ? 1 : v.protected ? 1 : 0, v.asset_type ?? "website", v.category ?? "other", v.employee_id ?? null, nowISO()]
+      "INSERT INTO listings (title, description, price, level, tech_stack, status, thumbnail, delivery_url, demo_url, protected, asset_type, category, employee_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+      [v.title, v.description, v.price, v.level ?? null, v.tech_stack ?? null, v.status ?? "available", v.thumbnail ?? null, v.delivery_url ?? v.deliveryUrl ?? null, v.demo_url ?? null, v.protected === undefined ? 1 : v.protected ? 1 : 0, v.asset_type ?? "website", v.category ?? "other", v.employee_id ?? null, nowISO(), nowISO()]
     );
     return this.get(res.insertId);
   },
@@ -504,7 +506,11 @@ const listings = {
       if (typeof v === "boolean") return v ? 1 : 0;
       return v === undefined ? null : v;
     });
-    await pool.query(`UPDATE listings SET ${keys.map((k) => `${k} = ?`).join(", ")} WHERE id = ?`, [...vals, id]);
+    await pool.query(`UPDATE listings SET ${keys.map((k) => `${k} = ?`).join(", ")}, updated_at = ? WHERE id = ?`, [
+      ...vals,
+      nowISO(),
+      id,
+    ]);
     return this.get(id);
   },
   async listForEmployee(employeeId) {
