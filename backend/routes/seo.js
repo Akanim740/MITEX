@@ -126,8 +126,12 @@ router.get("/sitemap.xml", async (req, res) => {
 // Every page hardcodes its own canonical/og:url. If the site later moves to a
 // custom domain those tags keep pointing at the old host, and self-canonicals
 // to the wrong origin get the pages dropped from the index. Static files
-// cannot read env vars, so they carry an __ORIGIN__ placeholder and
-// serveStaticHtml (registered last, below) substitutes the configured origin.
+// cannot read env vars, so they carry an __ORIGIN__ placeholder and every
+// handler that renders one of these files substitutes the configured origin:
+// serveStaticHtml (registered last, below) for the plain pages, and the
+// server-rendered routes below for marketplace.html and /listing/*.
+const ORIGIN_TOKEN = "__ORIGIN__";
+const publicRoot = path.join(__dirname, "..", "..");
 
 // --- Server-rendered marketplace ---------------------------------------
 //
@@ -221,7 +225,13 @@ router.get("/marketplace.html", async (req, res, next) => {
       // The client owns filtering and pagination; without JS the static
       // "View details" links remain fully usable.
       .replace(/<script src="auth\.js"><\/script>/, '<script src="auth.js"></script>');
-    res.type("html").set("Cache-Control", "public, max-age=300").send(html);
+    // This route is registered ahead of serveStaticHtml(), so it has to do the
+    // __ORIGIN__ substitution itself. Skipping it shipped a literal
+    // "__ORIGIN__/marketplace.html" canonical and og:url to crawlers.
+    res
+      .type("html")
+      .set("Cache-Control", "public, max-age=300")
+      .send(html.split(ORIGIN_TOKEN).join(seo.origin()));
   } catch (err) {
     // Never let a listing outage take the marketplace down: fall back to the
     // static shell, which still renders client-side.
@@ -390,10 +400,9 @@ router.get("/listing/:slug", async (req, res, next) => {
 });
 
 // Registered last so /marketplace.html and /listing/* (which also match the
-// generic .html pattern) keep their server-rendered handlers.
-const ORIGIN_TOKEN = "__ORIGIN__";
-const publicRoot = path.join(__dirname, "..", "..");
-
+// generic .html pattern) keep their server-rendered handlers. ORIGIN_TOKEN and
+// publicRoot are declared at the top of this file, since the server-rendered
+// routes above need them too.
 function serveStaticHtml(req, res, next) {
   const match = /^\/([A-Za-z0-9._-]+\.html)$/.exec(req.path);
   if (!match) return next();

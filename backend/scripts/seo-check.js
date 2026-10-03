@@ -74,7 +74,9 @@ async function get(path) {
 
   // listing detail page
   // Static pages must resolve __ORIGIN__ from config, never a baked-in host.
-  for (const p of ["/", "/packages.html", "/privacy.html", "/terms.html", "/valuator.html", "/transfer.html", "/careers.html", "/client-pitch.html", "/refund.html"]) {
+  // /marketplace.html belongs in this list: it has its own handler, so it does
+  // not go through serveStaticHtml and needs to substitute the token itself.
+  for (const p of ["/", "/marketplace.html", "/packages.html", "/privacy.html", "/terms.html", "/valuator.html", "/transfer.html", "/careers.html", "/client-pitch.html", "/refund.html"]) {
     const page = await get(p === "/" ? "/index.html" : p);
     check(`${p} 200`, page.status === 200, String(page.status));
     check(`${p} no unresolved placeholder`, !page.body.includes("__ORIGIN__"));
