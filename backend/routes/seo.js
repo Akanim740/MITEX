@@ -289,7 +289,7 @@ function renderListing(layout, listing) {
     ["Category", categoryName],
     ["Asset type", listing.assetType === "business" ? "Digital Business" : "Website"],
     ["Level", listing.level ? `Level ${listing.level}` : "Standard"],
-    ["Protection", listing.protected === false ? "Buyer protection applies" : "MITEZ protected"],
+    ["Protection", listing.protected === false ? "Direct purchase with the seller" : "MITEX protected"],
     ["Live demo", listing.demo_url ? "Available" : "Not provided for this listing"],
     ["Status", available ? "Available now" : "Sold"],
   ];

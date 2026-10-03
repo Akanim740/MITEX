@@ -14,6 +14,7 @@
 //
 //   node scripts/backfill-listing-categories.js            # dry run
 //   node scripts/backfill-listing-categories.js --apply    # write
+//   node scripts/backfill-listing-categories.js --recheck  # audit only, no writes
 //
 // Dry run is the default on purpose: this writes to production data.
 
@@ -21,7 +22,7 @@ require("dotenv").config();
 const { getStore } = require("../db");
 const { normalizeCategory, DEFAULT_CATEGORY, SLUGS } = require("../utils/categories");
 
-const APPLY = process.argv.includes("--apply");
+const APPLY = process.argv.includes("--apply") && require.main === module;
 
 // Order matters and is the whole design of this script: specific industries
 // first, generic buckets (services / corporate / saas) last. "Booking
@@ -40,7 +41,12 @@ const RULES = [
   ["education", /\b(schools?|students?|courses?|curriculum|e-?learning|enrol\w*|tutors?|academy|quizzes?)\b/i],
   ["finance", /\b(fintech|bank\w*|wallet|lending?|invest\w*|accounting|crypto|kyc|insurance|trading)\b/i],
   ["blog", /\b(blog|magazine|newsletter|editorial|publishing)\b/i],
-  ["portfolio", /\b(portfolio|showcase|resume|\bcv\b|photographer|musician|\bdj\b)\b/i],
+  // "showcase" was deliberately dropped from this pattern. It is a common word
+// inside descriptions of unrelated products -- "sponsor showcase" on an event
+// ticketing platform classified it as a portfolio, which is how it went wrong.
+// "portfolio" on its own is specific enough, and LuxePort's own title carries
+// it.
+  ["portfolio", /\b(portfolio|resume|\bcv\b|photographer|musician|\bdj\b)\b/i],
   ["ecommerce", /\b(e-?commerce|online store|shopping cart|checkouts?|product catalog|product grid|storefront|inventory|merch store)\b/i],
   ["services", /\b(bookings?|hotel|gyms?|fitness|salons?|spas?|tours?|travel|dealership|test-?drive|guest|beauty lane)\b/i],
   ["corporate", /\b(corporate|companies|construction|law firm|company site|brand site)\b/i],
@@ -67,9 +73,38 @@ function classify(listing) {
   return null;
 }
 
+// Re-audit mode: report every row whose stored category disagrees with what
+// the rules would now say, without writing. The normal backfill deliberately
+// skips rows that already have a category, so a rule that has since been fixed
+// leaves the wrong value in place forever with no way to spot it. This is the
+// escape hatch for that -- it is a report, never a write, because the stored
+// value may be a deliberate admin correction rather than a bad guess.
+const RECHECK = process.argv.includes("--recheck") && require.main === module;
+
 async function run() {
   const store = await getStore();
   const rows = await store.listings.list({ includeSold: true });
+
+  if (RECHECK) {
+    console.log(`RECHECK: ${rows.length} listings audited (no writes)`);
+    let disagreements = 0;
+    for (const row of rows) {
+      const stored = normalizeCategory(row.category) || "";
+      if (!stored || stored === DEFAULT_CATEGORY) continue; // nothing asserted yet
+      if (TEST_TITLE.test(String(row.title || ""))) continue;
+      const guess = classify(row);
+      if (!guess || !SLUGS.includes(guess) || guess === stored) continue;
+      disagreements++;
+      console.log(`  #${row.id} ${row.title} :: stored "${stored}", rules say "${guess}"`);
+    }
+    console.log(
+      disagreements
+        ? `${disagreements} disagreement(s). Review each before changing anything by hand.`
+        : "No disagreements."
+    );
+    return;
+  }
+
   console.log(`${APPLY ? "APPLY" : "DRY RUN"}: ${rows.length} listings in scope`);
 
   const plan = [];
@@ -102,7 +137,15 @@ async function run() {
   console.log(`Applied ${plan.length} update(s).`);
 }
 
-run().catch((err) => {
-  console.error(err);
-  process.exit(1);
-});
+// `classify` is exported so scripts/classify-check.js can pin the rules to the
+// real catalogue. These keyword rules are the kind of thing that rots quietly:
+// tightening one pattern to fix a bad row can silently re-file a correct row,
+// and nothing would notice until a customer browsed the wrong filter.
+if (require.main === module) {
+  run().catch((err) => {
+    console.error(err);
+    process.exit(1);
+  });
+}
+
+module.exports = { classify, RULES, TEST_TITLE };
