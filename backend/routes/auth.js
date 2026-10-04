@@ -4,7 +4,7 @@ const router = express.Router();
 
 const { signAccessToken, requireAuth, requireRole, resolveRefreshSession, ACCESS_TTL } = require("../middleware/auth");
 const { randomToken, randomOtp, sha256 } = require("../utils/tokens");
-const { sendMail, verificationEmail, otpEmail, resetEmail, smtpConfigured } = require("../utils/mailer");
+const { sendMail, verificationEmail, otpEmail, resetEmail, smtpConfigured, deliveryFailing, lastDeliveryError } = require("../utils/mailer");
 const { validateDob, encNin } = require("../utils/verify");
 const paystack = require("../utils/paystack");
 
@@ -514,7 +514,15 @@ router.post("/forgot-password", async (req, res) => {
     const lastSent = resetLastSent.get(email) || 0;
     const waitMs = RESET_COOLDOWN_MS - (Date.now() - lastSent);
     if (waitMs > 0) {
-      return res.json({ message: "If that email exists, a reset link has been sent." });
+      // Must carry the same global transport flags as the branches below.
+      // resetLastSent is only set for addresses that exist, so a cooldown
+      // reply that differed in any way would tell an attacker exactly which
+      // addresses have accounts: submit twice and compare.
+      return res.json({
+        message: "If that email exists, a reset link has been sent.",
+        ...(!smtpConfigured() ? { emailDown: true } : {}),
+        ...(smtpConfigured() && deliveryFailing() ? { emailFailed: true } : {}),
+      });
     }
 
     const user = await store.users.findByEmail(email);
@@ -533,12 +541,25 @@ router.post("/forgot-password", async (req, res) => {
       const result = await sendMail({ to: user.email, subject: mail.subject, text: mail.text, html: mail.html });
       resetLastSent.set(email, Date.now());
 
+      // A server with SMTP configured but broken (wrong password, blocked
+      // port, expired provider credential) used to tell the user the link had
+      // been sent while it silently bounced, because only result.dev was
+      // being surfaced. This flag reports global transport health instead of
+      // this request's outcome -- otherwise the unknown-address branch below
+      // would omit it and the endpoint would start revealing which addresses
+      // have accounts.
+      const emailFailed = smtpConfigured() && deliveryFailing();
+      if (emailFailed && lastDeliveryError()) {
+        console.error("[auth] reset email not delivered:", lastDeliveryError());
+      }
+
       // emailDown is global server state (not account state), so it is safe
       // to return for every request: it lets the UI be honest when SMTP is
       // off without leaking whether this address exists.
       return res.json({
         message: "If that email exists, a reset link has been sent.",
         ...(result.dev ? { emailDown: true } : {}),
+        ...(emailFailed ? { emailFailed: true } : {}),
         ...(result.dev && process.env.NODE_ENV !== "production" ? { devToken: rawReset, devResetUrl: mail.url } : {}),
       });
     }
@@ -546,6 +567,7 @@ router.post("/forgot-password", async (req, res) => {
     res.json({
       message: "If that email exists, a reset link has been sent.",
       ...(!smtpConfigured() ? { emailDown: true } : {}),
+      ...(smtpConfigured() && deliveryFailing() ? { emailFailed: true } : {}),
     });
   } catch (err) {
     console.error(err);

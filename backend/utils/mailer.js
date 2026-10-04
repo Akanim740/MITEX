@@ -121,6 +121,24 @@ function getTransporter() {
   return transporter;
 }
 
+// Global delivery health, not per-request state.
+//
+// Endpoints like forgot-password must not reveal whether an address has an
+// account, so they cannot report "this send failed" from the outcome of their
+// own attempt -- that branch only runs for addresses that exist. Instead the
+// last outcome is remembered here and every caller reports the same value,
+// which is genuinely global server state in the same way that "SMTP is not
+// configured at all" is.
+let lastDeliveryFailure = null;
+
+function deliveryFailing() {
+  return Boolean(lastDeliveryFailure);
+}
+
+function lastDeliveryError() {
+  return lastDeliveryFailure ? lastDeliveryFailure.message : null;
+}
+
 // Deliver one queued row through the pooled transport and record the outcome.
 async function attemptRow(row) {
   const msg = {
@@ -132,6 +150,7 @@ async function attemptRow(row) {
   if (row.html) msg.html = row.html;
   try {
     const info = await getTransporter().sendMail(msg);
+    lastDeliveryFailure = null;
     await outbox().markStatus(row.id, {
       status: "sent",
       attempts: row.attempts + 1,
@@ -143,6 +162,7 @@ async function attemptRow(row) {
   } catch (err) {
     const attempts = row.attempts + 1;
     const message = String((err && err.message) || err || "unknown SMTP error").slice(0, 500);
+    lastDeliveryFailure = { at: Date.now(), message };
     if (attempts >= MAX_ATTEMPTS) {
       await outbox().markStatus(row.id, { status: "failed", attempts, next_retry_at: null, last_error: message });
       return { ok: false, id: row.id, error: message, status: "failed" };
@@ -404,4 +424,4 @@ function newOrderAdminEmail(order) {
   };
 }
 
-module.exports = { sendMail, verificationEmail, otpEmail, resetEmail, testEmail, hireEmail, receiptEmail, salaryEmail, deliveryEmail, enquiryReply, refundEmail, buyerWaitingEmail, listingReadyEmail, fulfillmentEmail, newOrderAdminEmail, smtpConfigured, libraryLoaded, APP_URL, listMailbox, mailboxStats, attachOutbox, startMailWorker, sweepQueue };
+module.exports = { sendMail, verificationEmail, otpEmail, resetEmail, testEmail, hireEmail, receiptEmail, salaryEmail, deliveryEmail, enquiryReply, refundEmail, buyerWaitingEmail, listingReadyEmail, fulfillmentEmail, newOrderAdminEmail, smtpConfigured, deliveryFailing, lastDeliveryError, libraryLoaded, APP_URL, listMailbox, mailboxStats, attachOutbox, startMailWorker, sweepQueue };

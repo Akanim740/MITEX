@@ -456,6 +456,13 @@ function initReset() {
       } else if (data.emailDown) {
         msgEl.className = "error";
         msgEl.innerHTML = `${esc(data.message)}<br />Email delivery is not configured on this server yet, so no email was actually sent. Please contact the site admin for your reset link.`;
+      } else if (data.emailFailed) {
+        // SMTP is configured but the send did not go through (rejected
+        // credentials, unreachable host, blocked port). Saying "check your
+        // inbox" here is a claim we know to be false, so name the failure
+        // instead of sending the user to wait for a mail that never left.
+        msgEl.className = "error";
+        msgEl.innerHTML = `${esc(data.message)}<br />The server could not send the email &mdash; our mail service rejected or could not reach it. Please contact the site admin to reset your password.`;
       }
     } catch (err) {
       msgEl.className = "error";
