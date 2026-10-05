@@ -943,12 +943,64 @@ const emailSends = {
   },
 };
 
-const api = {
-  name: "supabase",
-  users,
-  tokens,
-  sessions,
-  enquiries,
+  // ---- MITEX AI -------------------------------------------------------
+  const AI_TABLES = new Set(["ai_projects", "ai_files", "ai_orders", "ai_deploys"]);
+  function aiTable(table) {
+    if (!AI_TABLES.has(table)) throw new Error(`Unknown AI table: ${table}`);
+    return table;
+  }
+  const aiDriver = {
+    async insert(table, row) {
+      const t = aiTable(table);
+      const { data, error } = await supabase
+        .from(t)
+        .insert({ ...row, created_at: row.created_at || nowISO() })
+        .select()
+        .single();
+      if (error) throw error;
+      return data;
+    },
+    async update(table, id, patch) {
+      const t = aiTable(table);
+      const { error } = await supabase.from(t).update(patch).eq("id", id);
+      return !error;
+    },
+    async findOne(table, id) {
+      const t = aiTable(table);
+      const { data } = await supabase.from(t).select("*").eq("id", id).maybeSingle();
+      return data || null;
+    },
+    async find(table, filter, { limit = 0 } = {}) {
+      const t = aiTable(table);
+      let query = supabase.from(t).select("*").order("created_at", { ascending: false });
+      for (const [k, v] of Object.entries(filter || {})) {
+        if (v && typeof v === "object") {
+          if (Array.isArray(v.$in)) query = query.in(k, v.$in);
+          else if (v.$lt !== undefined) query = query.lt(k, v.$lt);
+          else if (v.$lte !== undefined) query = query.lte(k, v.$lte);
+          else query = query.eq(k, v);
+        } else {
+          query = query.eq(k, v);
+        }
+      }
+      if (limit) query = query.limit(Number(limit));
+      const { data } = await query;
+      return data || [];
+    },
+    async remove(table, id) {
+      const t = aiTable(table);
+      const { error } = await supabase.from(t).delete().eq("id", id);
+      return !error;
+    },
+  };
+  const aiProjects = require("./ai-projects").makeAiProjects(aiDriver);
+
+  const api = {
+    name: "supabase",
+    users,
+    tokens,
+    sessions,
+    enquiries,
   listings,
   subscribers,
   orders,
@@ -959,9 +1011,10 @@ const api = {
   audit,
   buyIntents,
   pushSubs,
-  notifications,
-  emailSends,
-  _publicUser: toPublic,
-};
+    notifications,
+    emailSends,
+    aiProjects,
+    _publicUser: toPublic,
+  };
 
-module.exports = { init };
+  module.exports = { init };

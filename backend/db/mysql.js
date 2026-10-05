@@ -296,11 +296,77 @@ category     VARCHAR(40) NOT NULL DEFAULT 'other',
       features   TEXT,
       position   INT NOT NULL DEFAULT 0,
       created_at VARCHAR(32) NOT NULL,
-      updated_at VARCHAR(32)
-    );
-  `);
+         updated_at VARCHAR(32)
+       );
 
-  // Older databases: add columns that arrived after first launch
+       -- MITEX AI. Mirrors the SQLite DDL; state-machine rules live in
+       -- ai-projects.js so both drivers enforce identical transitions.
+       CREATE TABLE IF NOT EXISTS ai_projects (
+         id            VARCHAR(40) PRIMARY KEY,
+         user_id       INT NULL,
+         kind          VARCHAR(10) NOT NULL DEFAULT 'build',
+         title         VARCHAR(120) NOT NULL,
+         brief         TEXT,
+         status        VARCHAR(20) NOT NULL DEFAULT 'draft',
+         summary       TEXT,
+         notes         TEXT,
+         model         VARCHAR(80),
+         stub          TINYINT(1) NOT NULL DEFAULT 0,
+         total_bytes   INT NOT NULL DEFAULT 0,
+         input_tokens  INT NOT NULL DEFAULT 0,
+         output_tokens INT NOT NULL DEFAULT 0,
+         price         INT NULL,
+         currency      VARCHAR(8) NOT NULL DEFAULT 'NGN',
+         error         TEXT,
+         created_at    VARCHAR(32) NOT NULL,
+         updated_at    VARCHAR(32),
+         CONSTRAINT fk_ai_proj_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+         INDEX idx_ai_projects_user (user_id),
+         INDEX idx_ai_projects_status (status)
+       );
+
+       CREATE TABLE IF NOT EXISTS ai_files (
+         id         INT AUTO_INCREMENT PRIMARY KEY,
+         project_id VARCHAR(40) NOT NULL,
+         path       VARCHAR(160) NOT NULL,
+         content    MEDIUMTEXT,
+         bytes      INT NOT NULL DEFAULT 0,
+         created_at VARCHAR(32) NOT NULL,
+         CONSTRAINT fk_ai_files_project FOREIGN KEY (project_id) REFERENCES ai_projects(id) ON DELETE CASCADE,
+         INDEX idx_ai_files_project (project_id)
+       );
+
+       CREATE TABLE IF NOT EXISTS ai_orders (
+         id          VARCHAR(40) PRIMARY KEY,
+         project_id  VARCHAR(40) NOT NULL,
+         user_id     INT NULL,
+         reference   VARCHAR(60) NOT NULL UNIQUE,
+         amount      INT NOT NULL,
+         currency    VARCHAR(8) NOT NULL DEFAULT 'NGN',
+         status      VARCHAR(20) NOT NULL DEFAULT 'pending',
+         paid_at     VARCHAR(32),
+         released_at VARCHAR(32),
+         created_at  VARCHAR(32) NOT NULL,
+         updated_at  VARCHAR(32),
+         CONSTRAINT fk_ai_orders_project FOREIGN KEY (project_id) REFERENCES ai_projects(id) ON DELETE CASCADE,
+         INDEX idx_ai_orders_project (project_id)
+       );
+
+       CREATE TABLE IF NOT EXISTS ai_deploys (
+         id         VARCHAR(40) PRIMARY KEY,
+         project_id VARCHAR(40) NOT NULL,
+         provider   VARCHAR(40) NOT NULL,
+         target_url VARCHAR(500),
+         status     VARCHAR(20) NOT NULL DEFAULT 'pending',
+         live       TINYINT(1) NOT NULL DEFAULT 0,
+         error      TEXT,
+         created_at VARCHAR(32) NOT NULL,
+         updated_at VARCHAR(32),
+         CONSTRAINT fk_ai_deploys_project FOREIGN KEY (project_id) REFERENCES ai_projects(id) ON DELETE CASCADE
+       );
+     `);
+
+     // Older databases: add columns that arrived after first launch
   const [appCols] = await pool.query(
     "SELECT COUNT(*) AS n FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'applications' AND COLUMN_NAME = 'payment_enc'"
   );
@@ -920,12 +986,85 @@ const notifications = {
   },
 };
 
-const api = {
-  name: "mysql",
-  users,
-  tokens,
-  sessions,
-  enquiries,
+  // ---- MITEX AI -------------------------------------------------------
+  // Same shared state machine as SQLite, driven by a MySQL query driver.
+  // ai_projects.id is a string key like every other AI table, so the driver
+  // builds SQL from a fixed allowlist of table names rather than interpolating
+  // caller input.
+  const AI_TABLES = new Set(["ai_projects", "ai_files", "ai_orders", "ai_deploys"]);
+  function aiTable(table) {
+    if (!AI_TABLES.has(table)) throw new Error(`Unknown AI table: ${table}`);
+    return table;
+  }
+  const aiDriver = {
+    async insert(table, row) {
+      const t = aiTable(table);
+      const keys = Object.keys(row);
+      if (!keys.length) return row;
+      const [res] = await pool.query(
+        `INSERT INTO ${t} (${keys.join(", ")}) VALUES (${keys.map(() => "?").join(", ")})`,
+        keys.map((k) => row[k])
+      );
+      return row.id ? this.findOne(t, row.id) : { ...row, id: res.insertId };
+    },
+    async update(table, id, patch) {
+      const t = aiTable(table);
+      const keys = Object.keys(patch);
+      if (!keys.length) return false;
+      const [res] = await pool.query(
+        `UPDATE ${t} SET ${keys.map((k) => `${k} = ?`).join(", ")} WHERE id = ?`,
+        [...keys.map((k) => patch[k]), id]
+      );
+      return res.affectedRows > 0;
+    },
+    async findOne(table, id) {
+      const [rows] = await pool.query(`SELECT * FROM ${aiTable(table)} WHERE id = ?`, [id]);
+      return rows[0] || null;
+    },
+    async find(table, filter, { limit = 0 } = {}) {
+      const t = aiTable(table);
+      const where = [];
+      const params = [];
+      for (const [k, v] of Object.entries(filter || {})) {
+        if (v && typeof v === "object") {
+          if (Array.isArray(v.$in)) {
+            where.push(`${k} IN (${v.$in.map(() => "?").join(", ")})`);
+            params.push(...v.$in);
+          } else if (v.$lt !== undefined) {
+            where.push(`${k} < ?`);
+            params.push(v.$lt);
+          } else if (v.$lte !== undefined) {
+            where.push(`${k} <= ?`);
+            params.push(v.$lte);
+          } else {
+            where.push(`${k} = ?`);
+            params.push(JSON.stringify(v));
+          }
+        } else {
+          where.push(`${k} = ?`);
+          params.push(v);
+        }
+      }
+      const lim = limit ? " LIMIT " + Number(limit) : "";
+      const [rows] = await pool.query(
+        `SELECT * FROM ${t}` + (where.length ? ` WHERE ${where.join(" AND ")}` : "") + lim,
+        params
+      );
+      return rows;
+    },
+    async remove(table, id) {
+      const [res] = await pool.query(`DELETE FROM ${aiTable(table)} WHERE id = ?`, [id]);
+      return res.affectedRows > 0;
+    },
+  };
+  const aiProjects = require("./ai-projects").makeAiProjects(aiDriver);
+
+  const api = {
+    name: "mysql",
+    users,
+    tokens,
+    sessions,
+    enquiries,
   listings,
   subscribers,
   orders,
@@ -934,10 +1073,11 @@ const api = {
   applications,
   salaries,
   audit,
-  buyIntents,
-  pushSubs,
-  notifications,
-  _publicUser: stripSecret,
-};
+    buyIntents,
+    pushSubs,
+    notifications,
+    aiProjects,
+    _publicUser: stripSecret,
+  };
 
-module.exports = { init };
+  module.exports = { init };

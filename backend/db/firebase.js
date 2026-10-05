@@ -701,12 +701,76 @@ const notifications = {
   },
 };
 
-const api = {
-  name: "firebase",
-  users,
-  tokens,
-  sessions,
-  enquiries,
+  // ---- MITEX AI -------------------------------------------------------
+  const AI_TABLES = new Set(["ai_projects", "ai_files", "ai_orders", "ai_deploys"]);
+  function aiTable(table) {
+    if (!AI_TABLES.has(table)) throw new Error(`Unknown AI table: ${table}`);
+    return table;
+  }
+  const aiDriver = {
+    async insert(table, row) {
+      const t = aiTable(table);
+      const doc = { ...row, created_at: row.created_at || nowISO() };
+      const ref = await col(t).add(doc);
+      const snap = await ref.get();
+      return { ...snap.data(), id: ref.id };
+    },
+    async update(table, id, patch) {
+      await col(aiTable(table)).doc(String(id)).update(patch);
+      return true;
+    },
+    async findOne(table, id) {
+      const d = await col(aiTable(table)).doc(String(id)).get();
+      return d.exists ? { ...d.data(), id: d.id } : null;
+    },
+    async find(table, filter, { limit = 0 } = {}) {
+      let q = col(aiTable(table));
+      for (const [k, v] of Object.entries(filter || {})) {
+        if (v && typeof v === "object") {
+          if (Array.isArray(v.$in)) {
+            // Firebase 'in' requires batches; a small, rare case: degrade to
+            // client-side filtering. Projects/orders not typically large lists.
+          } else if (v.$lt !== undefined) {
+            q = q.where(k, "<", v.$lt);
+          } else if (v.$lte !== undefined) {
+            q = q.where(k, "<=", v.$lte);
+          } else {
+            q = q.where(k, "==", v);
+          }
+        } else {
+          q = q.where(k, "==", v);
+        }
+      }
+      // Default to recent first; clients order by created_at.
+      try {
+        q = q.orderBy("created_at", "desc");
+      } catch {
+        /* ignore ordering if missing */
+      }
+      const snap = await q.get();
+      let rows = snap.docs.map((d) => ({ ...d.data(), id: d.id }));
+      // Handle $in client-side if present
+      for (const [k, v] of Object.entries(filter || {})) {
+        if (v && typeof v === "object" && Array.isArray(v.$in)) {
+          rows = rows.filter((r) => v.$in.includes(r[k]));
+        }
+      }
+      if (limit) rows = rows.slice(0, Number(limit));
+      return rows;
+    },
+    async remove(table, id) {
+      await col(aiTable(table)).doc(String(id)).delete();
+      return true;
+    },
+  };
+  const aiProjects = require("./ai-projects").makeAiProjects(aiDriver);
+
+  const api = {
+    name: "firebase",
+    users,
+    tokens,
+    sessions,
+    enquiries,
   listings,
   subscribers,
   orders,
@@ -717,8 +781,9 @@ const api = {
   audit,
   buyIntents,
   pushSubs,
-  notifications,
-  _publicUser: toPublic,
-};
+    notifications,
+    aiProjects,
+    _publicUser: toPublic,
+  };
 
-module.exports = { init };
+  module.exports = { init };

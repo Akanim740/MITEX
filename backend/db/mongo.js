@@ -627,12 +627,49 @@ const notifications = {
   },
 };
 
-const api = {
-  name: "mongo",
-  users,
-  tokens,
-  sessions,
-  enquiries,
+  // ---- MITEX AI -------------------------------------------------------
+  // Mongo stores the AI rows as documents keyed by our own string id, so the
+  // shared driver maps id -> _id on the way out and back again on the way in.
+  const AI_TABLES = new Set(["ai_projects", "ai_files", "ai_orders", "ai_deploys"]);
+  function aiTable(table) {
+    if (!AI_TABLES.has(table)) throw new Error(`Unknown AI table: ${table}`);
+    return table;
+  }
+  const aiDriver = {
+    async insert(table, row) {
+      const t = aiTable(table);
+      // ai_files has no natural string id; Mongo supplies the ObjectId.
+      const doc = { ...row };
+      if (doc.id === undefined || doc.id === null) delete doc.id;
+      const res = await db.collection(t).insertOne(doc);
+      return { ...doc, _id: res.insertedId, id: doc.id || String(res.insertedId) };
+    },
+    async update(table, id, patch) {
+      const res = await db
+        .collection(aiTable(table))
+        .updateOne({ id: String(id) }, { $set: patch });
+      return res.modifiedCount > 0 || res.matchedCount > 0;
+    },
+    async findOne(table, id) {
+      return db.collection(aiTable(table)).findOne({ id: String(id) });
+    },
+    async find(table, filter, { limit = 0 } = {}) {
+      let q = db.collection(aiTable(table)).find(filter || {});
+      if (limit) q = q.limit(Number(limit));
+      return q.toArray();
+    },
+    async remove(table, id) {
+      return (await db.collection(aiTable(table)).deleteOne({ id: String(id) })).deletedCount > 0;
+    },
+  };
+  const aiProjects = require("./ai-projects").makeAiProjects(aiDriver);
+
+  const api = {
+    name: "mongo",
+    users,
+    tokens,
+    sessions,
+    enquiries,
   listings,
   subscribers,
   orders,
@@ -641,11 +678,12 @@ const api = {
   applications,
   salaries,
   audit,
-  buyIntents,
-  pushSubs,
-  notifications,
-  _publicUser: toPublic,
-  _close: () => client && client.close(),
-};
+    buyIntents,
+    pushSubs,
+    notifications,
+    aiProjects,
+    _publicUser: toPublic,
+    _close: () => client && client.close(),
+  };
 
 module.exports = { init };

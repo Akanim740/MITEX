@@ -293,6 +293,10 @@ if (usersTableSql && !String(usersTableSql.sql).includes("'staff'")) {
   db.exec("PRAGMA foreign_keys = ON");
 }
 
+// MITEX AI tables. Kept separate from the main schema block so the AI feature
+// can be removed without touching the core marketplace schema.
+db.exec(require("./ai-projects").DDL_SQLITE);
+
 {
   const userCols = db.prepare("PRAGMA table_info(users)").all().map((c) => c.name);
   if (!userCols.includes("active")) db.exec("ALTER TABLE users ADD COLUMN active INTEGER NOT NULL DEFAULT 1");
@@ -1030,12 +1034,71 @@ const emailSends = {
   },
 };
 
-module.exports = {
-  name: "sqlite",
-  file: DB_FILE,
-  users,
-  tokens,
-  sessions,
+  // ---- MITEX AI -------------------------------------------------------
+  // A thin driver so the AI state machine in ai-projects.js is implemented
+  // once instead of five times. SQLite needs the extra findAll helper because
+  // the shared driver speaks in objects and filters rather than SQL strings.
+  const aiDriver = {
+    exec(sql) {
+      db.exec(sql);
+    },
+    async insert(table, row) {
+      const keys = Object.keys(row);
+      const sql = `INSERT INTO ${table} (${keys.join(", ")}) VALUES (${keys.map(() => "?").join(", ")})`;
+      db.prepare(sql).run(...keys.map((k) => row[k]));
+      return row.id ? this.findOne(table, row.id) : row;
+    },
+    async update(table, id, patch) {
+      const keys = Object.keys(patch);
+      if (!keys.length) return false;
+      const sql = `UPDATE ${table} SET ${keys.map((k) => `${k} = ?`).join(", ")} WHERE id = ?`;
+      return db.prepare(sql).run(...keys.map((k) => patch[k]), id).changes > 0;
+    },
+    async findOne(table, id) {
+      return db.prepare(`SELECT * FROM ${table} WHERE id = ?`).get(id) || null;
+    },
+    async find(table, filter, { limit = 0 } = {}) {
+      const where = [];
+      const params = [];
+      for (const [k, v] of Object.entries(filter || {})) {
+        if (v && typeof v === "object") {
+          // Support the small subset of operators the state machine uses.
+          if (Array.isArray(v.$in)) {
+            where.push(`${k} IN (${v.$in.map(() => "?").join(", ")})`);
+            params.push(...v.$in);
+          } else if (v.$lt !== undefined) {
+            where.push(`${k} < ?`);
+            params.push(v.$lt);
+          } else if (v.$lte !== undefined) {
+            where.push(`${k} <= ?`);
+            params.push(v.$lte);
+          } else {
+            where.push(`${k} = ?`);
+            params.push(JSON.stringify(v));
+          }
+        } else {
+          where.push(`${k} = ?`);
+          params.push(v);
+        }
+      }
+      const sql =
+        `SELECT * FROM ${table}` +
+        (where.length ? ` WHERE ${where.join(" AND ")}` : "") +
+        (limit ? ` LIMIT ${Number(limit)}` : "");
+      return db.prepare(sql).all(...params);
+    },
+    async remove(table, id) {
+      return db.prepare(`DELETE FROM ${table} WHERE id = ?`).run(id).changes > 0;
+    },
+  };
+  const aiProjects = require("./ai-projects").makeAiProjects(aiDriver);
+
+  module.exports = {
+    name: "sqlite",
+    file: DB_FILE,
+    users,
+    tokens,
+    sessions,
   enquiries,
   listings,
   subscribers,
@@ -1047,7 +1110,8 @@ module.exports = {
   audit,
   buyIntents,
   pushSubs,
-  notifications,
-  emailSends,
-  _publicUser: stripSecret,
-};
+    notifications,
+    emailSends,
+    aiProjects,
+    _publicUser: stripSecret,
+  };
