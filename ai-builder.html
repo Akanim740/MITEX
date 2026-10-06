@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MITEX AI Builder | Build a Website in Minutes</title>
+  <meta name="description" content="Build a complete, ready-to-launch website with MITEX AI. Describe your site, we generate it, you pay, you download.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="auth.css">
+  <style>
+    .builder{display:grid;gap:2rem;max-width:1100px;margin:0 auto;padding:2rem 1.5rem}
+    .hero{display:grid;gap:1rem;text-align:center}
+    .hero h1{font-size:clamp(2rem,5vw,3.5rem);line-height:1.05}
+    .panel{background:var(--surface);border:1px solid rgba(255,255,255,.08);border-radius:1rem;padding:1.5rem;display:grid;gap:1rem;box-shadow:var(--shadow)}
+    .grid{display:grid;gap:1rem;grid-template-columns:repeat(auto-fit,minmax(280px,1fr))}
+    textarea{min-height:140px;padding:1rem;border-radius:.75rem;border:1px solid rgba(255,255,255,.12);background:rgba(15,23,42,.4);color:var(--text)}
+    input,select{padding:.75rem 1rem;border-radius:.75rem;border:1px solid rgba(255,255,255,.12);background:rgba(15,23,42,.4);color:var(--text)}
+    .btn{display:inline-flex;align-items:center;gap:.5rem;padding:.75rem 1.25rem;border-radius:.75rem;border:0;background:linear-gradient(135deg,#fbbf24,#f59e0b);color:#0f172a;font-weight:700;cursor:pointer}
+    .btn.secondary{background:transparent;color:var(--text);border:1px solid rgba(255,255,255,.12)}
+    .files{display:grid;gap:.75rem}
+    .file{background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:.75rem;padding:.75rem}
+    pre{overflow:auto;padding:.75rem;border-radius:.5rem;background:rgba(15,23,42,.6);max-height:240px}
+    .badge{padding:.25rem .5rem;border-radius:999px;border:1px solid rgba(255,255,255,.12);background:rgba(255,255,255,.06);font-size:.85rem;width:fit-content}
+    .status{display:flex;gap:.75rem;align-items:center;flex-wrap:wrap}
+    .muted{color:var(--muted)}
+  </style>
+</head>
+<body>
+  <header class="site-header">
+    <div class="container topbar">
+      <a href="index.html" class="logo">
+        <img src="assets/logo.svg" alt="MITEX logo">
+        <span>MITEX</span>
+      </a>
+      <nav class="nav-links" id="navLinks"></nav>
+      <button class="hamburger" id="hamburgerBtn" aria-label="Open menu" aria-expanded="false">☰</button>
+      <div class="auth-controls" id="authControls"></div>
+    </div>
+  </header>
+  <main class="builder">
+    <section class="hero">
+      <h1>MITEX AI <span style="color:#fbbf24">Builder</span></h1>
+      <p class="muted">Describe the website you want. MITEX AI builds a complete, self-contained static site. Approve → pay → download.</p>
+      <div id="loginNote" class="muted" style="display:none">Sign in to build with AI.</div>
+    </section>
+    <section class="panel" id="createPanel" style="display:none">
+      <h2>New Project</h2>
+      <div class="grid">
+        <input id="pTitle" placeholder="Project title e.g. Coffee Shop Website">
+        <select id="pKind">
+          <option value="build">Build from scratch</option>
+          <option value="fix">Fix existing website</option>
+        </select>
+      </div>
+      <textarea id="pBrief" placeholder="Describe what you want: pages, style, colours, features, content to include..."></textarea>
+      <button class="btn" id="createBtn">Create Project</button>
+    </section>
+    <section class="panel" id="projectsPanel" style="display:none">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:1rem;flex-wrap:wrap">
+        <h2>Your Projects</h2>
+        <button class="btn secondary" id="newBtn">New Project</button>
+      </div>
+      <div id="projectsList" class="grid"></div>
+    </section>
+    <section class="panel" id="projectPanel" style="display:none">
+      <button class="btn secondary" id="backBtn">← Back to projects</button>
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:1rem;flex-wrap:wrap">
+        <div>
+          <h2 id="projTitle"></h2>
+          <p class="muted" id="projBrief"></p>
+        </div>
+        <div class="status">
+          <span class="badge" id="projStatus"></span>
+          <span class="badge" id="projModel"></span>
+          <span class="muted" id="projTokens"></span>
+        </div>
+      </div>
+      <div id="actions" style="display:flex;gap:.75rem;flex-wrap:wrap"></div>
+      <div class="panel" id="buildPanel">
+        <h3>Generate Site</h3>
+        <textarea id="buildBrief" placeholder="Refine your brief (optional)"></textarea>
+        <button class="btn" id="buildBtn">Build with MITEX AI</button>
+        <p class="muted">Builds are validated for safety. Remote scripts, iframes, and server code are blocked.</p>
+      </div>
+      <div class="panel" id="filesPanel" style="display:none">
+        <h3>Generated Files</h3>
+        <div id="filesList" class="files"></div>
+      </div>
+      <div class="panel" id="notesPanel" style="display:none">
+        <h3>Summary & Notes</h3>
+        <p id="sumText"></p>
+        <p class="muted" id="notesText"></p>
+      </div>
+    </section>
+  </main>
+  <script src="auth.js"></script>
+  <script src="ai-builder.js"></script>
+</body>
+</html>
