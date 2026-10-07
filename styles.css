@@ -12,6 +12,9 @@
   --radius: 18px;
   --font-head: "Sora", sans-serif;
   --font-body: "Inter", sans-serif;
+  /* Homepage left sidebar width. body padding-left must match so fixed,
+     full-viewport elements do not sit on top of it. */
+  --sidebar-w: 250px;
 }
 
 html[data-theme="light"] {
@@ -35,7 +38,6 @@ html[data-theme="light"] {
 
 html {
   scroll-behavior: smooth;
-  scroll-padding-top: 90px;
 }
 
 body {
@@ -43,6 +45,10 @@ body {
   background: var(--bg);
   color: var(--text);
   line-height: 1.6;
+  /* Room for the fixed left sidebar. On a top bar this would have been a
+     wasted offset; the sidebar overlaps nothing, so scroll-padding-top was
+     removed too. */
+  padding-left: var(--sidebar-w);
   overflow-x: hidden;
   overflow-x: clip;
 }
@@ -189,25 +195,33 @@ ul {
 
 .navbar {
   position: fixed;
-  inset: 0 0 auto 0;
+  inset: 0 auto 0 0;
+  display: flex;
+  flex-direction: column;
+  width: var(--sidebar-w);
+  max-width: 82vw;
   z-index: 100;
-  padding: 18px 0;
-  transition: background 0.3s ease, padding 0.3s ease, box-shadow 0.3s ease;
+  padding: 20px 0;
+  background: rgba(7, 11, 20, 0.55);
+  backdrop-filter: blur(14px);
+  border-right: 1px solid var(--card-border);
+  overflow-y: auto;
+  transition: background 0.3s ease, box-shadow 0.3s ease;
 }
 
 .navbar.scrolled {
-  background: rgba(7, 11, 20, 0.85);
-  backdrop-filter: blur(14px);
-  padding: 12px 0;
-  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.35);
-  border-bottom: 1px solid var(--card-border);
+  background: rgba(7, 11, 20, 0.88);
+  backdrop-filter: blur(16px);
+  box-shadow: 8px 0 30px rgba(0, 0, 0, 0.3);
 }
 
 .nav-inner {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 20px;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 26px;
+  flex: 1;
+  padding: 0 16px;
 }
 
 .logo {
@@ -215,6 +229,7 @@ ul {
   font-weight: 800;
   font-size: 1.5rem;
   letter-spacing: 0.04em;
+  padding: 0 8px;
 }
 
 .logo span {
@@ -223,40 +238,38 @@ ul {
 
 .nav-links {
   display: flex;
-  gap: 34px;
+  flex-direction: column;
+  gap: 2px;
 }
 
 .nav-links a {
+  display: block;
+  padding: 11px 12px;
+  border-radius: 10px;
   font-size: 0.95rem;
   font-weight: 500;
   color: var(--muted);
-  position: relative;
-  transition: color 0.25s ease;
+  transition: color 0.25s ease, background 0.25s ease;
 }
 
 .nav-links a::after {
-  content: "";
-  position: absolute;
-  left: 0;
-  bottom: -6px;
-  width: 0;
-  height: 2px;
-  background: var(--gold);
-  border-radius: 2px;
-  transition: width 0.3s ease;
+  content: none;
 }
 
-.nav-links a:hover,
+.nav-links a:hover {
+  color: var(--text);
+  background: rgba(251, 191, 36, 0.09);
+}
+
 .nav-links a.active {
   color: var(--text);
-}
-
-.nav-links a:hover::after,
-.nav-links a.active::after {
-  width: 100%;
+  background: rgba(251, 191, 36, 0.14);
+  box-shadow: inset 3px 0 0 var(--gold);
 }
 
 .btn-nav {
+  display: inline-flex;
+  justify-content: center;
   padding: 10px 20px;
   font-size: 0.88rem;
   border: 1px solid var(--card-border);
@@ -271,11 +284,16 @@ ul {
 
 .nav-auth {
   display: flex;
-  align-items: center;
-  gap: 20px;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 12px;
+  margin-top: auto;
 }
 
 .nav-login {
+  display: block;
+  text-align: center;
+  padding: 10px 12px;
   font-size: 0.95rem;
   font-weight: 500;
   color: var(--muted);
@@ -418,7 +436,7 @@ ul {
 
 .hero {
   position: relative;
-  padding: 170px 0 80px;
+  padding: 96px 0 80px;
   overflow: hidden;
 }
 
@@ -1592,42 +1610,42 @@ ul {
     grid-column: 1 / -1;
   }
 
-  .nav-links {
-    position: fixed;
-    top: 0;
-    right: 0;
-    height: 100vh;
-    height: 100dvh;
-    width: min(320px, 78vw);
-    flex-direction: column;
-    justify-content: center;
-    align-items: center;
-    gap: 34px;
-    background: rgba(9, 13, 24, 0.97);
-    backdrop-filter: blur(18px);
-    border-left: 1px solid var(--card-border);
-    transform: translateX(100%);
+  .navbar {
+    inset: 0 auto 0 0;
+    transform: translateX(-100%);
     transition: transform 0.35s ease;
-    z-index: 99;
   }
 
-  .nav-links.open {
+  .navbar.open {
     transform: translateX(0);
   }
 
+  body {
+    padding-left: 0;
+  }
+
+  .nav-inner {
+    padding-top: 56px;
+  }
+
   .nav-links a {
-    font-size: 1.1rem;
+    font-size: 1.05rem;
   }
 
   .hamburger {
     display: flex;
-    position: relative;
+    position: fixed;
+    top: 14px;
+    left: 14px;
     z-index: 101;
     min-width: 44px;
     min-height: 44px;
     align-items: center;
     justify-content: center;
     padding: 8px;
+    background: rgba(7, 11, 20, 0.7);
+    border: 1px solid var(--card-border);
+    border-radius: 12px;
   }
 
   .btn-nav {

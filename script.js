@@ -1,5 +1,4 @@
 const hamburger = document.getElementById("hamburger");
-const navLinks = document.getElementById("navLinks");
 const navbar = document.getElementById("navbar");
 
 function escHtml(str) {
@@ -62,24 +61,26 @@ function escHtml(str) {
 })();
 
 const closeMenu = () => {
-  navLinks.classList.remove("open");
+  navbar.classList.remove("open");
   hamburger.classList.remove("active");
   hamburger.setAttribute("aria-expanded", "false");
   document.body.classList.remove("menu-open");
 };
 
 hamburger.addEventListener("click", () => {
-  const isOpen = navLinks.classList.toggle("open");
+  const isOpen = navbar.classList.toggle("open");
   hamburger.classList.toggle("active", isOpen);
   hamburger.setAttribute("aria-expanded", String(isOpen));
   document.body.classList.toggle("menu-open", isOpen);
 });
 
 document.addEventListener("keydown", (e) => {
-  if (e.key === "Escape" && navLinks.classList.contains("open")) closeMenu();
+  if (e.key === "Escape" && navbar.classList.contains("open")) closeMenu();
 });
 
-navLinks.querySelectorAll("a").forEach((link) => {
+// Logo, auth links and the phone button live inside the sidebar too, so any
+// link click should dismiss the drawer -- not just the nav-links ones.
+navbar.querySelectorAll("a").forEach((link) => {
   link.addEventListener("click", closeMenu);
 });
 
