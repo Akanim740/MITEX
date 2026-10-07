@@ -7,8 +7,7 @@
   <meta name="description" content="Build a complete, ready-to-launch website with MITEX AI. Describe your site, we generate it, you pay, you download.">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css">
+  <link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;600;700;800&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="auth.css">
   <style>
     .builder{display:grid;gap:2rem;max-width:1100px;margin:0 auto;padding:2rem 1.5rem}
@@ -29,22 +28,24 @@
   </style>
 </head>
 <body>
-  <header class="site-header">
-    <div class="container topbar">
-      <a href="index.html" class="logo">
-        <img src="assets/logo.svg" alt="MITEX logo">
-        <span>MITEX</span>
-      </a>
-      <nav class="nav-links" id="navLinks"></nav>
-      <button class="hamburger" id="hamburgerBtn" aria-label="Open menu" aria-expanded="false">☰</button>
-      <div class="auth-controls" id="authControls"></div>
+  <header class="topbar">
+    <div class="topbar-inner">
+      <a class="logo" href="/index.html">MIT<span>EX</span></a>
+      <nav class="topnav" aria-label="Primary">
+        <a href="/marketplace.html">Marketplace</a>
+        <a href="/ai-builder.html" aria-current="page">AI Builder</a>
+        <a href="/video-generator.html">Video Generator</a>
+        <a href="/chat.html">Assistant</a>
+        <a href="/packages.html">Packages</a>
+      </nav>
+      <div id="navAuthArea"></div>
     </div>
   </header>
   <main class="builder">
     <section class="hero">
       <h1>MITEX AI <span style="color:#fbbf24">Builder</span></h1>
       <p class="muted">Describe the website you want. MITEX AI builds a complete, self-contained static site. Approve → pay → download.</p>
-      <div id="loginNote" class="muted" style="display:none">Sign in to build with AI.</div>
+      <div id="loginNote" class="muted" style="display:none"><a href="/login.html?next=/ai-builder.html" style="color:var(--gold)">Sign in</a> to build with AI.</div>
     </section>
     <section class="panel" id="createPanel" style="display:none">
       <h2>New Project</h2>

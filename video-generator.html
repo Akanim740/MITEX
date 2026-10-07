@@ -7,8 +7,7 @@
   <meta name="description" content="Turn a short brief into an animated clip for social and content creation with MITEX AI. Pick a format, write your scenes, download the result.">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css">
+  <link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;600;700;800&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="auth.css">
   <style>
     .videogen{display:grid;gap:2rem;max-width:1100px;margin:0 auto;padding:2rem 1.5rem}
@@ -38,15 +37,17 @@
   </style>
 </head>
 <body>
-  <header class="site-header">
-    <div class="container topbar">
-      <a href="index.html" class="logo">
-        <img src="assets/logo.svg" alt="MITEX logo">
-        <span>MITEX</span>
-      </a>
-      <nav class="nav-links" id="navLinks"></nav>
-      <button class="hamburger" id="hamburgerBtn" aria-label="Open menu" aria-expanded="false">☰</button>
-      <div class="auth-controls" id="authControls"></div>
+  <header class="topbar">
+    <div class="topbar-inner">
+      <a class="logo" href="/index.html">MIT<span>EX</span></a>
+      <nav class="topnav" aria-label="Primary">
+        <a href="/marketplace.html">Marketplace</a>
+        <a href="/ai-builder.html">AI Builder</a>
+        <a href="/video-generator.html" aria-current="page">Video Generator</a>
+        <a href="/chat.html">Assistant</a>
+        <a href="/packages.html">Packages</a>
+      </nav>
+      <div id="navAuthArea"></div>
     </div>
   </header>
 
@@ -54,7 +55,7 @@
     <section class="hero">
       <h1>AI <span style="color:#fbbf24">Video Generator</span></h1>
       <p class="muted">Write a short brief. MITEX AI drafts the scenes, then renders an animated clip you can download for your content.</p>
-      <div id="loginNote" class="muted" style="display:none">Sign in to generate videos.</div>
+      <div id="loginNote" class="muted" style="display:none"><a href="/login.html?next=/video-generator.html" style="color:var(--gold)">Sign in</a> to generate videos.</div>
     </section>
 
     <section class="panel" id="formPanel" style="display:none">

@@ -8,6 +8,11 @@
   --gold-2: #f59e0b;
   --green: #25d366;
   --red: #f87171;
+  /* Alice panel surfaces used by the AI tool pages' inline styles. These were
+     referenced before auth.css defined them, so the panels rendered as flat
+     transparent boxes. */
+  --surface: #0d1424;
+  --shadow: 0 24px 54px rgba(0, 0, 0, 0.35);
 }
 
 html[data-theme="light"] {
@@ -20,6 +25,8 @@ html[data-theme="light"] {
   --gold-2: #d97706;
   --green: #12834a;
   --red: #dc2626;
+  --surface: #ffffff;
+  --shadow: 0 16px 40px rgba(23, 32, 54, 0.12);
 }
 
 html[data-theme="light"] body {

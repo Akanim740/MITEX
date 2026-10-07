@@ -99,6 +99,14 @@ if (page === "marketplace") {
   initNotifications();
 }
 
+// The AI tool pages reuse the marketplace topbar shell (an empty #navAuthArea)
+// but carry no data-page, so none of the init branches above call
+// renderMarketNav for them. Wired through the same hook so a logged-in user
+// gets the account dropdown and a guest gets the Sign In / Get Started pair.
+if (document.getElementById("navAuthArea") && !["marketplace", "packages", "valuator", "transfer", "account"].includes(page)) {
+  renderMarketNav();
+}
+
 function naira(value) {
   if (typeof formatPriceWithOriginal === "function") {
     const cc = localStorage.getItem("mitex_country") || "NG";
