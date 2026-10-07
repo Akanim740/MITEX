@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MITEX Code Playground | Run Python &amp; C++ in Your Browser</title>
+  <meta name="description" content="Write and run Python and C++ code right from the MITEX website. Python runs on the Pyodide WebAssembly runtime; C++ runs on a lightweight in-browser interpreter.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;600;700;800&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="auth.css">
+  <style>
+    .cp { display: grid; gap: 1.5rem; max-width: 1100px; margin: 0 auto; padding: 2rem 1.5rem; }
+    .cp-hero { display: grid; gap: .75rem; text-align: center; }
+    .cp-hero h1 { font-size: clamp(1.9rem, 4.5vw, 3rem); line-height: 1.05; }
+    .panel { background: var(--surface); border: 1px solid rgba(255, 255, 255, .08); border-radius: 1rem; padding: 1.5rem; display: grid; gap: 1rem; box-shadow: var(--shadow); }
+    .tabs { display: flex; gap: .5rem; flex-wrap: wrap; }
+    .tab { padding: .55rem 1.1rem; border-radius: 999px; border: 1px solid var(--card-border); background: transparent; color: var(--muted); cursor: pointer; font-size: .9rem; font-weight: 600; font-family: inherit; transition: color .2s, border-color .2s, background .2s; }
+    .tab:hover { color: var(--text); }
+    .tab.active { background: rgba(251, 191, 36, .14); border-color: rgba(251, 191, 36, .5); color: var(--gold); }
+    .toolrow { display: flex; gap: .75rem; flex-wrap: wrap; align-items: center; }
+    .toolrow select { flex: 1; min-width: 220px; padding: .55rem .9rem; border-radius: .65rem; border: 1px solid rgba(255, 255, 255, .12); background: rgba(15, 23, 42, .4); color: var(--text); font: inherit; }
+    .field { display: grid; gap: .4rem; }
+    .field label { font-size: .82rem; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; }
+    textarea#code { min-height: 300px; padding: 1rem; border-radius: .75rem; border: 1px solid rgba(255, 255, 255, .12); background: rgba(15, 23, 42, .55); color: var(--text); font-family: Consolas, Menlo, "Courier New", monospace; font-size: .9rem; line-height: 1.55; resize: vertical; tab-size: 2; outline: none; }
+    textarea#code:focus { border-color: rgba(251, 191, 36, .5); }
+    textarea#stdin { min-height: 60px; padding: .7rem 1rem; border-radius: .65rem; border: 1px solid rgba(255, 255, 255, .12); background: rgba(15, 23, 42, .4); color: var(--text); font-family: Consolas, Menlo, "Courier New", monospace; font-size: .85rem; resize: vertical; outline: none; }
+    .runrow { display: flex; gap: .75rem; flex-wrap: wrap; align-items: center; }
+    .btn { display: inline-flex; align-items: center; gap: .5rem; padding: .7rem 1.3rem; border-radius: .75rem; border: 0; background: linear-gradient(135deg, #fbbf24, #f59e0b); color: #0f172a; font-weight: 700; font-family: inherit; font-size: .92rem; cursor: pointer; }
+    .btn:disabled { opacity: .6; cursor: not-allowed; }
+    .btn.ghost { background: transparent; color: var(--text); border: 1px solid var(--card-border); }
+    .status { display: inline-flex; align-items: center; gap: .45rem; padding: .4rem .85rem; border-radius: 999px; border: 1px solid var(--card-border); background: rgba(255, 255, 255, .04); color: var(--muted); font-size: .8rem; margin-left: auto; }
+    .status .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--green); }
+    .status.busy .dot { background: var(--gold); }
+    .status.busy .dot { animation: pulse 1s infinite; }
+    .status .dot.err { background: var(--red); }
+    @keyframes pulse { 50% { opacity: .35; } }
+    pre#output { background: #070b14; border: 1px solid rgba(255, 255, 255, .1); border-radius: .75rem; padding: 1rem; min-height: 120px; max-height: 460px; overflow: auto; white-space: pre-wrap; word-break: break-word; font-family: Consolas, Menlo, "Courier New", monospace; font-size: .88rem; line-height: 1.55; }
+    .hints { display: grid; gap: .35rem; color: var(--muted); font-size: .84rem; }
+    .muted { color: var(--muted); }
+  </style>
+</head>
+<body>
+  <header class="topbar">
+    <div class="topbar-inner">
+      <a class="logo" href="/index.html">MIT<span>EX</span></a>
+      <nav class="topnav" aria-label="Primary">
+        <a href="/marketplace.html">Marketplace</a>
+        <a href="/ai-builder.html">AI Builder</a>
+        <a href="/chat.html">Assistant</a>
+        <a href="/video-generator.html">Video Generator</a>
+        <a href="/code-playground.html" aria-current="page">Playground</a>
+        <a href="/packages.html">Packages</a>
+      </nav>
+      <div id="navAuthArea"></div>
+    </div>
+  </header>
+
+  <main class="cp">
+    <section class="cp-hero">
+      <h1>Code <span style="color:#fbbf24">Playground</span></h1>
+      <p class="muted">Write and run Python and C++ right in your browser. Both engines execute locally, so your code never leaves the page.</p>
+    </section>
+
+    <section class="panel">
+      <div class="tabs" role="tablist" aria-label="Choose a language">
+        <button type="button" class="tab active" id="tabPython" role="tab" aria-selected="true" data-lang="python">Python</button>
+        <button type="button" class="tab" id="tabCpp" role="tab" aria-selected="false" data-lang="cpp">C++</button>
+      </div>
+
+      <div class="toolrow">
+        <label class="status" id="status" aria-live="polite"><span class="dot" id="statusDot"></span><span id="statusText">loading</span></label>
+        <select id="examples" aria-label="Load an example"></select>
+      </div>
+
+      <div class="field">
+        <label for="code" id="codeLabel">main.py</label>
+        <textarea id="code" spellcheck="false" autocapitalize="off" autocorrect="off"></textarea>
+      </div>
+
+      <div class="runrow">
+        <button type="button" class="btn" id="runBtn">Run (Ctrl + Enter)</button>
+        <button type="button" class="btn ghost" id="resetBtn">Clear output</button>
+      </div>
+
+      <div class="field">
+        <label for="stdin">Input (stdin)</label>
+        <textarea id="stdin" spellcheck="false">42</textarea>
+      </div>
+
+      <pre id="output" aria-live="polite"></pre>
+
+      <div class="hints">
+        <span>Python runs on Pyodide (CPython in WebAssembly). C++ runs on the JSCPP interpreter, which covers variables, functions, loops, arrays, pointers and iostream — but not classes, namespaces or the full standard library.</span>
+        <span>Python: <code>input()</code> is not supported yet &mdash; use <code>print</code>. C++: <code>cin</code> reads from the input box above.</span>
+        <span>Both engines are downloaded once from a public CDN on first run. Infinite loops freeze the tab, so keep them finite. Code is kept in this browser only.</span>
+      </div>
+    </section>
+  </main>
+
+  <script src="auth.js"></script>
+  <script src="code-playground.js"></script>
+</body>
+</html>
