@@ -79,25 +79,53 @@ function usageOf(payload) {
   };
 }
 
+// Build the `messages` array for the API.
+//
+// Single-turn callers keep passing `prompt` and never notice the difference.
+// Multi-turn callers pass a conversation instead. Either way the result is
+// validated here rather than at each call site: the API rejects an empty
+// conversation or an unknown role with a 400 we would then have to explain,
+// and a caller that forgets to strip an empty turn would send it every time.
+function normalizeMessages(messages, prompt) {
+  if (Array.isArray(messages) && messages.length) {
+    const out = [];
+    for (const m of messages) {
+      if (!m || typeof m !== "object") continue;
+      const role = m.role === "assistant" ? "assistant" : m.role === "user" ? "user" : null;
+      if (!role) continue;
+      const content = typeof m.content === "string" ? m.content.trim() : "";
+      if (!content) continue;
+      out.push({ role, content });
+    }
+    // A conversation has to start with a user turn; otherwise the API 400s.
+    while (out.length && out[0].role !== "user") out.shift();
+    if (out.length) return out;
+  }
+  const single = String(prompt || "").trim();
+  return single ? [{ role: "user", content: single }] : [];
+}
+
 /**
  * Single Messages call.
  *
  * @param {object} opts
  * @param {string} [opts.system]  System prompt.
- * @param {string} opts.prompt    The user turn.
+ * @param {string} [opts.prompt]  The user turn (single-turn).
+ * @param {Array<{role:"user"|"assistant", content:string}>} [opts.messages]
+ *   Full conversation. Takes precedence over `prompt` when non-empty.
  * @param {number} [opts.maxTokens]
  * @param {number} [opts.timeoutMs]
  * @param {AbortSignal} [opts.signal]
  * @returns {Promise<{text: string, usage: object, model: string, stopReason: string}>}
  */
-async function complete({ system, prompt, maxTokens: want, timeoutMs, signal } = {}) {
+async function complete({ system, prompt, messages, maxTokens: want, timeoutMs, signal } = {}) {
   if (!isConfigured()) {
     throw new AiError(
       "ANTHROPIC_API_KEY is not set. AI features are disabled until it is configured."
     );
   }
-  const userText = String(prompt || "").trim();
-  if (!userText) throw new AiError("AI prompt is empty");
+  const turns = normalizeMessages(messages, prompt);
+  if (!turns.length) throw new AiError("AI prompt is empty");
 
   const budget = maxTokens(want);
   const timeout = Number(timeoutMs) || DEFAULT_TIMEOUT_MS;
@@ -115,7 +143,7 @@ async function complete({ system, prompt, maxTokens: want, timeoutMs, signal } =
   const body = {
     model: model(),
     max_tokens: budget,
-    messages: [{ role: "user", content: userText }],
+    messages: turns,
   };
   if (system) body.system = String(system);
 
@@ -237,6 +265,7 @@ function parseJsonLoose(text) {
 module.exports = {
   complete,
   completeJson,
+  normalizeMessages,
   parseJsonLoose,
   isConfigured,
   workspaceId,

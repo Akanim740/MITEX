@@ -223,6 +223,7 @@ app.use("/api/packages", require("./routes/packages"));
 app.use("/api/applications", require("./routes/applications"));
 app.use("/api/ai", require("./routes/ai"));
 app.use("/api/video", require("./routes/video"));
+app.use("/api/chat", require("./routes/chat"));
 app.use("/api/analyze", require("./routes/analyze"));
 app.use("/api/salaries", require("./routes/salaries"));
 app.use("/api/notifications", require("./routes/notifications"));
@@ -277,8 +278,18 @@ app.get("*", (req, res) => {
 });
 
 app.use((err, req, res, _next) => {
-  console.error(err.stack);
-  res.status(500).json({ error: "Internal server error" });
+  // body-parser attaches a status to its own failures (400 for malformed JSON,
+  // 413 for an oversized body). Reporting those as 500 tells the client the
+  // server broke when in fact it sent something invalid, and buries the real
+  // cause in an error log. Client faults get their own message; only genuine
+  // server faults are generic.
+  const status = Number(err.status || err.statusCode) || 500;
+  if (status >= 500) {
+    console.error(err.stack);
+    return res.status(500).json({ error: "Internal server error" });
+  }
+  console.warn(`[http] ${status} ${req.method} ${req.originalUrl}: ${err.message}`);
+  return res.status(status).json({ error: err.message || "Bad request" });
 });
 
 getStore()
