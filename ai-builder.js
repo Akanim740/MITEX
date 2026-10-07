@@ -1,15 +1,11 @@
-async function api(path, opts={}) {
-  const res = await fetch(path, opts);
-  const data = await res.json().catch(()=>({}));
-  if (!res.ok) throw new Error(data.error || res.statusText);
-  return data;
-}
+// api() and isLoggedIn() come from auth.js, which loads first. api() attaches
+// the Bearer token and refreshes the session on 401 -- re-declaring it here
+// would shadow that and send every request unauthenticated.
 let currentUser = null;
 let currentProject = null;
 async function init() {
-  const auth = window.AuthClient;
-  currentUser = auth ? await auth.me() : null;
-  if (!currentUser) { document.getElementById('loginNote').style.display='block'; return; }
+  currentUser = JSON.parse(localStorage.getItem("mitex_user") || "null");
+  if (!currentUser || !isLoggedIn()) { document.getElementById('loginNote').style.display='block'; return; }
   document.getElementById('loginNote').style.display='none';
   document.getElementById('createPanel').style.display='grid';
   document.getElementById('createBtn').addEventListener('click', createProject);

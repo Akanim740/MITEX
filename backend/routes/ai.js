@@ -1,5 +1,6 @@
 const express = require("express");
 const rateLimit = require("express-rate-limit");
+const { requireAuth, requireAuthFlexible } = require("../middleware/auth");
 
 const router = express.Router();
 
@@ -19,18 +20,19 @@ const actionLimiter = rateLimit({
   message: { error: "Too many actions. Slow down." },
 });
 
-const authRequired = (req, res, next) => {
-  if (!req.user || !req.user.id) return res.status(401).json({ error: "Sign in required" });
-  next();
-};
+// req.user is only ever populated by middleware/auth.js, so these must run
+// requireAuth rather than inspecting req.user directly -- checking it here
+// without authentication would reject every request, valid token or not.
+const authRequired = requireAuth;
 
 const staffRequired = (req, res, next) => {
-  if (!req.user || !req.user.id) return res.status(401).json({ error: "Sign in required" });
-  const role = String(req.user.role || "").toLowerCase();
-  if (role !== "admin" && role !== "editor" && role !== "staff") {
-    return res.status(403).json({ error: "Staff only" });
-  }
-  next();
+  requireAuth(req, res, () => {
+    const role = String((req.user && req.user.role) || "").toLowerCase();
+    if (role !== "admin" && role !== "editor" && role !== "staff") {
+      return res.status(403).json({ error: "Staff only" });
+    }
+    next();
+  });
 };
 
 function toActor(req) {
@@ -223,7 +225,9 @@ router.post("/projects/:id/release", staffRequired, actionLimiter, async (req, r
 });
 
 // GET /api/ai/projects/:id/download - download zip
-router.get("/projects/:id/download", authRequired, async (req, res) => {
+// Uses requireAuthFlexible: a download is triggered by navigation, so there is
+// no Authorization header to send -- it has to fall back to the refresh cookie.
+router.get("/projects/:id/download", requireAuthFlexible, async (req, res) => {
   try {
     const { getStore } = require("../db");
     const s = await getStore();
