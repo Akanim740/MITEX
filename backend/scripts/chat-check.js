@@ -11,7 +11,7 @@ const assert = require("assert");
 process.env.AI_STUB = "true";
 
 const { sanitizeMessages, chat, LIMITS } = require("../services/ai-chat");
-const { chatStub, REPLIES } = require("../services/ai-chat-stub");
+const { chatStub, REPLIES, FOLLOWUPS } = require("../services/ai-chat-stub");
 const { normalizeMessages } = require("../utils/ai");
 
 let pass = 0;
@@ -255,6 +255,46 @@ async function checkAsync(label, fn) {
       ],
     });
     assert.strictEqual(r.reply, REPLIES.greeting);
+  });
+
+  // The stub grew a set of concrete intents on top of the original eight. Each
+  // has to route correctly, including the plural/verb forms people actually
+  // type. New replies must stay inside the honesty rules checked below.
+  const more = [
+    ["payment", "how do I pay after the build is approved?", REPLIES.payment],
+    ["download", "how do I download my project?", REPLIES.download],
+    ["account", "how do I log in to my account?", REPLIES.account],
+    ["refund (plural)", "do you do refunds?", REPLIES.refund],
+    ["review (verb)", "when will my build be reviewed?", REPLIES.review],
+    ["edit (verb)", "can you update the contact page?", REPLIES.edit],
+    ["about", "what is mitex?", REPLIES.about],
+    ["help", "what can you do?", REPLIES.help],
+    ["tech", "what are generated sites made of?", REPLIES.tech],
+  ];
+
+  for (const [label, prompt, expected] of more) {
+    await checkAsync(`answers ${label}`, async () => {
+      const r = await chatStub({ messages: [{ role: "user", content: prompt }] });
+      assert.strictEqual(r.reply, expected);
+    });
+  }
+
+  await checkAsync("answers a short follow-up from the conversation topic", async () => {
+    const r = await chatStub({
+      messages: [
+        { role: "user", content: "how do I build a site?" },
+        { role: "assistant", content: REPLIES.builder },
+        { role: "user", content: "how do I get it?" },
+      ],
+    });
+    assert.strictEqual(r.reply, FOLLOWUPS.builder);
+  });
+
+  await checkAsync("keeps a generic fallback when there is no topic to follow up on", async () => {
+    const r = await chatStub({
+      messages: [{ role: "user", content: "hi" }, { role: "assistant", content: REPLIES.greeting }, { role: "user", content: "and then?" }],
+    });
+    assert.strictEqual(r.reply, REPLIES.fallback);
   });
 
   console.log("stub never invents a price");
