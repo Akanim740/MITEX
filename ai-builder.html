@@ -46,12 +46,12 @@
     <section class="hero">
       <h1>MITEX AI <span style="color:#fbbf24">Builder</span></h1>
       <p class="muted">Describe the website you want. MITEX AI builds a complete, self-contained static site. Approve → pay → download.</p>
-      <div id="loginNote" class="muted" style="display:none"><a href="/login.html?next=/ai-builder.html" style="color:var(--gold)">Sign in</a> to build with AI.</div>
     </section>
-    <section class="panel" id="createPanel" style="display:none">
-      <h2>New Project</h2>
+    <section class="panel" id="promptPanel">
+      <h2>Describe your website</h2>
+      <p class="muted">Start typing below - the kind of site, the pages, the style, colours and content you want.</p>
       <div class="grid">
-        <input id="pTitle" placeholder="Project title e.g. Coffee Shop Website">
+        <input id="pTitle" placeholder="What is this site? e.g. Coffee Shop Website">
         <select id="pKind">
           <option value="build">Build from scratch</option>
           <option value="fix">Fix existing website</option>
@@ -59,6 +59,7 @@
       </div>
       <textarea id="pBrief" placeholder="Describe what you want: pages, style, colours, features, content to include..."></textarea>
       <button class="btn" id="createBtn">Create Project</button>
+      <p class="muted" id="loginHint" style="display:none">Your brief is saved. <a href="/login.html?next=/ai-builder.html" style="color:var(--gold)">Sign in</a> and you'll be returned here to generate.</p>
     </section>
     <section class="panel" id="projectsPanel" style="display:none">
       <div style="display:flex;justify-content:space-between;align-items:center;gap:1rem;flex-wrap:wrap">

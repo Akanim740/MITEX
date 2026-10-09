@@ -3,28 +3,60 @@
 // would shadow that and send every request unauthenticated.
 let currentUser = null;
 let currentProject = null;
-async function init() {
-  currentUser = JSON.parse(localStorage.getItem("mitex_user") || "null");
-  if (!currentUser || !isLoggedIn()) { document.getElementById('loginNote').style.display='block'; return; }
-  document.getElementById('loginNote').style.display='none';
-  document.getElementById('createPanel').style.display='grid';
-  document.getElementById('createBtn').addEventListener('click', createProject);
-  document.getElementById('newBtn').addEventListener('click', ()=>{ document.getElementById('createPanel').style.display='grid'; document.getElementById('projectPanel').style.display='none'; });
-  document.getElementById('backBtn').addEventListener('click', ()=>{ loadProjects(); document.getElementById('projectPanel').style.display='none'; document.getElementById('projectsPanel').style.display='grid'; });
-  document.getElementById('buildBtn').addEventListener('click', buildProject);
-  await loadProjects();
-}
-async function createProject() {
-  const title = document.getElementById('pTitle').value.trim();
-  const kind = document.getElementById('pKind').value;
-  const brief = document.getElementById('pBrief').value.trim();
-  if (!title) return alert('Enter a title');
+const PREFILL_KEY = "mitex_builder_prefill";
+
+function restorePrefill() {
   try {
-    const res = await api('/api/ai/projects', { method:'POST', headers:{'content-type':'application/json'}, body: JSON.stringify({title, kind, brief}) });
+    const raw = sessionStorage.getItem(PREFILL_KEY);
+    if (!raw) return;
+    const d = JSON.parse(raw);
+    if (d.title) document.getElementById("pTitle").value = d.title;
+    if (d.kind) document.getElementById("pKind").value = d.kind;
+    if (d.brief) document.getElementById("pBrief").value = d.brief;
+    sessionStorage.removeItem(PREFILL_KEY);
+  } catch {}
+}
+
+async function init() {
+  restorePrefill();
+  document.getElementById("promptPanel").style.display = "grid";
+  currentUser = JSON.parse(localStorage.getItem("mitex_user") || "null");
+  const loggedIn = Boolean(currentUser && isLoggedIn());
+  document.getElementById("loginHint").style.display = loggedIn ? "none" : "block";
+  document.getElementById("createBtn").addEventListener("click", createProject);
+  document.getElementById("newBtn").addEventListener("click", () => {
+    document.getElementById("promptPanel").style.display = "grid";
+    document.getElementById("projectPanel").style.display = "none";
+  });
+  document.getElementById("backBtn").addEventListener("click", () => {
+    loadProjects();
+    document.getElementById("projectPanel").style.display = "none";
+    document.getElementById("projectsPanel").style.display = "grid";
+  });
+  document.getElementById("buildBtn").addEventListener("click", buildProject);
+  if (loggedIn) await loadProjects();
+}
+
+async function createProject() {
+  const title = document.getElementById("pTitle").value.trim();
+  const kind = document.getElementById("pKind").value;
+  const brief = document.getElementById("pBrief").value.trim();
+  if (!title) return alert("Enter a title");
+  // Anyone can type a brief, but generating a site needs an account. Save the
+  // brief and return here after sign-in instead of making them retype it.
+  if (!currentUser || !isLoggedIn()) {
+    try {
+      sessionStorage.setItem(PREFILL_KEY, JSON.stringify({ title, kind, brief }));
+    } catch {}
+    location.href = "/login.html?next=/ai-builder.html";
+    return;
+  }
+  try {
+    const res = await api("/api/ai/projects", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ title, kind, brief }) });
     currentProject = res.project;
-    document.getElementById('createPanel').style.display='none';
+    document.getElementById("promptPanel").style.display = "none";
     showProject(currentProject);
-  } catch(e) { alert(e.message); }
+  } catch (e) { alert(e.message); }
 }
 async function loadProjects() {
   const res = await api('/api/ai/projects');
@@ -43,7 +75,7 @@ async function openProject(id){ const res=await api('/api/ai/projects/'+encodeUR
 function showProject(p,files=[]){
   currentProject=p;
   document.getElementById('projectsPanel').style.display='none';
-  document.getElementById('createPanel').style.display='none';
+  document.getElementById('promptPanel').style.display='none';
   document.getElementById('projectPanel').style.display='grid';
   document.getElementById('projTitle').textContent=p.title;
   document.getElementById('projBrief').textContent=p.brief||'';
