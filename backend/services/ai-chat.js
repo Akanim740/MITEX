@@ -15,7 +15,7 @@
 // mean a schema change across every database adapter for no benefit the user
 // can see, and a chat log is not worth that.
 
-const ai = require("../utils/ai");
+const provider = require("./ai-provider");
 const { chatStub } = require("./ai-chat-stub");
 
 // Sized to fit inside the app-wide express.json limit of 20kb (server.js:150),
@@ -184,22 +184,26 @@ async function chat({ messages, signal } = {}) {
   }
 
   const forceStub = String(process.env.AI_STUB || "").toLowerCase() === "true";
-  if (forceStub || !ai.isConfigured()) {
+  if (forceStub || !provider.isConfigured()) {
     const res = await chatStub({ messages: check.messages, signal });
     return { ...res, warnings: check.warnings };
   }
 
   try {
-    const res = await ai.complete({
+    const res = await provider.complete({
       system: SYSTEM_PROMPT,
       messages: check.messages,
       maxTokens: 1024,
       signal,
     });
+    if (!res) {
+      const stub = await chatStub({ messages: check.messages, signal });
+      return { ...stub, warnings: check.warnings };
+    }
     return {
       ok: true,
       reply: res.text.slice(0, LIMITS.maxReplyChars),
-      model: res.model,
+      model: `${res.provider}/${res.model}`,
       usage: res.usage,
       warnings: check.warnings,
     };

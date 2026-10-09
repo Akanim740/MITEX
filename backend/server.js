@@ -224,6 +224,7 @@ app.use("/api/applications", require("./routes/applications"));
 app.use("/api/ai", require("./routes/ai"));
 app.use("/api/video", require("./routes/video"));
 app.use("/api/chat", require("./routes/chat"));
+app.use("/api/concierge", require("./routes/concierge"));
 app.use("/api/analyze", require("./routes/analyze"));
 app.use("/api/salaries", require("./routes/salaries"));
 app.use("/api/notifications", require("./routes/notifications"));
